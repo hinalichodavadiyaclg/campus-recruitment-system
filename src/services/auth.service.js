@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
+import { Permission } from '../models/permission.model.js';
 import { Role } from '../models/role.model.js';
 import { User } from '../models/user.model.js';
 import { UserSession } from '../models/user-session.model.js';
@@ -105,7 +106,19 @@ export async function getCurrentUser(userId) {
   if (!user) throw new AppError(401, 'UNAUTHENTICATED', 'Authentication is required.');
   const role = await Role.findById(user.roleId).lean();
   if (!role || !role.isActive) throw new AppError(403, 'ROLE_INACTIVE', 'Account is not currently authorized.');
-  return { user: toSafeUser(user), role: { id: role._id, name: role.name }, permissionIds: role.permissionIds };
+
+  const activePermissions = await Permission.find({
+    _id: { $in: role.permissionIds },
+    isActive: true
+  }).lean();
+  const activePermissionIds = activePermissions.map((p) => p._id);
+
+  return {
+    user: toSafeUser(user),
+    role: { id: role._id, name: role.name, description: role.description },
+    permissions: activePermissions,
+    permissionIds: activePermissionIds
+  };
 }
 
 export async function changePassword({ userId, currentSessionId, currentPassword, newPassword }) {

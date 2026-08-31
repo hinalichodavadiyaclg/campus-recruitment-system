@@ -12,7 +12,9 @@ import {
 } from '../validators/schemas.js';
 
 export const permissionRouter = Router();
+
 permissionRouter.use(authenticate);
+
 permissionRouter.get('/', authorizePermissions(PERMISSION_IDS.PERMISSION_READ), permissionController.listPermissions);
 permissionRouter.post(
   '/',
@@ -31,6 +33,12 @@ permissionRouter.put(
   authorizePermissions(PERMISSION_IDS.PERMISSION_UPDATE),
   validate(permissionUpdateSchema),
   permissionController.updatePermission
+);
+permissionRouter.delete(
+  '/:id',
+  authorizePermissions(PERMISSION_IDS.PERMISSION_DELETE),
+  validate(resourceIdParamsSchema),
+  permissionController.deletePermission
 );
 permissionRouter.patch(
   '/:id/status',

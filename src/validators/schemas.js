@@ -45,7 +45,7 @@ export const roleCreateSchema = z.object({
     id: accessId,
     name: z.string().trim().min(2).max(100),
     description: z.string().trim().min(5).max(500),
-    permissionIds: z.array(accessId).max(100).default([])
+    permissionIds: z.array(accessId).max(200).default([])
   }),
   params: emptyParams,
   query: emptyQuery
@@ -56,9 +56,17 @@ export const roleUpdateSchema = z.object({
     .object({
       name: z.string().trim().min(2).max(100).optional(),
       description: z.string().trim().min(5).max(500).optional(),
-      permissionIds: z.array(accessId).max(100).optional()
+      permissionIds: z.array(accessId).max(200).optional()
     })
     .refine((body) => Object.keys(body).length > 0, 'At least one field is required.'),
+  params: z.object({ id: accessId }),
+  query: emptyQuery
+});
+
+export const rolePermissionsSchema = z.object({
+  body: z.object({
+    permissionIds: z.array(accessId).max(200).default([])
+  }),
   params: z.object({ id: accessId }),
   query: emptyQuery
 });
@@ -103,6 +111,40 @@ export const permissionStatusSchema = z.object({
 export const resourceIdParamsSchema = z.object({ body: emptyBody, params: z.object({ id: accessId }), query: emptyQuery });
 export const userIdParamsSchema = z.object({ body: emptyBody, params: z.object({ id: objectId }), query: emptyQuery });
 
+export const userCreateSchema = z.object({
+  body: z.object({
+    email,
+    password: strongPassword.optional(),
+    userType: z.enum(['STUDENT', 'COMPANY', 'PLACEMENT']),
+    roleId: accessId,
+    universityId: z.string().trim().min(1).max(50).optional(),
+    employeeId: z.string().trim().min(1).max(50).optional(),
+    companyId: objectId.optional(),
+    accountStatus: z.enum(['ACTIVE', 'INACTIVE', 'LOCKED']).default('ACTIVE'),
+    isEmailVerified: z.boolean().default(true)
+  }),
+  params: emptyParams,
+  query: emptyQuery
+});
+
+export const userUpdateSchema = z.object({
+  body: z
+    .object({
+      email: email.optional(),
+      password: strongPassword.optional(),
+      userType: z.enum(['STUDENT', 'COMPANY', 'PLACEMENT']).optional(),
+      roleId: accessId.optional(),
+      universityId: z.string().trim().min(1).max(50).optional(),
+      employeeId: z.string().trim().min(1).max(50).optional(),
+      companyId: objectId.optional(),
+      accountStatus: z.enum(['ACTIVE', 'INACTIVE', 'LOCKED']).optional(),
+      isEmailVerified: z.boolean().optional()
+    })
+    .refine((body) => Object.keys(body).length > 0, 'At least one field is required.'),
+  params: z.object({ id: objectId }),
+  query: emptyQuery
+});
+
 export const usersListSchema = z.object({
   body: emptyBody,
   params: emptyParams,
@@ -141,5 +183,27 @@ export const userLockSchema = z.object({
 export const userRoleSchema = z.object({
   body: z.object({ roleId: accessId }),
   params: z.object({ id: objectId }),
+  query: emptyQuery
+});
+
+export const importParamsSchema = z.object({
+  body: emptyBody,
+  params: z.object({ type: z.enum(['student', 'company', 'placement']) }),
+  query: emptyQuery
+});
+
+export const importValidateSchema = z.object({
+  body: z.object({
+    rows: z.array(z.record(z.any())).min(1).max(10_000)
+  }),
+  params: z.object({ type: z.enum(['student', 'company', 'placement']) }),
+  query: emptyQuery
+});
+
+export const importConfirmSchema = z.object({
+  body: z.object({
+    rows: z.array(z.record(z.any())).min(1).max(10_000)
+  }),
+  params: z.object({ type: z.enum(['student', 'company', 'placement']) }),
   query: emptyQuery
 });
