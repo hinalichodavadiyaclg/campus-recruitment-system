@@ -46,3 +46,28 @@ export function authorizePermissions(...requiredPermissionIds) {
     next();
   });
 }
+
+export function authorizeAnyPermission(...requiredPermissionIds) {
+  return asyncHandler(async (request, _response, next) => {
+    if (!request.auth) throw new AppError(401, 'UNAUTHENTICATED', 'Authentication is required.');
+
+    const normalizedRequired = requiredPermissionIds.map((id) => PERMISSION_LEGACY_ALIAS_MAP[id] || id);
+    const role = await Role.findOne({ _id: request.auth.roleId, isActive: true }).lean();
+
+    if (!role) {
+      throw new AppError(403, 'FORBIDDEN', 'Your assigned role is inactive or does not exist.');
+    }
+
+    const rolePermissionSet = new Set(
+      (role.permissionIds || []).map((id) => PERMISSION_LEGACY_ALIAS_MAP[id] || id)
+    );
+
+    const hasAny = normalizedRequired.some((permId) => rolePermissionSet.has(permId));
+    if (!hasAny) {
+      throw new AppError(403, 'FORBIDDEN', 'You are not authorized to perform this action.');
+    }
+
+    next();
+  });
+}
+

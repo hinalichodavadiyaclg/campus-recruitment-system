@@ -141,7 +141,10 @@ export async function updateUser(id, input) {
   return toSafeUser(user);
 }
 
-export async function deleteUser(id) {
+export async function deleteUser(id, actorId) {
+  if (actorId && String(id) === String(actorId)) {
+    throw new AppError(400, 'CANNOT_DELETE_SELF', 'You cannot delete your own currently logged-in account.');
+  }
   const user = await getUserOrThrow(id);
   await guardFinalActiveSuperAdmin(user);
   await invalidateUserSessions(user._id);

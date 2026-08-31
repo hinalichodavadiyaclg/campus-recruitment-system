@@ -18,7 +18,7 @@ export function createApp() {
   const sourceDirectory = dirname(fileURLToPath(import.meta.url));
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
-  app.use(helmet());
+  app.use(helmet({ contentSecurityPolicy: false }));
   app.use(
     cors({
       origin(origin, callback) {

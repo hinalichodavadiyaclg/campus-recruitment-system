@@ -19,8 +19,8 @@ export const updateUser = asyncHandler(async (_request, response) =>
   sendSuccess(response, 200, await userService.updateUser(response.locals.input.params.id, response.locals.input.body))
 );
 
-export const deleteUser = asyncHandler(async (_request, response) =>
-  sendSuccess(response, 200, await userService.deleteUser(response.locals.input.params.id))
+export const deleteUser = asyncHandler(async (request, response) =>
+  sendSuccess(response, 200, await userService.deleteUser(response.locals.input.params.id, request.auth.userId))
 );
 
 export const setStatus = asyncHandler(async (_request, response) =>

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import * as roleController from '../controllers/role.controller.js';
 import { PERMISSION_IDS } from '../utils/access-constants.js';
 import { authenticate } from '../middleware/authenticate.js';
-import { authorizePermissions } from '../middleware/authorize.js';
+import { authorizeAnyPermission, authorizePermissions } from '../middleware/authorize.js';
 import { validate } from '../validators/request.validator.js';
 import {
   resourceIdParamsSchema,
@@ -16,7 +16,16 @@ export const roleRouter = Router();
 
 roleRouter.use(authenticate);
 
-roleRouter.get('/', authorizePermissions(PERMISSION_IDS.ROLE_READ), roleController.listRoles);
+roleRouter.get(
+  '/',
+  authorizeAnyPermission(
+    PERMISSION_IDS.ROLE_READ,
+    PERMISSION_IDS.USER_ASSIGN_ROLE,
+    PERMISSION_IDS.USER_CREATE,
+    PERMISSION_IDS.USER_UPDATE
+  ),
+  roleController.listRoles
+);
 roleRouter.post('/', authorizePermissions(PERMISSION_IDS.ROLE_CREATE), validate(roleCreateSchema), roleController.createRole);
 roleRouter.get('/:id', authorizePermissions(PERMISSION_IDS.ROLE_READ), validate(resourceIdParamsSchema), roleController.getRole);
 roleRouter.put('/:id', authorizePermissions(PERMISSION_IDS.ROLE_UPDATE), validate(roleUpdateSchema), roleController.updateRole);

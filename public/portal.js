@@ -463,11 +463,8 @@ async function usersPage() {
             .map((u) => {
               const actions = [];
               actions.push(actionLink('View', `/users/${u._id}`));
-              if (has('USER_UPDATE')) actions.push(`<button class="link-button" onclick="window.editUserModal('${u._id}')">Edit</button>`);
-              if (has('USER_ASSIGN_ROLE')) actions.push(actionLink('Role', `/users/${u._id}/role`));
-              if (has('USER_LOCK') && u.accountStatus === 'ACTIVE') actions.push(`<button class="link-button" onclick="window.lockUserAction('${u._id}')">Lock</button>`);
-              if (has('USER_UNLOCK') && u.accountStatus === 'LOCKED') actions.push(`<button class="link-button" onclick="window.unlockUserAction('${u._id}')">Unlock</button>`);
-              if (has('USER_DELETE')) actions.push(`<button class="link-button" style="color:var(--red)" onclick="window.deleteUserAction('${u._id}')">Delete</button>`);
+              if (has('USER_UPDATE')) actions.push(`<button class="link-button" data-user-action="edit" data-user-id="${u._id}" onclick="window.editUserModal('${u._id}')">Edit</button>`);
+              if (has('USER_DELETE')) actions.push(`<button class="link-button" style="color:var(--red)" data-user-action="delete" data-user-id="${u._id}" onclick="window.deleteUserAction('${u._id}')">Delete</button>`);
 
               return `<tr>
                 <td>${esc(u.universityId || u.employeeId || u.companyId || '—')}</td>
@@ -508,6 +505,28 @@ async function usersPage() {
     renderRows();
   } catch (error) {
     document.querySelector('#users-content').textContent = error.message;
+  }
+}
+
+document.addEventListener('click', (event) => {
+  const btn = event.target.closest('[data-user-action]');
+  if (!btn) return;
+  const action = btn.dataset.userAction;
+  const id = btn.dataset.userId;
+
+  if (action === 'edit' && window.editUserModal) window.editUserModal(id);
+  else if (action === 'activate' && window.activateUserAction) window.activateUserAction(id);
+  else if (action === 'deactivate' && window.deactivateUserAction) window.deactivateUserAction(id);
+  else if (action === 'lock' && window.lockUserAction) window.lockUserAction(id);
+  else if (action === 'unlock' && window.unlockUserAction) window.unlockUserAction(id);
+  else if (action === 'delete' && window.deleteUserAction) window.deleteUserAction(id);
+});
+
+function refreshUserView() {
+  if (path() === '/users') {
+    usersPage();
+  } else {
+    render();
   }
 }
 
@@ -578,7 +597,7 @@ async function openCreateUserModal() {
 
 window.editUserModal = async (id) => {
   try {
-    const [user, roles] = await Promise.all([api(`/api/users/${id}`), api('/api/roles')]);
+    const [user, roles] = await Promise.all([api(`/api/users/${id}`), api('/api/roles').catch(() => [])]);
     showModal(`
       <h2>Edit User Details</h2>
       <form id="edit-user-modal-form" class="form-grid" style="margin-top:16px;">
@@ -616,7 +635,7 @@ window.editUserModal = async (id) => {
         await api(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(body) });
         modalRoot.innerHTML = '';
         toast('User updated successfully.');
-        usersPage();
+        refreshUserView();
       } catch (error) {
         const n = document.querySelector('#eu-notice');
         n.className = 'notice error';
@@ -629,6 +648,41 @@ window.editUserModal = async (id) => {
   }
 };
 
+window.activateUserAction = (id) => {
+  confirmAction({
+    title: 'Activate Account',
+    message: 'Are you sure you want to activate this user account?',
+    confirmLabel: 'Activate Account',
+    onConfirm: async () => {
+      try {
+        await api(`/api/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ accountStatus: 'ACTIVE' }) });
+        toast('Account activated.');
+        refreshUserView();
+      } catch (error) {
+        toast(error.message);
+      }
+    }
+  });
+};
+
+window.deactivateUserAction = (id) => {
+  confirmAction({
+    title: 'Deactivate Account',
+    message: 'Are you sure you want to deactivate this user account?',
+    confirmLabel: 'Deactivate Account',
+    danger: true,
+    onConfirm: async () => {
+      try {
+        await api(`/api/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ accountStatus: 'INACTIVE' }) });
+        toast('Account deactivated.');
+        refreshUserView();
+      } catch (error) {
+        toast(error.message);
+      }
+    }
+  });
+};
+
 window.lockUserAction = (id) => {
   confirmAction({
     title: 'Lock Account',
@@ -639,7 +693,7 @@ window.lockUserAction = (id) => {
       try {
         await api(`/api/users/${id}/lock`, { method: 'PATCH', body: JSON.stringify({ lockMinutes: 30 }) });
         toast('Account locked.');
-        render();
+        refreshUserView();
       } catch (error) {
         toast(error.message);
       }
@@ -656,7 +710,7 @@ window.unlockUserAction = (id) => {
       try {
         await api(`/api/users/${id}/unlock`, { method: 'PATCH', body: '{}' });
         toast('Account unlocked.');
-        render();
+        refreshUserView();
       } catch (error) {
         toast(error.message);
       }
@@ -665,6 +719,10 @@ window.unlockUserAction = (id) => {
 };
 
 window.deleteUserAction = (id) => {
+  if (state.me?.user?._id === id) {
+    toast('You cannot delete your own currently logged-in account.');
+    return;
+  }
   confirmAction({
     title: 'Delete User',
     message: 'Are you sure you want to delete this user permanently? This action cannot be undone.',
@@ -674,7 +732,11 @@ window.deleteUserAction = (id) => {
       try {
         await api(`/api/users/${id}`, { method: 'DELETE' });
         toast('User deleted successfully.');
-        usersPage();
+        if (path().startsWith('/users/')) {
+          go('/users');
+        } else {
+          usersPage();
+        }
       } catch (error) {
         toast(error.message);
       }
@@ -696,12 +758,13 @@ async function userDetailsPage(id) {
     ]);
 
     const actions = [];
-    if (has('USER_UPDATE')) actions.push(`<button class="primary" onclick="window.editUserModal('${user._id}')">Edit User</button>`);
+    if (has('USER_UPDATE')) actions.push(`<button class="primary" data-user-action="edit" data-user-id="${user._id}" onclick="window.editUserModal('${user._id}')">Edit User</button>`);
     if (has('USER_ASSIGN_ROLE')) actions.push(`<a class="secondary" href="#/users/${id}/role">Change role</a>`);
-    if (has('USER_MANAGE_STATUS') || has('USER_LOCK') || has('USER_UNLOCK')) {
-      actions.push(`<button class="ghost" id="user-status-action" type="button">${user.accountStatus === 'LOCKED' ? 'Unlock account' : user.accountStatus === 'INACTIVE' ? 'Activate account' : 'Manage status'}</button>`);
-    }
-    if (has('USER_DELETE')) actions.push(`<button class="danger" onclick="window.deleteUserAction('${user._id}')">Delete User</button>`);
+    if (has('USER_MANAGE_STATUS') && user.accountStatus === 'INACTIVE') actions.push(`<button class="ghost" data-user-action="activate" data-user-id="${user._id}" onclick="window.activateUserAction('${user._id}')">Activate account</button>`);
+    if (has('USER_MANAGE_STATUS') && user.accountStatus === 'ACTIVE') actions.push(`<button class="ghost" data-user-action="deactivate" data-user-id="${user._id}" onclick="window.deactivateUserAction('${user._id}')">Deactivate account</button>`);
+    if (has('USER_LOCK') && user.accountStatus === 'ACTIVE') actions.push(`<button class="ghost" data-user-action="lock" data-user-id="${user._id}" onclick="window.lockUserAction('${user._id}')">Lock account</button>`);
+    if (has('USER_UNLOCK') && user.accountStatus === 'LOCKED') actions.push(`<button class="ghost" data-user-action="unlock" data-user-id="${user._id}" onclick="window.unlockUserAction('${user._id}')">Unlock account</button>`);
+    if (has('USER_DELETE')) actions.push(`<button class="danger" data-user-action="delete" data-user-id="${user._id}" onclick="window.deleteUserAction('${user._id}')">Delete User</button>`);
 
     portalFrame(
       'User Details',
@@ -736,40 +799,9 @@ async function userDetailsPage(id) {
          </aside>
        </section>`
     );
-
-    const statusBtn = document.querySelector('#user-status-action');
-    if (statusBtn) statusBtn.onclick = () => userStatusDialog(user);
   } catch (error) {
     portalFrame('User Details', '', `<p class="notice error">${esc(error.message)}</p>`);
   }
-}
-
-function userStatusDialog(user) {
-  const actions =
-    user.accountStatus === 'LOCKED'
-      ? [['Unlock account', 'unlock', false]]
-      : user.accountStatus === 'INACTIVE'
-        ? [['Activate account', 'activate', false], ['Lock account', 'lock', true]]
-        : [['Deactivate account', 'deactivate', true], ['Lock account', 'lock', true]];
-
-  confirmAction({
-    title: 'Manage account status',
-    message: `Select an action for ${user.email}.`,
-    confirmLabel: actions[0][0],
-    danger: actions[0][2],
-    onConfirm: async () => {
-      const [, action] = actions[0];
-      try {
-        if (action === 'unlock') await api(`/api/users/${user._id}/unlock`, { method: 'PATCH', body: '{}' });
-        else if (action === 'lock') await api(`/api/users/${user._id}/lock`, { method: 'PATCH', body: JSON.stringify({ lockMinutes: 30 }) });
-        else await api(`/api/users/${user._id}/status`, { method: 'PATCH', body: JSON.stringify({ accountStatus: action === 'activate' ? 'ACTIVE' : 'INACTIVE' }) });
-        toast('Account status updated.');
-        render();
-      } catch (error) {
-        toast(error.message);
-      }
-    }
-  });
 }
 
 async function userRolePage(id) {
