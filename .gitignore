@@ -1,0 +1,6 @@
+node_modules/
+coverage/
+.mongodb-binaries/
+.env
+.env.test
+*.log
