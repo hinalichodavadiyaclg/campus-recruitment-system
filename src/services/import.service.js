@@ -310,7 +310,7 @@ export async function confirmImport(type, rows) {
       if (type === 'student') {
         const email = String(row.email).trim().toLowerCase();
         const universityId = String(row.universityId).trim();
-        const rawPassword = `Student@${crypto.randomBytes(4).toString('hex')}!`;
+        const rawPassword = process.env.DEFAULT_STUDENT_PASSWORD || 'Student@123456';
         const passwordHash = await hashPassword(rawPassword);
 
         // Create User account
@@ -363,7 +363,7 @@ export async function confirmImport(type, rows) {
         });
 
         // Create Recruiter user account
-        const rawPassword = `Company@${crypto.randomBytes(4).toString('hex')}!`;
+        const rawPassword = process.env.DEFAULT_COMPANY_PASSWORD || 'Company@123456';
         const passwordHash = await hashPassword(rawPassword);
         await User.create({
           email,
@@ -380,7 +380,7 @@ export async function confirmImport(type, rows) {
       } else if (type === 'placement') {
         const email = String(row.email).trim().toLowerCase();
         const employeeId = String(row.employeeId).trim();
-        const rawPassword = `Placement@${crypto.randomBytes(4).toString('hex')}!`;
+        const rawPassword = process.env.DEFAULT_PLACEMENT_PASSWORD || 'Placement@123456';
         const passwordHash = await hashPassword(rawPassword);
 
         const user = await User.create({

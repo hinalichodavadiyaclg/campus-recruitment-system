@@ -436,9 +436,13 @@ async function usersPage() {
     go('/dashboard');
     return;
   }
-  const createBtn = has('USER_CREATE') ? `<button class="primary" id="btn-create-user" type="button">+ Create User</button>` : '';
+  const createBtn = [
+    `<button class="secondary" id="btn-default-passwords" type="button">🔑 Default Passwords</button>`,
+    has('USER_CREATE') ? `<button class="primary" id="btn-create-user" type="button">+ Create User</button>` : ''
+  ].filter(Boolean).join(' ');
   portalFrame('User Management', 'Search accounts, review access, and manage account statuses.', `<div id="users-content" class="loading">Loading users…</div>`, createBtn);
 
+  document.querySelector('#btn-default-passwords').onclick = openDefaultPasswordsModal;
   if (has('USER_CREATE')) {
     document.querySelector('#btn-create-user').onclick = openCreateUserModal;
   }
@@ -528,6 +532,24 @@ function refreshUserView() {
   } else {
     render();
   }
+}
+
+function openDefaultPasswordsModal() {
+  showModal(`
+    <h2>Default Initial Passwords</h2>
+    <p style="margin-top:8px;">Initial default passwords for accounts imported from Excel:</p>
+    <div class="card" style="margin-top:16px; background:var(--bg-subtle);">
+      <dl class="definition-list">
+        <div><dt>Student Accounts</dt><dd><code style="font-size:1.1em; color:var(--teal);">Student@123456</code></dd></div>
+        <div><dt>Company Recruiter Accounts</dt><dd><code style="font-size:1.1em; color:var(--teal);">Company@123456</code></dd></div>
+        <div><dt>Placement Cell Accounts</dt><dd><code style="font-size:1.1em; color:var(--teal);">Placement@123456</code></dd></div>
+      </dl>
+    </div>
+    <p class="help-text" style="margin-top:16px;">Users can change their password after logging in, or administrators can reset passwords via the Edit User button.</p>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button class="primary" id="modal-close" type="button">Close</button>
+    </div>
+  `);
 }
 
 async function openCreateUserModal() {
@@ -1359,14 +1381,20 @@ async function excelImportPage(type) {
     placement: 'Upload Excel/CSV file to create Placement Head and Coordinator staff accounts.'
   };
 
+  const defaultPwd = type === 'student' ? 'Student@123456' : type === 'company' ? 'Company@123456' : 'Placement@123456';
+
   portalFrame(
     titles[type],
     subtitles[type],
     `<section class="card" style="max-width:960px">
        <div id="import-step-container">
-         <div class="row-between" style="margin-bottom:20px;">
+         <div class="row-between" style="margin-bottom:16px;">
            <p>Supported file formats: <b>.xlsx, .xls, .csv</b></p>
            <a class="secondary" href="/api/imports/templates/${type}" download="${type}_template.xlsx">Download Excel Template ⤓</a>
+         </div>
+
+         <div class="notice" style="margin-bottom:20px; background:rgba(18, 140, 150, 0.08); border-color:var(--teal);">
+           🔑 <strong>Default Password Notice:</strong> All imported ${type === 'student' ? 'students' : type === 'company' ? 'companies' : 'placement cell users'} will be assigned the initial default password: <b><code>${defaultPwd}</code></b>
          </div>
 
          <div class="upload-dropzone" id="dropzone">
@@ -1491,11 +1519,12 @@ async function excelImportPage(type) {
     previewArea.innerHTML = `<div class="loading">Importing records into MongoDB…</div>`;
     try {
       const result = await api(`/api/imports/confirm/${type}`, { method: 'POST', body: formData });
+      const defaultPwd = type === 'student' ? 'Student@123456' : type === 'company' ? 'Company@123456' : 'Placement@123456';
       previewArea.innerHTML = `
         <div class="center" style="padding:24px 0;">
           <div class="success-icon">✓</div>
           <h2>Import Completed</h2>
-          <p class="subcopy">Records have been saved to the MongoDB database and are now live in the recruitment portal.</p>
+          <p class="subcopy">Records have been saved to the MongoDB database and are now live in the recruitment portal.<br>Initial default password: <strong>${defaultPwd}</strong></p>
           <div class="stat-pill-row" style="max-width:500px; margin:20px auto;">
             <div class="stat-pill valid"><span>Imported</span><strong>${result.importedCount}</strong></div>
             <div class="stat-pill duplicate"><span>Skipped</span><strong>${result.skippedCount}</strong></div>
