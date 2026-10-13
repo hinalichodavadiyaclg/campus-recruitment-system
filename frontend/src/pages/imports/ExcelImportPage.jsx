@@ -123,12 +123,11 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
     }
   };
 
-  const listPath =
-    type === 'student'
-      ? '#/students'
-      : type === 'company'
-        ? '#/companies'
-        : '#/placement-officers';
+  const filteredListPath = {
+    student: '#/students/filtered',
+    company: '#/companies/filtered',
+    placement: '#/placement-officers/filtered'
+  };
 
   const sectionLabels = {
     student: 'Students',
@@ -407,7 +406,7 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
                 {exporting ? '⏳ Exporting...' : `📊 Export All ${modulePlural[type]} (.xlsx)`}
               </button>
               <a
-                href={type === 'student' ? '#/students/filtered' : listPath}
+                href={filteredListPath[type] || '#/students/filtered'}
                 style={{
                   padding: '10px 12px',
                   borderRadius: '8px',

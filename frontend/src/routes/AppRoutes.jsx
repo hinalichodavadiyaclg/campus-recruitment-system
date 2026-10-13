@@ -24,8 +24,10 @@ import { FilteredStudentRecordsPage } from '../pages/students/FilteredStudentRec
 import { StudentMyProfilePage } from '../pages/students/StudentMyProfilePage.jsx';
 import { StudentPublicProfilePage } from '../pages/students/StudentPublicProfilePage.jsx';
 import { CompaniesListPage } from '../pages/companies/CompaniesListPage.jsx';
+import { FilteredCompanyRecordsPage } from '../pages/companies/FilteredCompanyRecordsPage.jsx';
 import { CompanyMyProfilePage } from '../pages/companies/CompanyMyProfilePage.jsx';
 import { PlacementOfficersListPage } from '../pages/placement/PlacementOfficersListPage.jsx';
+import { FilteredPlacementRecordsPage } from '../pages/placement/FilteredPlacementRecordsPage.jsx';
 import { DepartmentsListPage } from '../pages/departments/DepartmentsListPage.jsx';
 import { CoursesListPage } from '../pages/courses/CoursesListPage.jsx';
 
@@ -136,10 +138,18 @@ export function AppRoutes() {
   }
 
   if (parts[0] === 'companies') {
+    const subRoute = (parts[1] || '').split('?')[0];
+    if (subRoute === 'filtered') {
+      return has('USER_READ') ? <FilteredCompanyRecordsPage /> : <NotFoundModulePage title="Company Records" path="/companies/filtered" />;
+    }
     return has('USER_READ') ? <CompaniesListPage /> : <DashboardPage />;
   }
 
   if (parts[0] === 'placement-officers') {
+    const subRoute = (parts[1] || '').split('?')[0];
+    if (subRoute === 'filtered') {
+      return has('USER_READ') ? <FilteredPlacementRecordsPage /> : <NotFoundModulePage title="Placement Records" path="/placement-officers/filtered" />;
+    }
     return has('USER_READ') ? <PlacementOfficersListPage /> : <DashboardPage />;
   }
 
