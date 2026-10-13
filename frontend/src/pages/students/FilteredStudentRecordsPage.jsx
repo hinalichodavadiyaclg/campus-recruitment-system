@@ -230,41 +230,43 @@ export function FilteredStudentRecordsPage() {
         >
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '12px',
-              alignItems: 'end'
+              display: 'flex',
+              alignItems: 'end',
+              gap: '8px',
+              flexWrap: 'nowrap',
+              overflowX: 'auto',
+              paddingBottom: '4px'
             }}
           >
-            <div>
+            <div style={{ flex: '1 1 180px', minWidth: '140px' }}>
               <label
                 htmlFor="filtered-search-input"
-                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+                style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', marginBottom: '5px', whiteSpace: 'nowrap' }}
               >
                 Search Records
               </label>
               <input
                 id="filtered-search-input"
                 type="text"
-                placeholder="Search by ID, Name, Email, or Branch"
+                placeholder="ID, Name, Email, Branch…"
                 value={search}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
+                  padding: '7px 10px',
+                  borderRadius: '7px',
                   border: '1px solid #cbd5e1',
-                  fontSize: '0.88rem'
+                  fontSize: '0.84rem'
                 }}
               />
             </div>
 
-            <div>
+            <div style={{ flex: '1 1 145px', minWidth: '130px' }}>
               <label
                 htmlFor="filtered-dept-select"
-                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+                style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', marginBottom: '5px', whiteSpace: 'nowrap' }}
               >
-                Filter by Department
+                Department
               </label>
               <select
                 id="filtered-dept-select"
@@ -272,10 +274,10 @@ export function FilteredStudentRecordsPage() {
                 onChange={(e) => handleDepartmentFilterChange(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
+                  padding: '7px 8px',
+                  borderRadius: '7px',
                   border: '1px solid #cbd5e1',
-                  fontSize: '0.88rem',
+                  fontSize: '0.84rem',
                   backgroundColor: '#ffffff'
                 }}
               >
@@ -288,12 +290,12 @@ export function FilteredStudentRecordsPage() {
               </select>
             </div>
 
-            <div>
+            <div style={{ flex: '1 1 135px', minWidth: '120px' }}>
               <label
                 htmlFor="filtered-course-select"
-                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+                style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', marginBottom: '5px', whiteSpace: 'nowrap' }}
               >
-                Filter by Course
+                Course
               </label>
               <select
                 id="filtered-course-select"
@@ -305,16 +307,16 @@ export function FilteredStudentRecordsPage() {
                 disabled={Boolean(departmentFilter && availableCourses.length === 0)}
                 style={{
                   width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
+                  padding: '7px 8px',
+                  borderRadius: '7px',
                   border: '1px solid #cbd5e1',
-                  fontSize: '0.88rem',
+                  fontSize: '0.84rem',
                   backgroundColor: '#ffffff'
                 }}
               >
                 <option value="">
                   {departmentFilter && availableCourses.length === 0
-                    ? 'No courses in selected department'
+                    ? 'No courses'
                     : 'All Courses'}
                 </option>
                 {availableCourses.map((c) => (
@@ -325,10 +327,10 @@ export function FilteredStudentRecordsPage() {
               </select>
             </div>
 
-            <div>
+            <div style={{ flex: '0 1 110px', minWidth: '95px' }}>
               <label
                 htmlFor="filtered-semester-select"
-                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+                style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', marginBottom: '5px', whiteSpace: 'nowrap' }}
               >
                 Semester
               </label>
@@ -341,28 +343,28 @@ export function FilteredStudentRecordsPage() {
                 }}
                 style={{
                   width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
+                  padding: '7px 8px',
+                  borderRadius: '7px',
                   border: '1px solid #cbd5e1',
-                  fontSize: '0.88rem',
+                  fontSize: '0.84rem',
                   backgroundColor: '#ffffff'
                 }}
               >
                 <option value="">All Semesters</option>
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
                   <option key={sem} value={sem}>
-                    Semester {sem}
+                    Sem {sem}
                   </option>
                 ))}
               </select>
             </div>
 
-            <div>
+            <div style={{ flex: '0 1 95px', minWidth: '85px' }}>
               <label
                 htmlFor="filtered-cgpa-input"
-                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+                style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', marginBottom: '5px', whiteSpace: 'nowrap' }}
               >
-                Minimum CGPA
+                Min CGPA
               </label>
               <input
                 id="filtered-cgpa-input"
@@ -378,18 +380,18 @@ export function FilteredStudentRecordsPage() {
                 }}
                 style={{
                   width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
+                  padding: '7px 8px',
+                  borderRadius: '7px',
                   border: '1px solid #cbd5e1',
-                  fontSize: '0.88rem'
+                  fontSize: '0.84rem'
                 }}
               />
             </div>
 
-            <div>
+            <div style={{ flex: '0 1 130px', minWidth: '120px' }}>
               <label
                 htmlFor="filtered-backlogs-select"
-                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+                style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', marginBottom: '5px', whiteSpace: 'nowrap' }}
               >
                 Active Backlogs
               </label>
@@ -402,22 +404,22 @@ export function FilteredStudentRecordsPage() {
                 }}
                 style={{
                   width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
+                  padding: '7px 8px',
+                  borderRadius: '7px',
                   border: '1px solid #cbd5e1',
-                  fontSize: '0.88rem',
+                  fontSize: '0.84rem',
                   backgroundColor: '#ffffff'
                 }}
               >
-                <option value="">All Backlog Status</option>
-                <option value="0">0 Backlogs (Eligible)</option>
-                <option value="max1">Max 1 Backlog</option>
-                <option value="max2">Max 2 Backlogs</option>
-                <option value="has">Has Backlogs (&gt; 0)</option>
+                <option value="">All Status</option>
+                <option value="0">0 (Clean)</option>
+                <option value="max1">Max 1</option>
+                <option value="max2">Max 2</option>
+                <option value="has">Has Backlogs</option>
               </select>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center' }}>
               {(search || departmentFilter || courseFilter || semesterFilter || minCgpaFilter || backlogFilter) && (
                 <button
                   type="button"
@@ -432,12 +434,13 @@ export function FilteredStudentRecordsPage() {
                     setCurrentPage(1);
                   }}
                   style={{
-                    padding: '9px 14px',
-                    fontSize: '0.84rem',
+                    padding: '7px 12px',
+                    fontSize: '0.80rem',
                     color: '#64748b',
-                    borderRadius: '8px',
+                    borderRadius: '7px',
                     border: '1px solid #e2e8f0',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
                   }}
                 >
                   Clear Filters

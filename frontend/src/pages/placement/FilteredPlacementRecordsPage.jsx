@@ -22,7 +22,6 @@ export function FilteredPlacementRecordsPage() {
   const [departmentFilter, setDepartmentFilter] = useState(
     queryParams.get('department') || queryParams.get('departmentId') || ''
   );
-  const [designationFilter, setDesignationFilter] = useState(queryParams.get('designation') || '');
 
   const [officers, setOfficers] = useState([]);
   const [departmentsList, setDepartmentsList] = useState([]);
@@ -60,15 +59,6 @@ export function FilteredPlacementRecordsPage() {
       setDepartmentFilter('');
     }
   };
-
-  // Unique designations from loaded placement officers
-  const availableDesignations = useMemo(() => {
-    const set = new Set();
-    officers.forEach((p) => {
-      if (p.designation?.trim()) set.add(p.designation.trim());
-    });
-    return Array.from(set).sort();
-  }, [officers]);
 
   const filteredOfficers = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -109,12 +99,7 @@ export function FilteredPlacementRecordsPage() {
         }
       }
 
-      // 2. Specific designation matching (if selected)
-      if (designationFilter && p.designation?.toLowerCase() !== designationFilter.toLowerCase()) {
-        return false;
-      }
-
-      // 3. Text search
+      // 2. Text search
       if (q) {
         const fullName = [p.firstName, p.lastName].filter(Boolean).join(' ').toLowerCase();
         const matchName = fullName.includes(q);
@@ -127,7 +112,7 @@ export function FilteredPlacementRecordsPage() {
       }
       return true;
     });
-  }, [officers, search, roleFilter, departmentFilter, designationFilter, departmentsList]);
+  }, [officers, search, roleFilter, departmentFilter, departmentsList]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOfficers.length / PAGE_SIZE));
   const paginatedOfficers = useMemo(() => {
@@ -146,8 +131,7 @@ export function FilteredPlacementRecordsPage() {
         filtered: true,
         search,
         role: roleFilter,
-        department: departmentFilter,
-        designation: designationFilter
+        department: departmentFilter
       });
       toast(`Exported ${filteredOfficers.length} matching placement cell record(s) to Excel.`);
     } catch (err) {
@@ -167,7 +151,6 @@ export function FilteredPlacementRecordsPage() {
       if (activeDept) filterSummaryParts.push(`Department: ${activeDept.name}`);
     }
   }
-  if (designationFilter) filterSummaryParts.push(`Designation: ${designationFilter}`);
 
   const subtitleText = filterSummaryParts.length > 0
     ? `Filtered view by ${filterSummaryParts.join(' • ')}`
@@ -243,23 +226,25 @@ export function FilteredPlacementRecordsPage() {
         >
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-              gap: '12px',
-              alignItems: 'end'
+              display: 'flex',
+              alignItems: 'end',
+              gap: '10px',
+              flexWrap: 'nowrap',
+              overflowX: 'auto',
+              paddingBottom: '4px'
             }}
           >
-            <div>
+            <div style={{ flex: '1 1 240px', minWidth: '180px' }}>
               <label
                 htmlFor="filtered-placement-search"
-                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+                style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', marginBottom: '5px', whiteSpace: 'nowrap' }}
               >
                 Search Placement Officers
               </label>
               <input
                 id="filtered-placement-search"
                 type="text"
-                placeholder="Search by name, employee ID, email, role…"
+                placeholder="Name, ID, Email, Role…"
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -267,18 +252,18 @@ export function FilteredPlacementRecordsPage() {
                 }}
                 style={{
                   width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
+                  padding: '7px 10px',
+                  borderRadius: '7px',
                   border: '1px solid #cbd5e1',
-                  fontSize: '0.88rem'
+                  fontSize: '0.84rem'
                 }}
               />
             </div>
 
-            <div>
+            <div style={{ flex: '1 1 200px', minWidth: '160px' }}>
               <label
                 htmlFor="filtered-placement-role-select"
-                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+                style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', marginBottom: '5px', whiteSpace: 'nowrap' }}
               >
                 Placement Filter
               </label>
@@ -288,10 +273,10 @@ export function FilteredPlacementRecordsPage() {
                 onChange={(e) => handleRoleFilterChange(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
+                  padding: '7px 8px',
+                  borderRadius: '7px',
                   border: '1px solid #cbd5e1',
-                  fontSize: '0.88rem',
+                  fontSize: '0.84rem',
                   backgroundColor: '#ffffff'
                 }}
               >
@@ -303,10 +288,10 @@ export function FilteredPlacementRecordsPage() {
 
             {/* Dynamic Department Filter — shown ONLY when Placement Coordinator is selected */}
             {roleFilter === 'ROLE_PLACEMENT_COORDINATOR' && (
-              <div>
+              <div style={{ flex: '1 1 200px', minWidth: '160px' }}>
                 <label
                   htmlFor="filtered-placement-dept-select"
-                  style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', marginBottom: '6px' }}
+                  style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#1e40af', marginBottom: '5px', whiteSpace: 'nowrap' }}
                 >
                   Department (Coordinator)
                 </label>
@@ -319,10 +304,10 @@ export function FilteredPlacementRecordsPage() {
                   }}
                   style={{
                     width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
+                    padding: '7px 8px',
+                    borderRadius: '7px',
                     border: '1.5px solid #3b82f6',
-                    fontSize: '0.88rem',
+                    fontSize: '0.84rem',
                     backgroundColor: '#eff6ff',
                     color: '#1e3a8a',
                     fontWeight: 600
@@ -338,42 +323,8 @@ export function FilteredPlacementRecordsPage() {
               </div>
             )}
 
-            {availableDesignations.length > 0 && (
-              <div>
-                <label
-                  htmlFor="filtered-designation-select"
-                  style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
-                >
-                  Filter by Designation
-                </label>
-                <select
-                  id="filtered-designation-select"
-                  value={designationFilter}
-                  onChange={(e) => {
-                    setDesignationFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '0.88rem',
-                    backgroundColor: '#ffffff'
-                  }}
-                >
-                  <option value="">All Designations</option>
-                  {availableDesignations.map((desig) => (
-                    <option key={desig} value={desig}>
-                      {desig}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {(search || roleFilter || departmentFilter || designationFilter) && (
+            <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center' }}>
+              {(search || roleFilter || departmentFilter) && (
                 <button
                   type="button"
                   className="ghost"
@@ -381,16 +332,16 @@ export function FilteredPlacementRecordsPage() {
                     setSearch('');
                     setRoleFilter('');
                     setDepartmentFilter('');
-                    setDesignationFilter('');
                     setCurrentPage(1);
                   }}
                   style={{
-                    padding: '9px 14px',
-                    fontSize: '0.84rem',
+                    padding: '7px 12px',
+                    fontSize: '0.80rem',
                     color: '#64748b',
-                    borderRadius: '8px',
+                    borderRadius: '7px',
                     border: '1px solid #e2e8f0',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
                   }}
                 >
                   Clear Filters
@@ -415,7 +366,7 @@ export function FilteredPlacementRecordsPage() {
             <div>
               Showing <strong style={{ color: '#0f172a' }}>{filteredOfficers.length}</strong> of{' '}
               <strong>{officers.length}</strong> total placement officer record(s)
-              {(search || roleFilter || departmentFilter || designationFilter) && (
+              {(search || roleFilter || departmentFilter) && (
                 <span style={{ marginLeft: '8px', color: '#1d4ed8', fontWeight: 600 }}>
                   (Filters Active)
                 </span>
