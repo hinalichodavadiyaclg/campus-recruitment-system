@@ -20,7 +20,6 @@ import { UserDetailsPage } from '../pages/users/UserDetailsPage.jsx';
 import { UserRoleChangePage } from '../pages/users/UserRoleChangePage.jsx';
 
 // Domain Profile Pages
-import { StudentsListPage } from '../pages/students/StudentsListPage.jsx';
 import { FilteredStudentRecordsPage } from '../pages/students/FilteredStudentRecordsPage.jsx';
 import { StudentMyProfilePage } from '../pages/students/StudentMyProfilePage.jsx';
 import { StudentPublicProfilePage } from '../pages/students/StudentPublicProfilePage.jsx';
@@ -127,16 +126,13 @@ export function AppRoutes() {
     return has('PLACEMENT_USER_IMPORT') ? <ExcelImportPage type="placement" /> : <NotFoundModulePage title="Import Placement Cell" path="/import/placement" />;
   }
 
-  // Domain Profile routes
+  // Domain Profile routes (Read-only student records with department/course filtering)
   if (parts[0] === 'students') {
     const subRoute = (parts[1] || '').split('?')[0];
-    if (subRoute === 'filtered') {
-      return (has('USER_READ') || has('STUDENT_READ')) ? <FilteredStudentRecordsPage /> : <NotFoundModulePage title="Filtered Student Records" path="/students/filtered" />;
-    }
-    if (parts.length > 1 && subRoute !== 'public') {
+    if (parts.length > 1 && subRoute !== 'filtered' && subRoute !== 'public') {
       return <StudentPublicProfilePage studentId={parts[1]} />;
     }
-    return has('USER_READ') || has('STUDENT_READ') ? <StudentsListPage /> : <DashboardPage />;
+    return (has('USER_READ') || has('STUDENT_READ')) ? <FilteredStudentRecordsPage /> : <DashboardPage />;
   }
 
   if (parts[0] === 'companies') {

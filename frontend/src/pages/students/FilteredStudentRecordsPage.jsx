@@ -104,15 +104,6 @@ export function FilteredStudentRecordsPage() {
     return filteredStudents.slice(start, start + PAGE_SIZE);
   }, [filteredStudents, currentPage]);
 
-  const handleBackToManagement = () => {
-    const params = new URLSearchParams();
-    if (search) params.set('search', search);
-    if (departmentFilter) params.set('department', departmentFilter);
-    if (courseFilter) params.set('course', courseFilter);
-    const qs = params.toString();
-    window.location.hash = `#/students${qs ? `?${qs}` : ''}`;
-  };
-
   const handleBackToImport = () => {
     window.location.hash = '#/import/student';
   };
@@ -144,30 +135,11 @@ export function FilteredStudentRecordsPage() {
   if (activeCourseObj) filterSummaryParts.push(`Course: ${activeCourseObj.name}`);
 
   const subtitleText = filterSummaryParts.length > 0
-    ? `Filtered preview by ${filterSummaryParts.join(' • ')}`
-    : 'All student records preview (no filters applied)';
+    ? `Filtered view by ${filterSummaryParts.join(' • ')}`
+    : 'All student records (Read-Only) — filter by department or course and export to Excel';
 
   const headerActions = (
     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-      <button
-        className="secondary"
-        type="button"
-        id="btn-back-to-management"
-        onClick={handleBackToManagement}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '6px',
-          padding: '9px 16px',
-          fontWeight: 600,
-          fontSize: '0.88rem',
-          borderRadius: '8px',
-          cursor: 'pointer'
-        }}
-      >
-        ← Back to Student Management
-      </button>
-
       <button
         className="secondary"
         type="button"
@@ -215,11 +187,11 @@ export function FilteredStudentRecordsPage() {
 
   return (
     <PortalLayout
-      title="Filtered Student Records"
+      title="Student Records"
       subtitle={subtitleText}
       actions={headerActions}
-      currentPath="/students/filtered"
-      category="STUDENT MANAGEMENT"
+      currentPath="/students"
+      category="STUDENTS"
       section="Students"
     >
       <section className="page-body">
