@@ -27,6 +27,9 @@ export function FilteredStudentRecordsPage() {
   const [courseFilter, setCourseFilter] = useState(
     queryParams.get('course') || queryParams.get('courseId') || ''
   );
+  const [semesterFilter, setSemesterFilter] = useState(queryParams.get('semester') || '');
+  const [minCgpaFilter, setMinCgpaFilter] = useState(queryParams.get('cgpa') || queryParams.get('minCgpa') || '');
+  const [backlogFilter, setBacklogFilter] = useState(queryParams.get('backlogs') || '');
 
   const [students, setStudents] = useState([]);
   const [departmentsList, setDepartmentsList] = useState([]);
@@ -93,9 +96,12 @@ export function FilteredStudentRecordsPage() {
       departmentId: departmentFilter,
       courseId: courseFilter,
       departments: departmentsList,
-      courses: coursesList
+      courses: coursesList,
+      semester: semesterFilter,
+      minCgpa: minCgpaFilter,
+      backlogs: backlogFilter
     });
-  }, [students, search, departmentFilter, courseFilter, departmentsList, coursesList]);
+  }, [students, search, departmentFilter, courseFilter, departmentsList, coursesList, semesterFilter, minCgpaFilter, backlogFilter]);
 
   // Paginated slice for read-only preview table
   const totalPages = Math.max(1, Math.ceil(filteredStudents.length / PAGE_SIZE));
@@ -115,7 +121,10 @@ export function FilteredStudentRecordsPage() {
         filtered: true,
         search,
         department: departmentFilter,
-        course: courseFilter
+        course: courseFilter,
+        semester: semesterFilter,
+        minCgpa: minCgpaFilter,
+        backlogs: backlogFilter
       });
       toast(`Exported ${filteredStudents.length} matching student record(s) to Excel.`);
     } catch (err) {
@@ -133,10 +142,23 @@ export function FilteredStudentRecordsPage() {
   if (search.trim()) filterSummaryParts.push(`Search: "${search.trim()}"`);
   if (activeDeptObj) filterSummaryParts.push(`Department: ${activeDeptObj.name}`);
   if (activeCourseObj) filterSummaryParts.push(`Course: ${activeCourseObj.name}`);
+  if (semesterFilter) filterSummaryParts.push(`Semester: ${semesterFilter}`);
+  if (minCgpaFilter) filterSummaryParts.push(`Min CGPA: ${minCgpaFilter}`);
+  if (backlogFilter) {
+    const bLabel =
+      backlogFilter === '0'
+        ? '0 Backlogs (Clean)'
+        : backlogFilter === 'max1'
+        ? 'Max 1 Backlog'
+        : backlogFilter === 'max2'
+        ? 'Max 2 Backlogs'
+        : 'Has Backlogs (>0)';
+    filterSummaryParts.push(bLabel);
+  }
 
   const subtitleText = filterSummaryParts.length > 0
     ? `Filtered view by ${filterSummaryParts.join(' • ')}`
-    : 'All student records (Read-Only) — filter by department or course and export to Excel';
+    : 'All student records (Read-Only) — filter by department, course, semester, CGPA or backlogs and export to Excel';
 
   const headerActions = (
     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -303,8 +325,100 @@ export function FilteredStudentRecordsPage() {
               </select>
             </div>
 
+            <div>
+              <label
+                htmlFor="filtered-semester-select"
+                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+              >
+                Semester
+              </label>
+              <select
+                id="filtered-semester-select"
+                value={semesterFilter}
+                onChange={(e) => {
+                  setSemesterFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '0.88rem',
+                  backgroundColor: '#ffffff'
+                }}
+              >
+                <option value="">All Semesters</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
+                  <option key={sem} value={sem}>
+                    Semester {sem}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="filtered-cgpa-input"
+                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+              >
+                Minimum CGPA
+              </label>
+              <input
+                id="filtered-cgpa-input"
+                type="number"
+                min="0"
+                max="10"
+                step="0.1"
+                placeholder="e.g. 7.0"
+                value={minCgpaFilter}
+                onChange={(e) => {
+                  setMinCgpaFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '0.88rem'
+                }}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="filtered-backlogs-select"
+                style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+              >
+                Active Backlogs
+              </label>
+              <select
+                id="filtered-backlogs-select"
+                value={backlogFilter}
+                onChange={(e) => {
+                  setBacklogFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '0.88rem',
+                  backgroundColor: '#ffffff'
+                }}
+              >
+                <option value="">All Backlog Status</option>
+                <option value="0">0 Backlogs (Eligible)</option>
+                <option value="max1">Max 1 Backlog</option>
+                <option value="max2">Max 2 Backlogs</option>
+                <option value="has">Has Backlogs (&gt; 0)</option>
+              </select>
+            </div>
+
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {(search || departmentFilter || courseFilter) && (
+              {(search || departmentFilter || courseFilter || semesterFilter || minCgpaFilter || backlogFilter) && (
                 <button
                   type="button"
                   className="ghost"
@@ -312,6 +426,9 @@ export function FilteredStudentRecordsPage() {
                     setSearch('');
                     setDepartmentFilter('');
                     setCourseFilter('');
+                    setSemesterFilter('');
+                    setMinCgpaFilter('');
+                    setBacklogFilter('');
                     setCurrentPage(1);
                   }}
                   style={{
@@ -319,7 +436,8 @@ export function FilteredStudentRecordsPage() {
                     fontSize: '0.84rem',
                     color: '#64748b',
                     borderRadius: '8px',
-                    border: '1px solid #e2e8f0'
+                    border: '1px solid #e2e8f0',
+                    cursor: 'pointer'
                   }}
                 >
                   Clear Filters

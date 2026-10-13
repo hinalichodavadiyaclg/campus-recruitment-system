@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { placementOfficerService } from '../../services/placement_officer.service.js';
+import { departmentService } from '../../services/department.service.js';
 import { importService } from '../../services/import.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 
@@ -17,9 +18,14 @@ export function FilteredPlacementRecordsPage() {
 
   const queryParams = useMemo(() => getHashQueryParams(), []);
   const [search, setSearch] = useState(queryParams.get('search') || '');
+  const [roleFilter, setRoleFilter] = useState(queryParams.get('role') || '');
+  const [departmentFilter, setDepartmentFilter] = useState(
+    queryParams.get('department') || queryParams.get('departmentId') || ''
+  );
   const [designationFilter, setDesignationFilter] = useState(queryParams.get('designation') || '');
 
   const [officers, setOfficers] = useState([]);
+  const [departmentsList, setDepartmentsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
@@ -30,8 +36,12 @@ export function FilteredPlacementRecordsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await placementOfficerService.listPlacementOfficers({ limit: 500 });
-      setOfficers(data.items || []);
+      const [officersData, deptsData] = await Promise.all([
+        placementOfficerService.listPlacementOfficers({ limit: 500 }),
+        departmentService.listDepartments({ limit: 100, isActive: true }).catch(() => ({ items: [] }))
+      ]);
+      setOfficers(officersData.items || officersData || []);
+      setDepartmentsList(deptsData.items || deptsData || []);
     } catch (err) {
       toast(err.message || 'Failed to load placement officer records.');
     } finally {
@@ -42,6 +52,14 @@ export function FilteredPlacementRecordsPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleRoleFilterChange = (newRole) => {
+    setRoleFilter(newRole);
+    setCurrentPage(1);
+    if (newRole !== 'ROLE_PLACEMENT_COORDINATOR') {
+      setDepartmentFilter('');
+    }
+  };
 
   // Unique designations from loaded placement officers
   const availableDesignations = useMemo(() => {
@@ -55,9 +73,48 @@ export function FilteredPlacementRecordsPage() {
   const filteredOfficers = useMemo(() => {
     const q = search.toLowerCase().trim();
     return officers.filter((p) => {
+      // 1. Role Filter matching
+      if (roleFilter === 'ROLE_PLACEMENT_HEAD') {
+        const isHead =
+          p.role === 'ROLE_PLACEMENT_HEAD' ||
+          p.role === 'PLACEMENT_HEAD' ||
+          p.designation?.toLowerCase().includes('head');
+        if (!isHead) return false;
+      } else if (roleFilter === 'ROLE_PLACEMENT_COORDINATOR') {
+        const isCoordinator =
+          p.role === 'ROLE_PLACEMENT_COORDINATOR' ||
+          p.role === 'PLACEMENT_COORDINATOR' ||
+          p.designation?.toLowerCase().includes('coordinator');
+        if (!isCoordinator) return false;
+
+        // Dynamic Department scoping (only when Placement Coordinator is selected)
+        if (departmentFilter) {
+          const pDeptId = p.departmentId?._id
+            ? String(p.departmentId._id)
+            : p.departmentId
+            ? String(p.departmentId)
+            : '';
+          if (pDeptId) {
+            if (pDeptId !== String(departmentFilter)) return false;
+          } else if (p.department) {
+            const matchedDept = departmentsList.find(
+              (d) =>
+                d.name?.toLowerCase() === p.department.toLowerCase() ||
+                d.code?.toLowerCase() === p.department.toLowerCase()
+            );
+            if (!matchedDept || String(matchedDept._id) !== String(departmentFilter)) return false;
+          } else {
+            return false;
+          }
+        }
+      }
+
+      // 2. Specific designation matching (if selected)
       if (designationFilter && p.designation?.toLowerCase() !== designationFilter.toLowerCase()) {
         return false;
       }
+
+      // 3. Text search
       if (q) {
         const fullName = [p.firstName, p.lastName].filter(Boolean).join(' ').toLowerCase();
         const matchName = fullName.includes(q);
@@ -70,7 +127,7 @@ export function FilteredPlacementRecordsPage() {
       }
       return true;
     });
-  }, [officers, search, designationFilter]);
+  }, [officers, search, roleFilter, departmentFilter, designationFilter, departmentsList]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOfficers.length / PAGE_SIZE));
   const paginatedOfficers = useMemo(() => {
@@ -87,7 +144,10 @@ export function FilteredPlacementRecordsPage() {
     try {
       await importService.exportData('placement', {
         filtered: true,
-        search
+        search,
+        role: roleFilter,
+        department: departmentFilter,
+        designation: designationFilter
       });
       toast(`Exported ${filteredOfficers.length} matching placement cell record(s) to Excel.`);
     } catch (err) {
@@ -99,11 +159,19 @@ export function FilteredPlacementRecordsPage() {
 
   const filterSummaryParts = [];
   if (search.trim()) filterSummaryParts.push(`Search: "${search.trim()}"`);
+  if (roleFilter === 'ROLE_PLACEMENT_HEAD') filterSummaryParts.push('Role: Placement Head');
+  if (roleFilter === 'ROLE_PLACEMENT_COORDINATOR') {
+    filterSummaryParts.push('Role: Placement Coordinator');
+    if (departmentFilter) {
+      const activeDept = departmentsList.find((d) => String(d._id) === String(departmentFilter));
+      if (activeDept) filterSummaryParts.push(`Department: ${activeDept.name}`);
+    }
+  }
   if (designationFilter) filterSummaryParts.push(`Designation: ${designationFilter}`);
 
   const subtitleText = filterSummaryParts.length > 0
     ? `Filtered view by ${filterSummaryParts.join(' • ')}`
-    : 'All placement cell officer records (Read-Only) — filter by designation or search and export to Excel';
+    : 'All placement cell officer records (Read-Only) — filter by role, department, or search and export to Excel';
 
   const headerActions = (
     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -209,18 +277,15 @@ export function FilteredPlacementRecordsPage() {
 
             <div>
               <label
-                htmlFor="filtered-designation-select"
+                htmlFor="filtered-placement-role-select"
                 style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
               >
-                Filter by Designation
+                Placement Filter
               </label>
               <select
-                id="filtered-designation-select"
-                value={designationFilter}
-                onChange={(e) => {
-                  setDesignationFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
+                id="filtered-placement-role-select"
+                value={roleFilter}
+                onChange={(e) => handleRoleFilterChange(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '9px 12px',
@@ -230,22 +295,92 @@ export function FilteredPlacementRecordsPage() {
                   backgroundColor: '#ffffff'
                 }}
               >
-                <option value="">All Designations</option>
-                {availableDesignations.map((desig) => (
-                  <option key={desig} value={desig}>
-                    {desig}
-                  </option>
-                ))}
+                <option value="">All Placement Roles</option>
+                <option value="ROLE_PLACEMENT_HEAD">Placement Head</option>
+                <option value="ROLE_PLACEMENT_COORDINATOR">Placement Coordinator</option>
               </select>
             </div>
 
+            {/* Dynamic Department Filter — shown ONLY when Placement Coordinator is selected */}
+            {roleFilter === 'ROLE_PLACEMENT_COORDINATOR' && (
+              <div>
+                <label
+                  htmlFor="filtered-placement-dept-select"
+                  style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', marginBottom: '6px' }}
+                >
+                  Department (Coordinator)
+                </label>
+                <select
+                  id="filtered-placement-dept-select"
+                  value={departmentFilter}
+                  onChange={(e) => {
+                    setDepartmentFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #3b82f6',
+                    fontSize: '0.88rem',
+                    backgroundColor: '#eff6ff',
+                    color: '#1e3a8a',
+                    fontWeight: 600
+                  }}
+                >
+                  <option value="">All Departments</option>
+                  {departmentsList.map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {d.name} {d.code ? `(${d.code})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {availableDesignations.length > 0 && (
+              <div>
+                <label
+                  htmlFor="filtered-designation-select"
+                  style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}
+                >
+                  Filter by Designation
+                </label>
+                <select
+                  id="filtered-designation-select"
+                  value={designationFilter}
+                  onChange={(e) => {
+                    setDesignationFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '0.88rem',
+                    backgroundColor: '#ffffff'
+                  }}
+                >
+                  <option value="">All Designations</option>
+                  {availableDesignations.map((desig) => (
+                    <option key={desig} value={desig}>
+                      {desig}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {(search || designationFilter) && (
+              {(search || roleFilter || departmentFilter || designationFilter) && (
                 <button
                   type="button"
                   className="ghost"
                   onClick={() => {
                     setSearch('');
+                    setRoleFilter('');
+                    setDepartmentFilter('');
                     setDesignationFilter('');
                     setCurrentPage(1);
                   }}
@@ -280,7 +415,7 @@ export function FilteredPlacementRecordsPage() {
             <div>
               Showing <strong style={{ color: '#0f172a' }}>{filteredOfficers.length}</strong> of{' '}
               <strong>{officers.length}</strong> total placement officer record(s)
-              {(search || designationFilter) && (
+              {(search || roleFilter || departmentFilter || designationFilter) && (
                 <span style={{ marginLeft: '8px', color: '#1d4ed8', fontWeight: 600 }}>
                   (Filters Active)
                 </span>

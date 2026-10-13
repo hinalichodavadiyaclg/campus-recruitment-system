@@ -55,7 +55,10 @@ export function filterStudents({
   departmentId = '',
   courseId = '',
   departments = [],
-  courses = []
+  courses = [],
+  semester = '',
+  minCgpa = '',
+  backlogs = ''
 }) {
   const q = search.toLowerCase().trim();
 
@@ -114,6 +117,37 @@ export function filterStudents({
       }
     }
 
-    return matchesSearch && matchesDept && matchesCourse;
+    // 4. Semester matching
+    let matchesSemester = true;
+    if (semester !== '' && semester !== undefined && semester !== null) {
+      const sSem = s?.semester !== undefined && s?.semester !== null ? s.semester : s?.currentSemester;
+      matchesSemester = Number(sSem) === Number(semester);
+    }
+
+    // 5. Min CGPA matching
+    let matchesCgpa = true;
+    if (minCgpa !== '' && minCgpa !== undefined && minCgpa !== null) {
+      const sCgpa = Number(s?.cgpa);
+      matchesCgpa = !isNaN(sCgpa) && sCgpa >= Number(minCgpa);
+    }
+
+    // 6. Backlogs matching
+    let matchesBacklogs = true;
+    if (backlogs !== '' && backlogs !== undefined && backlogs !== null) {
+      const sBacklogs = Number(s?.backlogs ?? s?.activeBacklogs ?? 0);
+      if (backlogs === '0' || backlogs === 'zero') {
+        matchesBacklogs = sBacklogs === 0;
+      } else if (backlogs === 'max1') {
+        matchesBacklogs = sBacklogs <= 1;
+      } else if (backlogs === 'max2') {
+        matchesBacklogs = sBacklogs <= 2;
+      } else if (backlogs === 'has') {
+        matchesBacklogs = sBacklogs > 0;
+      } else if (!isNaN(Number(backlogs))) {
+        matchesBacklogs = sBacklogs <= Number(backlogs);
+      }
+    }
+
+    return matchesSearch && matchesDept && matchesCourse && matchesSemester && matchesCgpa && matchesBacklogs;
   });
 }

@@ -47,6 +47,13 @@ export function UsersListPage() {
   const [coursesList, setCoursesList] = useState([]);
   const [studentDepartmentFilter, setStudentDepartmentFilter] = useState('');
   const [studentCourseFilter, setStudentCourseFilter] = useState('');
+  const [studentSemesterFilter, setStudentSemesterFilter] = useState('');
+  const [studentMinCgpaFilter, setStudentMinCgpaFilter] = useState('');
+  const [studentBacklogFilter, setStudentBacklogFilter] = useState('');
+
+  // Placement Role & Department filter
+  const [officerRoleFilter, setOfficerRoleFilter] = useState('');
+  const [officerDepartmentFilter, setOfficerDepartmentFilter] = useState('');
 
   // Modals
   const [defaultPasswordsOpen, setDefaultPasswordsOpen] = useState(false);
@@ -149,9 +156,22 @@ export function UsersListPage() {
       departmentId: studentDepartmentFilter,
       courseId: studentCourseFilter,
       departments: departmentsList,
-      courses: coursesList
+      courses: coursesList,
+      semester: studentSemesterFilter,
+      minCgpa: studentMinCgpaFilter,
+      backlogs: studentBacklogFilter
     });
-  }, [students, search, studentDepartmentFilter, studentCourseFilter, departmentsList, coursesList]);
+  }, [
+    students,
+    search,
+    studentDepartmentFilter,
+    studentCourseFilter,
+    departmentsList,
+    coursesList,
+    studentSemesterFilter,
+    studentMinCgpaFilter,
+    studentBacklogFilter
+  ]);
 
   const filteredCompanies = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -167,17 +187,59 @@ export function UsersListPage() {
 
   const filteredOfficers = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return officers;
-    return officers.filter(
-      (po) =>
-        po.employeeId?.toLowerCase().includes(q) ||
-        po.firstName?.toLowerCase().includes(q) ||
-        po.lastName?.toLowerCase().includes(q) ||
-        po.email?.toLowerCase().includes(q) ||
-        po.mobileNumber?.toLowerCase().includes(q) ||
-        po.role?.toLowerCase().includes(q)
-    );
-  }, [officers, search]);
+    return officers.filter((po) => {
+      // 1. Role matching
+      if (officerRoleFilter === 'ROLE_PLACEMENT_HEAD') {
+        const isHead =
+          po.role === 'ROLE_PLACEMENT_HEAD' ||
+          po.role === 'PLACEMENT_HEAD' ||
+          po.designation?.toLowerCase().includes('head');
+        if (!isHead) return false;
+      } else if (officerRoleFilter === 'ROLE_PLACEMENT_COORDINATOR') {
+        const isCoordinator =
+          po.role === 'ROLE_PLACEMENT_COORDINATOR' ||
+          po.role === 'PLACEMENT_COORDINATOR' ||
+          po.designation?.toLowerCase().includes('coordinator');
+        if (!isCoordinator) return false;
+
+        // Dynamic Department scoping
+        if (officerDepartmentFilter) {
+          const pDeptId = po.departmentId?._id
+            ? String(po.departmentId._id)
+            : po.departmentId
+            ? String(po.departmentId)
+            : '';
+          if (pDeptId) {
+            if (pDeptId !== String(officerDepartmentFilter)) return false;
+          } else if (po.department) {
+            const matchedDept = departmentsList.find(
+              (d) =>
+                d.name?.toLowerCase() === po.department.toLowerCase() ||
+                d.code?.toLowerCase() === po.department.toLowerCase()
+            );
+            if (!matchedDept || String(matchedDept._id) !== String(officerDepartmentFilter)) return false;
+          } else {
+            return false;
+          }
+        }
+      }
+
+      // 2. Search query matching
+      if (q) {
+        return (
+          po.employeeId?.toLowerCase().includes(q) ||
+          po.firstName?.toLowerCase().includes(q) ||
+          po.lastName?.toLowerCase().includes(q) ||
+          po.email?.toLowerCase().includes(q) ||
+          po.mobileNumber?.toLowerCase().includes(q) ||
+          po.role?.toLowerCase().includes(q) ||
+          po.designation?.toLowerCase().includes(q) ||
+          (po.departmentId?.name || po.department || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [officers, search, officerRoleFilter, officerDepartmentFilter, departmentsList]);
 
   const getDisplayName = (u) => {
     if (u?.companyName) return u.companyName;
@@ -531,40 +593,131 @@ export function UsersListPage() {
         {/* TAB 1: STUDENTS */}
         {activeTab === 'students' && (
           <>
-            <div className="filters" style={{ gridTemplateColumns: '2fr 1fr 1fr' }}>
-              <input
-                id="student-search"
-                placeholder="Search by University ID, Name, Email, or Branch"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <select
-                id="student-filter-department"
-                value={studentDepartmentFilter}
-                onChange={(e) => handleDepartmentFilterChange(e.target.value)}
-              >
-                <option value="">All Departments</option>
-                {departmentsList.map((d) => (
-                  <option key={d._id} value={d._id}>
-                    {d.name} {d.code ? `(${d.code})` : ''}
-                  </option>
-                ))}
-              </select>
-              <select
-                id="student-filter-course"
-                value={studentCourseFilter}
-                onChange={(e) => setStudentCourseFilter(e.target.value)}
-                disabled={!studentDepartmentFilter}
-                title={!studentDepartmentFilter ? 'Select a department first' : 'Filter by course'}
-                style={!studentDepartmentFilter ? { opacity: 0.65, cursor: 'not-allowed', backgroundColor: '#f1f5f9' } : {}}
-              >
-                <option value="">All Courses</option>
-                {availableCourses.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.name} {c.code ? `(${c.code})` : ''}
-                  </option>
-                ))}
-              </select>
+            <div
+              className="filters"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: '10px',
+                alignItems: 'end',
+                marginBottom: '16px'
+              }}
+            >
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
+                  Search
+                </label>
+                <input
+                  id="student-search"
+                  placeholder="ID, Name, Email, or Branch"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
+                  Department
+                </label>
+                <select
+                  id="student-filter-department"
+                  value={studentDepartmentFilter}
+                  onChange={(e) => handleDepartmentFilterChange(e.target.value)}
+                >
+                  <option value="">All Departments</option>
+                  {departmentsList.map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {d.name} {d.code ? `(${d.code})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
+                  Course / Branch
+                </label>
+                <select
+                  id="student-filter-course"
+                  value={studentCourseFilter}
+                  onChange={(e) => setStudentCourseFilter(e.target.value)}
+                  disabled={!studentDepartmentFilter}
+                  title={!studentDepartmentFilter ? 'Select a department first' : 'Filter by course'}
+                  style={!studentDepartmentFilter ? { opacity: 0.65, cursor: 'not-allowed', backgroundColor: '#f1f5f9' } : {}}
+                >
+                  <option value="">All Courses</option>
+                  {availableCourses.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name} {c.code ? `(${c.code})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
+                  Semester
+                </label>
+                <select
+                  id="student-filter-semester"
+                  value={studentSemesterFilter}
+                  onChange={(e) => setStudentSemesterFilter(e.target.value)}
+                >
+                  <option value="">All Semesters</option>
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                    <option key={s} value={s}>
+                      Semester {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
+                  Min CGPA
+                </label>
+                <input
+                  id="student-filter-cgpa"
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.1"
+                  placeholder="e.g. 7.0"
+                  value={studentMinCgpaFilter}
+                  onChange={(e) => setStudentMinCgpaFilter(e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
+                  Active Backlogs
+                </label>
+                <select
+                  id="student-filter-backlogs"
+                  value={studentBacklogFilter}
+                  onChange={(e) => setStudentBacklogFilter(e.target.value)}
+                >
+                  <option value="">All Backlog Status</option>
+                  <option value="0">0 Backlogs (Clean)</option>
+                  <option value="max1">Max 1 Backlog</option>
+                  <option value="max2">Max 2 Backlogs</option>
+                  <option value="has">Has Backlogs (&gt; 0)</option>
+                </select>
+              </div>
+              {(search || studentDepartmentFilter || studentCourseFilter || studentSemesterFilter || studentMinCgpaFilter || studentBacklogFilter) && (
+                <div>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      setSearch('');
+                      setStudentDepartmentFilter('');
+                      setStudentCourseFilter('');
+                      setStudentSemesterFilter('');
+                      setStudentMinCgpaFilter('');
+                      setStudentBacklogFilter('');
+                    }}
+                    style={{ padding: '8px 12px', fontSize: '0.84rem' }}
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              )}
             </div>
 
             <article className="card table-card">
@@ -742,12 +895,82 @@ export function UsersListPage() {
         {/* TAB 3: PLACEMENT CELL */}
         {activeTab === 'placement' && (
           <>
-            <div className="filters">
-              <input
-                placeholder="Search by Employee ID, Name, Email, or Role"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+            <div
+              className="filters"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: officerRoleFilter === 'ROLE_PLACEMENT_COORDINATOR' ? '2fr 1.5fr 1.5fr auto' : '2fr 1.5fr auto',
+                gap: '12px',
+                alignItems: 'end',
+                marginBottom: '16px'
+              }}
+            >
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
+                  Search Placement Officers
+                </label>
+                <input
+                  placeholder="Search by Employee ID, Name, Email, or Role"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
+                  Placement Filter
+                </label>
+                <select
+                  id="user-officer-role-filter"
+                  value={officerRoleFilter}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setOfficerRoleFilter(val);
+                    if (val !== 'ROLE_PLACEMENT_COORDINATOR') {
+                      setOfficerDepartmentFilter('');
+                    }
+                  }}
+                >
+                  <option value="">All Placement Roles</option>
+                  <option value="ROLE_PLACEMENT_HEAD">Placement Head</option>
+                  <option value="ROLE_PLACEMENT_COORDINATOR">Placement Coordinator</option>
+                </select>
+              </div>
+              {officerRoleFilter === 'ROLE_PLACEMENT_COORDINATOR' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#1e40af', marginBottom: '4px' }}>
+                    Department (Coordinator)
+                  </label>
+                  <select
+                    id="user-officer-dept-filter"
+                    value={officerDepartmentFilter}
+                    onChange={(e) => setOfficerDepartmentFilter(e.target.value)}
+                    style={{ backgroundColor: '#eff6ff', borderColor: '#3b82f6', color: '#1e3a8a', fontWeight: 600 }}
+                  >
+                    <option value="">All Departments</option>
+                    {departmentsList.map((d) => (
+                      <option key={d._id} value={d._id}>
+                        {d.name} {d.code ? `(${d.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {(search || officerRoleFilter || officerDepartmentFilter) && (
+                <div>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      setSearch('');
+                      setOfficerRoleFilter('');
+                      setOfficerDepartmentFilter('');
+                    }}
+                    style={{ padding: '8px 12px', fontSize: '0.84rem' }}
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              )}
             </div>
 
             <article className="card table-card">

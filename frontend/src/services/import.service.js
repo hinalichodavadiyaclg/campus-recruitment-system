@@ -35,12 +35,32 @@ export const importService = {
     });
   },
 
-  exportData: async (type, { filtered = false, search = '', department = '', course = '' } = {}) => {
+  exportData: async (type, options = {}) => {
+    const {
+      filtered = false,
+      search = '',
+      department = '',
+      course = '',
+      role = '',
+      designation = '',
+      semester = '',
+      minCgpa = '',
+      cgpa = '',
+      backlogs = ''
+    } = options;
+
     const params = new URLSearchParams();
     if (filtered) params.set('filtered', 'true');
     if (search) params.set('search', search);
     if (department) params.set('department', department);
     if (course) params.set('course', course);
+    if (role) params.set('role', role);
+    if (designation) params.set('designation', designation);
+    if (semester !== '' && semester !== undefined && semester !== null) params.set('semester', semester);
+    const effectiveCgpa = minCgpa || cgpa;
+    if (effectiveCgpa !== '' && effectiveCgpa !== undefined && effectiveCgpa !== null) params.set('minCgpa', effectiveCgpa);
+    if (backlogs !== '' && backlogs !== undefined && backlogs !== null) params.set('backlogs', backlogs);
+
     const queryString = params.toString() ? `?${params.toString()}` : '';
 
     const timestamp = new Date().toISOString().slice(0, 10);

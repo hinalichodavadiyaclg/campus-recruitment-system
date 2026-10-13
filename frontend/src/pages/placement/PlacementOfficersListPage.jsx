@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { placementOfficerService } from '../../services/placement_officer.service.js';
+import { departmentService } from '../../services/department.service.js';
 import { importService } from '../../services/import.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { ConfirmModal } from '../../components/common/ConfirmModal.jsx';
@@ -13,8 +14,11 @@ export function PlacementOfficersListPage() {
   const { toast } = useToast();
 
   const [officers, setOfficers] = useState([]);
+  const [departmentsList, setDepartmentsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
 
   // Modals
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -27,8 +31,12 @@ export function PlacementOfficersListPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await placementOfficerService.listPlacementOfficers({ limit: 100 });
-      setOfficers(data.items || []);
+      const [officersData, deptsData] = await Promise.all([
+        placementOfficerService.listPlacementOfficers({ limit: 500 }),
+        departmentService.listDepartments({ limit: 100, isActive: true }).catch(() => ({ items: [] }))
+      ]);
+      setOfficers(officersData.items || officersData || []);
+      setDepartmentsList(deptsData.items || deptsData || []);
     } catch (err) {
       toast(err.message || 'Failed to load placement officers');
     } finally {
@@ -40,19 +48,68 @@ export function PlacementOfficersListPage() {
     loadData();
   }, []);
 
+  const handleRoleFilterChange = (newRole) => {
+    setRoleFilter(newRole);
+    if (newRole !== 'ROLE_PLACEMENT_COORDINATOR') {
+      setDepartmentFilter('');
+    }
+  };
+
   const filteredOfficers = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return officers;
-    return officers.filter(
-      (po) =>
-        po.employeeId?.toLowerCase().includes(q) ||
-        po.firstName?.toLowerCase().includes(q) ||
-        po.lastName?.toLowerCase().includes(q) ||
-        po.email?.toLowerCase().includes(q) ||
-        po.mobileNumber?.toLowerCase().includes(q) ||
-        po.role?.toLowerCase().includes(q)
-    );
-  }, [officers, search]);
+    return officers.filter((po) => {
+      // 1. Role matching
+      if (roleFilter === 'ROLE_PLACEMENT_HEAD') {
+        const isHead =
+          po.role === 'ROLE_PLACEMENT_HEAD' ||
+          po.role === 'PLACEMENT_HEAD' ||
+          po.designation?.toLowerCase().includes('head');
+        if (!isHead) return false;
+      } else if (roleFilter === 'ROLE_PLACEMENT_COORDINATOR') {
+        const isCoordinator =
+          po.role === 'ROLE_PLACEMENT_COORDINATOR' ||
+          po.role === 'PLACEMENT_COORDINATOR' ||
+          po.designation?.toLowerCase().includes('coordinator');
+        if (!isCoordinator) return false;
+
+        // Dynamic Department scoping
+        if (departmentFilter) {
+          const pDeptId = po.departmentId?._id
+            ? String(po.departmentId._id)
+            : po.departmentId
+            ? String(po.departmentId)
+            : '';
+          if (pDeptId) {
+            if (pDeptId !== String(departmentFilter)) return false;
+          } else if (po.department) {
+            const matchedDept = departmentsList.find(
+              (d) =>
+                d.name?.toLowerCase() === po.department.toLowerCase() ||
+                d.code?.toLowerCase() === po.department.toLowerCase()
+            );
+            if (!matchedDept || String(matchedDept._id) !== String(departmentFilter)) return false;
+          } else {
+            return false;
+          }
+        }
+      }
+
+      // 2. Search query matching
+      if (q) {
+        return (
+          po.employeeId?.toLowerCase().includes(q) ||
+          po.firstName?.toLowerCase().includes(q) ||
+          po.lastName?.toLowerCase().includes(q) ||
+          po.email?.toLowerCase().includes(q) ||
+          po.mobileNumber?.toLowerCase().includes(q) ||
+          po.role?.toLowerCase().includes(q) ||
+          po.designation?.toLowerCase().includes(q) ||
+          (po.departmentId?.name || po.department || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [officers, search, roleFilter, departmentFilter, departmentsList]);
 
   const handleDelete = async () => {
     if (!deletingOfficer) return;
@@ -113,7 +170,12 @@ export function PlacementOfficersListPage() {
   const handleExportFiltered = async () => {
     setExporting(true);
     try {
-      await importService.exportData('placement', { filtered: true, search });
+      await importService.exportData('placement', {
+        filtered: true,
+        search,
+        role: roleFilter,
+        department: departmentFilter
+      });
       toast(`Exported filtered placement officer records (${filteredOfficers.length}) to Excel.`);
     } catch (err) {
       toast(err.message || 'Failed to export filtered placement officers.');
@@ -203,13 +265,60 @@ export function PlacementOfficersListPage() {
       currentPath="/placement-officers"
     >
       <section>
-        <div className="filters">
+        <div
+          className="filters"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: roleFilter === 'ROLE_PLACEMENT_COORDINATOR' ? '2fr 1.5fr 1.5fr auto' : '2fr 1.5fr auto',
+            gap: '12px',
+            alignItems: 'center',
+            marginBottom: '16px'
+          }}
+        >
           <input
             id="officer-search"
             placeholder="Search by Employee ID, Name, Email, or Role"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <select
+            id="officer-role-filter"
+            value={roleFilter}
+            onChange={(e) => handleRoleFilterChange(e.target.value)}
+          >
+            <option value="">All Placement Roles</option>
+            <option value="ROLE_PLACEMENT_HEAD">Placement Head</option>
+            <option value="ROLE_PLACEMENT_COORDINATOR">Placement Coordinator</option>
+          </select>
+          {roleFilter === 'ROLE_PLACEMENT_COORDINATOR' && (
+            <select
+              id="officer-department-filter"
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              style={{ backgroundColor: '#eff6ff', borderColor: '#3b82f6', color: '#1e3a8a', fontWeight: 600 }}
+            >
+              <option value="">All Departments</option>
+              {departmentsList.map((d) => (
+                <option key={d._id} value={d._id}>
+                  {d.name} {d.code ? `(${d.code})` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+          {(search || roleFilter || departmentFilter) && (
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                setSearch('');
+                setRoleFilter('');
+                setDepartmentFilter('');
+              }}
+              style={{ padding: '8px 12px', fontSize: '0.84rem' }}
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
 
         <article className="card table-card">
