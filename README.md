@@ -1,91 +1,203 @@
-# University Campus Recruitment Portal — Module 1
+# VVWU Campus Recruitment Portal
 
-This repository contains only Module 1: Authentication, Roles, Permissions, and Session Management. It is a Node.js, Express, JavaScript (ES Modules), MongoDB, and Mongoose backend. Modules 2–11 and the `companies` collection are intentionally not implemented.
+Enterprise Recruitment Management System & Campus Placement Portal built on a professionally structured **MERN stack monorepo** architecture.
 
-## Collections
+---
 
-The application creates only these Module 1 collections:
+## 1. Project Architecture
 
-- `users` — user identity, account status, role assignment, and login state.
-- `roles` — string-keyed roles and their permission IDs.
-- `permissions` — string-keyed permissions.
-- `user_sessions` — hashed opaque session tokens and activity/expiry information.
+The repository is physically separated into independent `frontend` and `backend` workspaces, with centralized monorepo orchestration and comprehensive architectural documentation.
 
-`users.companyId` is an ObjectId reference to `Company`; the actual companies model and collection remain deferred to Module 3.
+```
+campus-recruitment-system/
+├── backend/                       # Node.js + Express + MongoDB/Mongoose API
+│   ├── src/
+│   │   ├── config/                # Database connection & environment validation
+│   │   ├── controllers/           # Thin HTTP controllers
+│   │   ├── middleware/            # Authentication, RBAC authorization, error handler
+│   │   ├── models/                # Mongoose schemas (users, roles, permissions, sessions, students, companies)
+│   │   ├── routes/                # REST API routes (/api/auth, /api/users, /api/roles, etc.)
+│   │   ├── seeders/               # Database seeder scripts
+│   │   ├── services/              # Modular business logic & data operations
+│   │   ├── utils/                 # Password hashing, token security, logging, constants
+│   │   ├── validators/            # Zod validation schemas
+│   │   ├── app.js                 # Express application factory
+│   │   └── server.js              # Server bootstrapper & graceful shutdown
+│   ├── tests/                     # Integration tests (15 test suites)
+│   ├── .env                       # Backend secrets & configuration
+│   ├── .env.example
+│   └── package.json
+│
+├── frontend/                      # React 18 + Vite + Tailwind CSS Single-Page Application
+│   ├── public/                    # Static assets
+│   ├── src/
+│   │   ├── components/            # Reusable UI components
+│   │   │   ├── common/            # Badge, Modal, ConfirmModal, Loading
+│   │   │   ├── layout/            # AuthLayout (split-hero), PortalLayout (sidebar/topbar)
+│   │   │   └── users/             # Default Passwords, Create User, Edit User modals
+│   │   ├── context/               # AuthContext (state & RBAC check) & ToastContext
+│   │   ├── pages/                 # Role & domain screens
+│   │   │   ├── auth/              # Login, Forgot Password, OTP Verify, Reset Password
+│   │   │   ├── dashboard/         # Permission-driven Dashboard
+│   │   │   ├── profile/           # My Account & Change Password
+│   │   │   ├── users/             # User Management, Details, Role Assignment
+│   │   │   ├── roles/             # Role Management, Create/Edit, Permission Checklist
+│   │   │   ├── permissions/       # Canonical Permission Management
+│   │   │   ├── sessions/          # Login & Session Audit Log
+│   │   │   └── imports/           # Excel Bulk Import (Students, Companies, Placement Staff)
+│   │   ├── routes/                # Hash router with strict RBAC guards
+│   │   ├── services/              # Centralized API service layer (auth, user, role, etc.)
+│   │   ├── App.jsx                # Application root with context providers
+│   │   ├── main.jsx               # React DOM initialization
+│   │   └── index.css              # Tailwind CSS & design tokens
+│   ├── index.html                 # Single page application entry point
+│   ├── vite.config.js             # Vite 5 configuration with API reverse proxy
+│   ├── tailwind.config.js         # Curated color tokens (Navy, Teal, Canvas, Ink)
+│   ├── .env                       # Frontend environment variables
+│   ├── .env.example
+│   └── package.json
+│
+├── docs/                          # Architecture guides & functionality inventories
+│   └── architecture/
+│       ├── system-audit-inventory.md
+│       └── monorepo-architecture.md
+│
+├── package.json                   # Root workspace orchestration scripts
+└── README.md
+```
 
-## Setup
+---
 
-1. Copy `.env.example` to `.env`.
-2. Set `MONGODB_URI` to a running MongoDB instance.
-3. Replace `SESSION_TOKEN_PEPPER` and `PASSWORD_RESET_SECRET` with distinct random values. They are mandatory and must each contain at least 32 characters in production.
-4. Set all three `SUPER_ADMIN_*` variables when provisioning the first administrator. The password must contain at least 12 characters, including uppercase, lowercase, number, and symbol.
-5. Install packages:
+## 2. Technology Stack
 
+- **Frontend**: React 18, Vite 5, Tailwind CSS, Vanilla CSS Design System, Inter Typography
+- **Backend**: Node.js (`>=20`), Express 4 (ES Modules), Zod, Multer, XLSX, Helmet, CORS
+- **Database**: MongoDB with Mongoose 8
+- **Security**: Bcrypt password hashing (12 rounds), SHA-256 peppered session tokens, account lockout protection, HTTP rate limiting
+
+---
+
+## 3. Getting Started
+
+### Prerequisites
+
+- Node.js `>= 20.0.0`
+- MongoDB running locally on `mongodb://127.0.0.1:27017` or a MongoDB Atlas URI
+
+### Installation
+
+1. Install root dependencies:
    ```bash
    npm install
    ```
 
-6. Start the API. Startup automatically creates Module 1 indexes, roles, permissions, and (when configured) the first Super Admin:
-
+2. Install backend dependencies:
    ```bash
-   npm run dev
-   # or
-   npm start
+   cd backend && npm install && cd ..
    ```
 
-   You can also run the seed command independently; it is safe to run more than once:
-
+3. Install frontend dependencies:
    ```bash
-   npm run seed
+   cd frontend && npm install && cd ..
    ```
 
-The default API address is `http://localhost:3000`.
+---
 
-## Security model
+## 4. Environment Variables
 
-- Passwords are bcrypt hashes only; `passwordHash` is excluded from JSON and never logged.
-- Login returns a cryptographically random opaque bearer token. MongoDB stores only its SHA-256 digest combined with `SESSION_TOKEN_PEPPER`.
-- Session expiry is enforced during every authenticated request and backed by MongoDB TTL removal.
-- Failed login attempts lock accounts after `MAX_FAILED_LOGIN_ATTEMPTS`; the configured lock duration is `ACCOUNT_LOCK_MINUTES`.
-- Password changes invalidate other active sessions. Password resets invalidate every active session.
-- Reset tokens are short-lived signed tokens tied to the current password hash, so changing a password makes issued reset tokens unusable. No reset-token collection or extra user field is needed.
-- `POST /api/auth/forgot-password` has a non-enumerating response. In development/test only, it returns `resetToken` to enable local integration testing. A production deployment must deliver that value through a trusted mail service; it is never logged or returned in production.
-- Authentication routes have IP rate limits. All administration routes require an authenticated session and active permissions.
-- The last active Super Admin cannot be deactivated, locked, or moved to another role.
+### Backend (`backend/.env`)
 
-## API
+| Variable | Description | Default / Example |
+| :--- | :--- | :--- |
+| `NODE_ENV` | Environment mode (`development`, `production`, `test`) | `development` |
+| `PORT` | Backend HTTP port | `3000` |
+| `MONGODB_URI` | MongoDB connection string | `mongodb://127.0.0.1:27017/campus_recruitment` |
+| `CORS_ORIGINS` | Permitted origins | `http://localhost:3000,http://localhost:5173` |
+| `SESSION_TOKEN_PEPPER` | High-entropy secret for hashing session tokens | High-entropy string (min 32 chars) |
+| `PASSWORD_RESET_SECRET` | Secret key for JWT password reset tokens | High-entropy string (min 32 chars) |
+| `SESSION_TTL_HOURS` | Session expiry time in hours | `24` |
+| `MAX_FAILED_LOGIN_ATTEMPTS` | Attempts before locking account | `5` |
+| `ACCOUNT_LOCK_MINUTES` | Lockout duration in minutes | `30` |
+| `SUPER_ADMIN_EMAIL` | Initial Super Admin login email | `admin@example.edu` |
+| `SUPER_ADMIN_PASSWORD` | Initial Super Admin password | `Admin@12345678` |
+| `SUPER_ADMIN_EMPLOYEE_ID` | Initial Super Admin employee identifier | `ADMIN-001` |
 
-All responses use either `{ "success": true, "data": ... }` or `{ "success": false, "error": { "code", "message" } }`.
+### Frontend (`frontend/.env`)
 
-| Method | Route | Access |
-| --- | --- | --- |
-| POST | `/api/auth/login` | Public |
-| POST | `/api/auth/logout` | Authenticated |
-| POST | `/api/auth/change-password` | Authenticated |
-| POST | `/api/auth/forgot-password` | Public |
-| POST | `/api/auth/reset-password` | Public with reset token |
-| GET | `/api/auth/me` | Authenticated |
-| GET/POST | `/api/roles` | Role read/create permission |
-| GET/PUT/PATCH | `/api/roles/:id`, `/api/roles/:id/status` | Role management permissions |
-| GET/POST | `/api/permissions` | Permission read/create permission |
-| GET/PUT/PATCH | `/api/permissions/:id`, `/api/permissions/:id/status` | Permission management permissions |
-| GET | `/api/users`, `/api/users/:id` | User read permission |
-| PATCH | `/api/users/:id/status`, `/lock`, `/unlock`, `/role` | Corresponding user-management permission |
+| Variable | Description | Default / Example |
+| :--- | :--- | :--- |
+| `VITE_API_BASE_URL` | Base URL of the API. Leave empty for local Vite dev proxy (`/api`). | ` ` (blank for relative proxy) |
 
-Send session credentials as:
+---
 
-```http
-Authorization: Bearer <sessionToken>
+## 5. Database Seeding
+
+Run the seed script to initialize indexes, all canonical permissions, system roles, and the default Super Admin:
+
+```bash
+npm run seed
 ```
 
-The seeded `ROLE_SUPER_ADMIN` owns all initial Module 1 permissions. Other initial roles receive only self-account access until a Super Admin assigns more permissions.
+*Note: Default accounts imported via Excel or created initially use the following default initial passwords:*
+- **Student Accounts**: `Student@123456`
+- **Company Recruiter Accounts**: `Company@123456`
+- **Placement Cell Staff**: `Placement@123456`
+- **Initial Super Admin**: `Admin@12345678`
 
-## Tests
+---
 
-Run the integration suite with:
+## 6. Running the Application
+
+### Option A: Run Both Frontend & Backend Concurrently (Recommended)
+
+From the project root:
+```bash
+npm run dev
+```
+- Backend runs on `http://localhost:3000`
+- Frontend runs on `http://localhost:5173`
+
+### Option B: Run Services Individually
+
+- **Start Backend API only**:
+  ```bash
+  npm run server
+  # or: cd backend && npm run dev
+  ```
+
+- **Start Frontend Client only**:
+  ```bash
+  npm run client
+  # or: cd frontend && npm run dev
+  ```
+
+### Option C: Production Build
+
+```bash
+npm run build
+```
+Builds the optimized production client bundle in `frontend/dist/`.
+
+---
+
+## 7. Automated Testing & Verification
+
+Run the full integration test suite covering authentication, RBAC, session expiry, role assignment, user lock/unlock, and Excel imports:
 
 ```bash
 npm test
 ```
 
-Tests use an isolated in-memory MongoDB instance and cover login, invalid credentials, inactive and locked accounts, password change/reset, logout, expiry enforcement, role and permission authorization, role/permission assignment, and account lock/unlock.
+All 15 integration tests run against an in-memory MongoDB instance with complete isolation and zero side effects.
+
+---
+
+## 8. Role-Based Access Control (RBAC) Specification
+
+| Role | Access Level & Capabilities |
+| :--- | :--- |
+| **ROLE_STUDENT** | Student profile view (`AUTH_READ_SELF`), password change, application dashboard |
+| **ROLE_COMPANY** | Recruiter company profile view, candidate management |
+| **ROLE_PLACEMENT_COORDINATOR** | Student & company imports (`STUDENT_IMPORT`, `COMPANY_IMPORT`), user read |
+| **ROLE_PLACEMENT_HEAD** | User management (`USER_READ`, `USER_CREATE`, `USER_UPDATE`), role read, data imports |
+| **ROLE_SUPER_ADMIN** | Full system permissions (User CRUD, Role CRUD, Permission CRUD, Sessions Audit, Data Imports) |

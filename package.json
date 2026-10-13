@@ -2,18 +2,19 @@
   "name": "university-campus-recruitment-portal",
   "version": "1.0.0",
   "private": true,
-  "description": "Module 1 backend: authentication, roles, permissions, and session management.",
+  "description": "VVWU Campus Recruitment Portal - Full Stack MERN Architecture",
   "type": "module",
-  "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "seed": "node src/seeders/seed.js",
-    "test": "node --test",
-    "test:watch": "node --test --watch"
-  },
-  "engines": {
-    "node": ">=20"
+    "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"blue,cyan\" \"npm run server\" \"npm run client\"",
+    "start": "node backend/src/server.js",
+    "server": "node --watch --watch-path=backend/src backend/src/server.js",
+    "client": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test backend/tests/module1.integration.test.js",
+    "test:watch": "node --test --watch backend/tests/module1.integration.test.js",
+    "seed": "node backend/src/seeders/seed.js",
+    "seed:passwords": "node backend/src/seeders/update-student-passwords.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -25,11 +26,19 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.10.1",
     "multer": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "xlsx": "^0.18.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
     "mongodb-memory-server": "^10.1.4",
-    "supertest": "^7.1.0"
+    "postcss": "^8.4.49",
+    "supertest": "^7.1.0",
+    "tailwindcss": "^3.4.17",
+    "vite": "^5.4.11"
   }
 }
