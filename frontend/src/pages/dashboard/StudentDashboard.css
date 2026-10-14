@@ -609,22 +609,40 @@
 
 /* Empty State */
 .student-empty-state {
-  padding: 32px 20px;
+  padding: 36px 20px;
   text-align: center;
   color: #64748b;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
+  min-height: 180px;
 }
 
 .student-empty-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #f1f5f9;
   color: #94a3b8;
-  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
 }
 
-.student-empty-text {
-  font-size: 0.88rem;
-  font-weight: 500;
+.student-empty-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #334155;
+  margin: 0;
+}
+
+.student-empty-desc {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  max-width: 320px;
+  margin: 0;
+  line-height: 1.4;
 }

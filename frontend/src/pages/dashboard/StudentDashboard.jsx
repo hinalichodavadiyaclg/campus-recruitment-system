@@ -14,16 +14,12 @@ import {
   KeyIcon,
   LinkIcon,
   ChevronRightIcon,
-  VideoIcon,
-  MapPinIcon,
-  CloudIcon,
-  CheckCircleIcon,
-  ClockIcon
+  CheckCircleIcon
 } from '../../components/common/Icons.jsx';
 import './StudentDashboard.css';
 
 function calculateProfileCompletion(student) {
-  if (!student) return { percentage: 25, missingItems: [] };
+  if (!student) return { percentage: 0, missingItems: [] };
 
   const checks = [
     { label: 'Basic Information (Name & ID)', complete: Boolean(student.firstName && student.universityId) },
@@ -37,7 +33,7 @@ function calculateProfileCompletion(student) {
   ];
 
   const completed = checks.filter((c) => c.complete).length;
-  const percentage = Math.max(25, Math.round((completed / checks.length) * 100));
+  const percentage = Math.round((completed / checks.length) * 100);
   const missingItems = checks.filter((c) => !c.complete).map((c) => c.label);
 
   return { percentage, missingItems };
@@ -48,6 +44,15 @@ export function StudentDashboard() {
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
+
+  // Real data collections (empty states when no records exist in the database)
+  const recentJobs = [];
+  const upcomingInterviews = [];
+  const announcements = [];
+  const jobPostingsCount = recentJobs.length;
+  const applicationsCount = 0;
+  const interviewsCount = upcomingInterviews.length;
+  const offersCount = 0;
 
   useEffect(() => {
     let mounted = true;
@@ -94,14 +99,14 @@ export function StudentDashboard() {
   const greetingText =
     currentHour < 12 ? 'Good Morning' : currentHour < 17 ? 'Good Afternoon' : 'Good Evening';
 
-  const firstName = student?.firstName || user?.name?.split(' ')[0] || 'Sara';
-  const lastName = student?.lastName || (user?.name?.split(' ').slice(1).join(' ') || 'Raval');
+  const firstName = student?.firstName || user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'Student';
+  const lastName = student?.lastName || (user?.name?.split(' ').slice(1).join(' ') || '');
   const fullName = `${firstName} ${lastName}`.trim();
-  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || 'SR';
+  const initials = `${firstName.charAt(0)}${lastName ? lastName.charAt(0) : ''}`.toUpperCase() || 'ST';
 
-  const degree = student?.course || student?.courseName || 'Bachelor of Computer Applications';
-  const branch = student?.branch || student?.department || 'Computer Science';
-  const studentId = student?.universityId || user?.universityId || 'STU2026010';
+  const degree = student?.course || student?.courseName || '';
+  const branch = student?.branch || student?.department || '';
+  const studentId = student?.universityId || user?.universityId || user?.employeeId || '—';
 
   const { percentage } = calculateProfileCompletion(student);
 
@@ -171,13 +176,21 @@ export function StudentDashboard() {
                 <h2 className="student-hero-name">{fullName}</h2>
                 <span className="student-hero-status-badge">
                   <CheckCircleIcon size={13} color="#059669" />
-                  Active Candidate
+                  {student ? 'Active Candidate' : 'Candidate'}
                 </span>
               </div>
               <div className="student-hero-academic">
-                <span>{degree}</span>
-                <span className="sep">|</span>
-                <span>{branch}</span>
+                {degree && branch ? (
+                  <>
+                    <span>{degree}</span>
+                    <span className="sep">|</span>
+                    <span>{branch}</span>
+                  </>
+                ) : degree || branch ? (
+                  <span>{degree || branch}</span>
+                ) : (
+                  <span>Academic details not specified</span>
+                )}
               </div>
               <div className="student-hero-id">
                 ID: {studentId}
@@ -269,7 +282,7 @@ export function StudentDashboard() {
                 <BriefcaseIcon size={22} color="#0284c7" />
               </div>
               <div className="student-metric-details">
-                <span className="student-metric-value">5</span>
+                <span className="student-metric-value">{jobPostingsCount}</span>
                 <span className="student-metric-label">Job Postings</span>
               </div>
             </div>
@@ -285,7 +298,7 @@ export function StudentDashboard() {
                 <DocumentIcon size={22} color="#9333ea" />
               </div>
               <div className="student-metric-details">
-                <span className="student-metric-value">2</span>
+                <span className="student-metric-value">{applicationsCount}</span>
                 <span className="student-metric-label">Applications</span>
               </div>
             </div>
@@ -301,7 +314,7 @@ export function StudentDashboard() {
                 <CalendarIcon size={22} color="#16a34a" />
               </div>
               <div className="student-metric-details">
-                <span className="student-metric-value">3</span>
+                <span className="student-metric-value">{interviewsCount}</span>
                 <span className="student-metric-label">Interviews</span>
               </div>
             </div>
@@ -317,7 +330,7 @@ export function StudentDashboard() {
                 <TrophyIcon size={22} color="#d97706" />
               </div>
               <div className="student-metric-details">
-                <span className="student-metric-value">0</span>
+                <span className="student-metric-value">{offersCount}</span>
                 <span className="student-metric-label">Offers</span>
               </div>
             </div>
@@ -339,62 +352,35 @@ export function StudentDashboard() {
               </a>
             </div>
             <div className="student-card-list">
-              {/* Row 1: TechNova Solutions */}
-              <a href="#/jobs" className="student-list-row">
-                <div className="student-list-left">
-                  <div className="student-company-avatar tn">
-                    TN
+              {recentJobs.length > 0 ? (
+                recentJobs.map((job) => (
+                  <a key={job._id || job.id} href="#/jobs" className="student-list-row">
+                    <div className="student-list-left">
+                      <div className="student-company-avatar tn">
+                        {(job.companyName || 'CO').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="student-list-info">
+                        <span className="student-list-primary">{job.companyName}</span>
+                        <span className="student-list-secondary">{job.title || job.role}</span>
+                      </div>
+                    </div>
+                    <div className="student-list-right">
+                      <span className="student-pill-badge open">Open</span>
+                      <div className="student-chevron-arrow">
+                        <ChevronRightIcon size={16} />
+                      </div>
+                    </div>
+                  </a>
+                ))
+              ) : (
+                <div className="student-empty-state">
+                  <div className="student-empty-icon">
+                    <BriefcaseIcon size={20} />
                   </div>
-                  <div className="student-list-info">
-                    <span className="student-list-primary">TechNova Solutions</span>
-                    <span className="student-list-secondary">Frontend Developer</span>
-                  </div>
+                  <p className="student-empty-title">No data found</p>
+                  <p className="student-empty-desc">No active job postings are available at this time.</p>
                 </div>
-                <div className="student-list-right">
-                  <span className="student-pill-badge new">New</span>
-                  <div className="student-chevron-arrow">
-                    <ChevronRightIcon size={16} />
-                  </div>
-                </div>
-              </a>
-
-              {/* Row 2: ByteMatrix */}
-              <a href="#/jobs" className="student-list-row">
-                <div className="student-list-left">
-                  <div className="student-company-avatar bm">
-                    BM
-                  </div>
-                  <div className="student-list-info">
-                    <span className="student-list-primary">ByteMatrix</span>
-                    <span className="student-list-secondary">Software Developer</span>
-                  </div>
-                </div>
-                <div className="student-list-right">
-                  <span className="student-pill-badge open">Open</span>
-                  <div className="student-chevron-arrow">
-                    <ChevronRightIcon size={16} />
-                  </div>
-                </div>
-              </a>
-
-              {/* Row 3: CloudSync Technologies */}
-              <a href="#/jobs" className="student-list-row">
-                <div className="student-list-left">
-                  <div className="student-company-avatar cloud">
-                    <CloudIcon size={20} color="#ffffff" />
-                  </div>
-                  <div className="student-list-info">
-                    <span className="student-list-primary">CloudSync Technologies</span>
-                    <span className="student-list-secondary">Backend Developer</span>
-                  </div>
-                </div>
-                <div className="student-list-right">
-                  <span className="student-pill-badge open">Open</span>
-                  <div className="student-chevron-arrow">
-                    <ChevronRightIcon size={16} />
-                  </div>
-                </div>
-              </a>
+              )}
             </div>
           </div>
 
@@ -408,71 +394,35 @@ export function StudentDashboard() {
               </a>
             </div>
             <div className="student-card-list">
-              {/* Interview 1 */}
-              <a href="#/interviews" className="student-list-row">
-                <div className="student-list-left">
-                  <div className="student-company-avatar tn">
-                    TN
+              {upcomingInterviews.length > 0 ? (
+                upcomingInterviews.map((interview) => (
+                  <a key={interview._id || interview.id} href="#/interviews" className="student-list-row">
+                    <div className="student-list-left">
+                      <div className="student-company-avatar tn">
+                        {(interview.companyName || 'CO').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="student-list-info">
+                        <span className="student-list-primary">{interview.companyName}</span>
+                        <span className="student-list-secondary">{interview.role || 'Interview'}</span>
+                      </div>
+                    </div>
+                    <div className="student-list-right">
+                      <span className="student-pill-badge online">Scheduled</span>
+                      <div className="student-chevron-arrow">
+                        <ChevronRightIcon size={16} />
+                      </div>
+                    </div>
+                  </a>
+                ))
+              ) : (
+                <div className="student-empty-state">
+                  <div className="student-empty-icon">
+                    <CalendarIcon size={20} />
                   </div>
-                  <div className="student-list-info">
-                    <span className="student-list-primary">TechNova Solutions</span>
-                    <span className="student-list-secondary">Frontend Developer</span>
-                  </div>
+                  <p className="student-empty-title">No data found</p>
+                  <p className="student-empty-desc">You have no scheduled interviews at this time.</p>
                 </div>
-                <div className="student-list-right">
-                  <span className="student-pill-badge online">
-                    <VideoIcon size={13} color="#0284c7" />
-                    Online
-                  </span>
-                  <div className="student-chevron-arrow">
-                    <ChevronRightIcon size={16} />
-                  </div>
-                </div>
-              </a>
-
-              {/* Interview 2 */}
-              <a href="#/interviews" className="student-list-row">
-                <div className="student-list-left">
-                  <div className="student-company-avatar bm">
-                    BM
-                  </div>
-                  <div className="student-list-info">
-                    <span className="student-list-primary">ByteMatrix</span>
-                    <span className="student-list-secondary">Software Developer</span>
-                  </div>
-                </div>
-                <div className="student-list-right">
-                  <span className="student-pill-badge on-campus">
-                    <MapPinIcon size={13} color="#7e22ce" />
-                    On Campus
-                  </span>
-                  <div className="student-chevron-arrow">
-                    <ChevronRightIcon size={16} />
-                  </div>
-                </div>
-              </a>
-
-              {/* Interview 3 */}
-              <a href="#/interviews" className="student-list-row">
-                <div className="student-list-left">
-                  <div className="student-company-avatar cloud">
-                    <CloudIcon size={20} color="#ffffff" />
-                  </div>
-                  <div className="student-list-info">
-                    <span className="student-list-primary">CloudSync Technologies</span>
-                    <span className="student-list-secondary">Backend Developer</span>
-                  </div>
-                </div>
-                <div className="student-list-right">
-                  <span className="student-pill-badge online">
-                    <VideoIcon size={13} color="#0284c7" />
-                    Online
-                  </span>
-                  <div className="student-chevron-arrow">
-                    <ChevronRightIcon size={16} />
-                  </div>
-                </div>
-              </a>
+              )}
             </div>
           </div>
         </div>
@@ -489,37 +439,32 @@ export function StudentDashboard() {
               </a>
             </div>
             <div className="student-card-list">
-              {/* Announcement 1 */}
-              <a href="#/announcements" className="student-list-row">
-                <div className="student-list-left">
-                  <div className="student-announcement-icon-box">
-                    <MegaphoneIcon size={20} color="#2563eb" />
+              {announcements.length > 0 ? (
+                announcements.map((item) => (
+                  <a key={item._id || item.id} href="#/announcements" className="student-list-row">
+                    <div className="student-list-left">
+                      <div className="student-announcement-icon-box">
+                        <MegaphoneIcon size={20} color="#2563eb" />
+                      </div>
+                      <div className="student-list-info">
+                        <span className="student-list-primary">{item.title}</span>
+                        <span className="student-list-secondary">{item.date}</span>
+                      </div>
+                    </div>
+                    <div className="student-chevron-arrow">
+                      <ChevronRightIcon size={16} />
+                    </div>
+                  </a>
+                ))
+              ) : (
+                <div className="student-empty-state">
+                  <div className="student-empty-icon">
+                    <MegaphoneIcon size={20} />
                   </div>
-                  <div className="student-list-info">
-                    <span className="student-list-primary">Placement Drive 2026</span>
-                    <span className="student-list-secondary">Oct 10, 2026</span>
-                  </div>
+                  <p className="student-empty-title">No data found</p>
+                  <p className="student-empty-desc">No campus announcements have been posted yet.</p>
                 </div>
-                <div className="student-chevron-arrow">
-                  <ChevronRightIcon size={16} />
-                </div>
-              </a>
-
-              {/* Announcement 2 */}
-              <a href="#/announcements" className="student-list-row">
-                <div className="student-list-left">
-                  <div className="student-announcement-icon-box">
-                    <MegaphoneIcon size={20} color="#2563eb" />
-                  </div>
-                  <div className="student-list-info">
-                    <span className="student-list-primary">Resume Update Reminder</span>
-                    <span className="student-list-secondary">Oct 08, 2026</span>
-                  </div>
-                </div>
-                <div className="student-chevron-arrow">
-                  <ChevronRightIcon size={16} />
-                </div>
-              </a>
+              )}
             </div>
           </div>
 
