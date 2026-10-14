@@ -133,9 +133,9 @@ export async function createUser(input) {
     if (existingEmp) throw new AppError(409, 'EMPLOYEE_ID_EXISTS', 'A user with this Employee ID already exists.');
   }
 
-  let defaultPass = 'Student@123456';
-  if (input.userType === 'COMPANY') defaultPass = 'Company@123456';
-  if (input.userType === 'PLACEMENT') defaultPass = 'Placement@123456';
+  let defaultPass = process.env.DEFAULT_STUDENT_PASSWORD || 'Student@123456';
+  if (input.userType === 'COMPANY') defaultPass = process.env.DEFAULT_COMPANY_PASSWORD || 'Company@123456';
+  if (input.userType === 'PLACEMENT') defaultPass = process.env.DEFAULT_PLACEMENT_PASSWORD || 'Placement@123456';
 
   const rawPassword = (input.password && input.password.trim()) || defaultPass;
   const passwordHash = await hashPassword(rawPassword);

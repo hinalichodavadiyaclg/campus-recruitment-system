@@ -503,7 +503,7 @@ export function StudentMyProfilePage() {
     <PortalLayout
       title="My Student Profile"
       subtitle=""
-      currentPath="/my-profile"
+      currentPath={window.location.hash.includes('/my-profile') ? '/my-profile' : '/profile'}
       hideEyebrow={true}
     >
       {loading ? (

@@ -551,3 +551,36 @@ export function LinkedinIcon({ size = 18, color = '#0a66c2', className = '', sty
   );
 }
 
+export const ChevronRightIcon = createIcon(
+  <>
+    <polyline points="9 18 15 12 9 6" />
+  </>
+);
+
+export const VideoIcon = createIcon(
+  <>
+    <polygon points="23 7 16 12 23 17 23 7" />
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+  </>
+);
+
+export const CloudIcon = createIcon(
+  <>
+    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+  </>
+);
+
+export const SunIcon = createIcon(
+  <>
+    <circle cx="12" cy="12" r="5" />
+    <line x1="12" y1="1" x2="12" y2="3" />
+    <line x1="12" y1="21" x2="12" y2="23" />
+    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+    <line x1="1" y1="12" x2="3" y2="12" />
+    <line x1="21" y1="12" x2="23" y2="12" />
+    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+  </>
+);
+

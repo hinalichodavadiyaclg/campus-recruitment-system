@@ -107,7 +107,9 @@ export function AppRoutes() {
 
   // Authenticated workspace routes
   if (route === '/dashboard') return <DashboardPage />;
-  if (route === '/profile') return <ProfilePage />;
+  if (route === '/profile') {
+    return (user?.userType === 'STUDENT' || role?.id === 'ROLE_STUDENT') ? <StudentMyProfilePage /> : <ProfilePage />;
+  }
   if (route === '/my-profile') {
     return (user?.userType === 'STUDENT' || role?.id === 'ROLE_STUDENT') ? <StudentMyProfilePage /> : <DashboardPage />;
   }

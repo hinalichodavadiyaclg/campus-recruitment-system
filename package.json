@@ -14,7 +14,8 @@
     "test": "node --test backend/tests/module1.integration.test.js",
     "test:watch": "node --test --watch backend/tests/module1.integration.test.js",
     "seed": "node backend/src/seeders/seed.js",
-    "seed:passwords": "node backend/src/seeders/update-student-passwords.js"
+    "seed:passwords": "node backend/src/seeders/update-student-passwords.js",
+    "seed:placement-passwords": "node backend/src/seeders/update-placement-passwords.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
