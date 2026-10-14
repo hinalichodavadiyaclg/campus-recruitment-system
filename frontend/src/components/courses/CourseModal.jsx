@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal.jsx';
 import { departmentService } from '../../services/department.service.js';
+import { BookIcon, BuildingIcon, ClockIcon } from '../common/Icons.jsx';
 
 export const COURSE_LEVEL_OPTIONS = [
   { value: 'UNDERGRADUATE', label: 'Undergraduate' },
@@ -182,7 +183,7 @@ export function CourseModal({ isOpen, course = null, onClose, onSubmit, isProces
         <section className="form-section-card">
           <div style={{ marginBottom: '12px' }}>
             <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              📚 Course Identification
+              <BookIcon size={16} color="var(--primary, #0284c7)" /> Course Identification
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Core course naming and official university code
@@ -242,7 +243,7 @@ export function CourseModal({ isOpen, course = null, onClose, onSubmit, isProces
         <section className="form-section-card">
           <div style={{ marginBottom: '12px' }}>
             <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              🏛️ Department & Academic Level
+              <BuildingIcon size={16} color="var(--primary, #0284c7)" /> Department & Academic Level
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Parent department and academic qualification degree
@@ -312,7 +313,7 @@ export function CourseModal({ isOpen, course = null, onClose, onSubmit, isProces
         <section className="form-section-card">
           <div style={{ marginBottom: '12px' }}>
             <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              ⏱️ Duration & Additional Details
+              <ClockIcon size={16} color="var(--primary, #0284c7)" /> Duration & Additional Details
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Program length and optional course overview

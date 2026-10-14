@@ -2,6 +2,16 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { ConfirmModal } from '../../components/common/ConfirmModal.jsx';
+import {
+  UserIcon,
+  MailIcon,
+  ShieldIcon,
+  UsersIcon,
+  CheckCircleIcon,
+  LockIcon,
+  KeyIcon,
+  LogOutIcon
+} from '../../components/common/Icons.jsx';
 
 export function ProfilePage() {
   const { user, role, logout } = useAuth();
@@ -206,7 +216,7 @@ export function ProfilePage() {
                     flexShrink: 0
                   }}
                 >
-                  🪪
+                  <UserIcon size={16} color="#2563eb" />
                 </div>
                 <span style={{ fontSize: '0.88rem', color: '#64748b', fontWeight: 500 }}>
                   User ID
@@ -242,7 +252,7 @@ export function ProfilePage() {
                     flexShrink: 0
                   }}
                 >
-                  ✉️
+                  <MailIcon size={16} color="#2563eb" />
                 </div>
                 <span style={{ fontSize: '0.88rem', color: '#64748b', fontWeight: 500 }}>
                   Email
@@ -278,7 +288,7 @@ export function ProfilePage() {
                     flexShrink: 0
                   }}
                 >
-                  🛡️
+                  <ShieldIcon size={16} color="#2563eb" />
                 </div>
                 <span style={{ fontSize: '0.88rem', color: '#64748b', fontWeight: 500 }}>
                   User type
@@ -314,7 +324,7 @@ export function ProfilePage() {
                     flexShrink: 0
                   }}
                 >
-                  👥
+                  <UsersIcon size={16} color="#2563eb" />
                 </div>
                 <span style={{ fontSize: '0.88rem', color: '#64748b', fontWeight: 500 }}>
                   Assigned role
@@ -350,7 +360,7 @@ export function ProfilePage() {
                     flexShrink: 0
                   }}
                 >
-                  ⬇️
+                  <CheckCircleIcon size={16} color="#2563eb" />
                 </div>
                 <span style={{ fontSize: '0.88rem', color: '#64748b', fontWeight: 500 }}>
                   Account status
@@ -428,11 +438,10 @@ export function ProfilePage() {
                 color: '#2563eb',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.05rem'
+                justifyContent: 'center'
               }}
             >
-              🔒
+              <LockIcon size={18} color="#2563eb" />
             </div>
             <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
               Security
@@ -524,7 +533,7 @@ export function ProfilePage() {
                   transition: 'background 0.15s ease'
                 }}
               >
-                <span>🔑</span>
+                <KeyIcon size={16} />
                 <span>Change Password</span>
               </a>
 
@@ -550,7 +559,7 @@ export function ProfilePage() {
                   transition: 'background 0.15s ease'
                 }}
               >
-                <span>🚪</span>
+                <LogOutIcon size={16} />
                 <span>Log out</span>
               </button>
             </div>

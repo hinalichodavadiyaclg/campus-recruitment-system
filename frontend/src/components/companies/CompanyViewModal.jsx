@@ -1,5 +1,13 @@
 import React from 'react';
 import { Modal } from '../common/Modal.jsx';
+import {
+  BuildingIcon,
+  UserIcon,
+  MapPinIcon,
+  ExternalLinkIcon,
+  EditIcon,
+  UsersIcon
+} from '../common/Icons.jsx';
 
 export function CompanyViewModal({
   isOpen,
@@ -20,7 +28,16 @@ export function CompanyViewModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={company.companyName ? `🏢 ${company.companyName}` : 'Company Details'}
+      title={
+        company.companyName ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            <BuildingIcon size={22} color="var(--primary, #0284c7)" />
+            {company.companyName}
+          </span>
+        ) : (
+          'Company Details'
+        )
+      }
       maxWidth="760px"
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '14px' }}>
@@ -60,7 +77,7 @@ export function CompanyViewModal({
                 gap: '6px'
               }}
             >
-              🏢 Company Identity
+              <BuildingIcon size={16} color="var(--primary, #0284c7)" /> Company Identity
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Organization naming, industry classification, and establishment
@@ -106,9 +123,9 @@ export function CompanyViewModal({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-link"
-                    style={{ wordBreak: 'break-all' }}
+                    style={{ wordBreak: 'break-all', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                   >
-                    {company.website} ↗
+                    {company.website} <ExternalLinkIcon size={12} />
                   </a>
                 ) : (
                   <span style={{ color: 'var(--muted, #64748b)' }}>—</span>
@@ -132,7 +149,7 @@ export function CompanyViewModal({
                 gap: '6px'
               }}
             >
-              👤 Primary Recruiter Contact
+              <UserIcon size={16} color="var(--primary, #0284c7)" /> Primary Recruiter Contact
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Primary talent acquisition contact and communication channels
@@ -198,7 +215,7 @@ export function CompanyViewModal({
                 gap: '6px'
               }}
             >
-              📍 Overview & Office Location
+              <MapPinIcon size={16} color="var(--primary, #0284c7)" /> Overview & Office Location
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Registered office address and corporate introduction
@@ -248,7 +265,7 @@ export function CompanyViewModal({
                 onManageRecruiters(company);
               }}
             >
-              Manage Recruiters
+              <UsersIcon size={15} /> Manage Recruiters
             </button>
           )}
           {onEdit && (
@@ -260,7 +277,7 @@ export function CompanyViewModal({
                 onEdit(company);
               }}
             >
-              Edit Company
+              <EditIcon size={15} /> Edit Company
             </button>
           )}
         </div>

@@ -7,6 +7,12 @@ import { courseService } from '../../services/course.service.js';
 import { importService } from '../../services/import.service.js';
 import { filterStudents, getAvailableCourses, shouldResetCourseSelection } from '../../utils/student-filter.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
+import {
+  ArrowLeftIcon,
+  DownloadIcon,
+  ClockIcon,
+  SearchIcon
+} from '../../components/common/Icons.jsx';
 
 function getHashQueryParams() {
   const hash = window.location.hash || '';
@@ -178,7 +184,7 @@ export function FilteredStudentRecordsPage() {
           cursor: 'pointer'
         }}
       >
-        ← Back to Import Page
+        <ArrowLeftIcon size={16} /> Back to Import Page
       </button>
 
       <button
@@ -202,7 +208,15 @@ export function FilteredStudentRecordsPage() {
           opacity: exporting || filteredStudents.length === 0 ? 0.65 : 1
         }}
       >
-        {exporting ? '⏳ Generating Excel...' : `📊 Download Filtered Excel (${filteredStudents.length})`}
+        {exporting ? (
+          <>
+            <ClockIcon size={16} /> Generating Excel...
+          </>
+        ) : (
+          <>
+            <DownloadIcon size={16} /> Download Filtered Excel ({filteredStudents.length})
+          </>
+        )}
       </button>
     </div>
   );
@@ -569,7 +583,7 @@ export function FilteredStudentRecordsPage() {
                   <tr>
                     <td colSpan="10" style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b' }}>
                       <div style={{ maxWidth: '380px', margin: '0 auto' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🔍</div>
+                        <SearchIcon size={36} color="#94a3b8" style={{ marginBottom: '8px' }} />
                         <h3 style={{ margin: '0 0 6px 0', fontSize: '1.05rem', color: '#1e293b' }}>
                           No student records found
                         </h3>

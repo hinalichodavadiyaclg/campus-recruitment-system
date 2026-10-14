@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal.jsx';
+import {
+  GraduationCapIcon,
+  BuildingIcon,
+  BriefcaseIcon,
+  ChartIcon,
+  UserIcon,
+  MapPinIcon
+} from '../common/Icons.jsx';
 import { userService } from '../../services/user.service.js';
 import { roleService } from '../../services/role.service.js';
 import { studentService } from '../../services/student.service.js';
@@ -410,7 +418,7 @@ export function CreateUserModal({
             style={{ flex: 1, padding: '8px 12px', fontSize: '13px' }}
             onClick={() => handleTabChange('STUDENT')}
           >
-            🎓 Student
+            <GraduationCapIcon size={14} /> Student
           </button>
           <button
             type="button"
@@ -419,7 +427,7 @@ export function CreateUserModal({
             style={{ flex: 1, padding: '8px 12px', fontSize: '13px' }}
             onClick={() => handleTabChange('COMPANY')}
           >
-            🏢 Company
+            <BuildingIcon size={14} /> Company
           </button>
           <button
             type="button"
@@ -428,7 +436,7 @@ export function CreateUserModal({
             style={{ flex: 1, padding: '8px 12px', fontSize: '13px' }}
             onClick={() => handleTabChange('PLACEMENT')}
           >
-            👔 Placement Officer
+            <BriefcaseIcon size={14} /> Placement Officer
           </button>
         </div>
       </div>
@@ -467,7 +475,7 @@ export function CreateUserModal({
                     gap: '6px'
                   }}
                 >
-                  🎓 Student Account & Identity
+                  <GraduationCapIcon size={16} color="var(--primary, #0284c7)" /> Student Account & Identity
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                   Official roll number, portal login email, and contact details
@@ -604,7 +612,7 @@ export function CreateUserModal({
                     gap: '6px'
                   }}
                 >
-                  🏫 Department & Academic Program
+                  <BuildingIcon size={16} color="var(--primary, #0284c7)" /> Department & Academic Program
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                   Department enrollment, course degree, and semester progress
@@ -741,7 +749,7 @@ export function CreateUserModal({
                     gap: '6px'
                   }}
                 >
-                  📊 Academic Performance
+                  <ChartIcon size={16} color="var(--primary, #0284c7)" /> Academic Performance
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                   Cumulative CGPA and active backlog standing
@@ -866,7 +874,7 @@ export function CreateUserModal({
                     gap: '6px'
                   }}
                 >
-                  🏢 Company Identity
+                  <BuildingIcon size={16} color="var(--primary, #0284c7)" /> Company Identity
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                   Organization name, domain, founding year, and web presence
@@ -986,7 +994,7 @@ export function CreateUserModal({
                     gap: '6px'
                   }}
                 >
-                  👤 Recruiter Contact
+                  <UserIcon size={16} color="var(--primary, #0284c7)" /> Recruiter Contact
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                   Lead recruiter account credentials and contact point
@@ -1103,7 +1111,7 @@ export function CreateUserModal({
                     gap: '6px'
                   }}
                 >
-                  📍 Overview & Location
+                  <MapPinIcon size={16} color="var(--primary, #0284c7)" /> Overview & Location
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                   Physical office address and descriptive overview visible to candidates
@@ -1188,7 +1196,7 @@ export function CreateUserModal({
                     gap: '6px'
                   }}
                 >
-                  💼 Professional Identity & Credentials
+                  <BriefcaseIcon size={16} color="var(--primary, #0284c7)" /> Professional Identity & Credentials
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                   Staff identifier, designation, and portal authorization role
@@ -1330,7 +1338,7 @@ export function CreateUserModal({
                     gap: '6px'
                   }}
                 >
-                  👤 Personal Details & Contact
+                  <UserIcon size={16} color="var(--primary, #0284c7)" /> Personal Details & Contact
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                   Staff full name and official contact email

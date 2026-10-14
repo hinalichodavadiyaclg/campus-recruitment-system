@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal.jsx';
+import { UserIcon, KeyIcon } from '../common/Icons.jsx';
 import { userService } from '../../services/user.service.js';
 import { roleService } from '../../services/role.service.js';
 
@@ -111,7 +112,7 @@ export function EditUserModal({ isOpen, onClose, user, onSuccess }) {
                 gap: '6px'
               }}
             >
-              👤 Account Credentials & Role
+              <UserIcon size={16} color="var(--primary, #0284c7)" /> Account Credentials & Role
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Portal login email, access role, and account status
@@ -189,7 +190,7 @@ export function EditUserModal({ isOpen, onClose, user, onSuccess }) {
                   gap: '6px'
                 }}
               >
-                🔑 Security & Password Override
+                <KeyIcon size={16} color="var(--primary, #0284c7)" /> Security & Password Override
               </h3>
               <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                 Optional password reset for this user account

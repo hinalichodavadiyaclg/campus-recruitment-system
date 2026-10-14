@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { companyService } from '../../services/company.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
+import { BuildingIcon, UserIcon, MapPinIcon } from '../../components/common/Icons.jsx';
 import { isValidMobile, MOBILE_VALIDATION_MESSAGE } from '../../utils/validation.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -217,8 +218,8 @@ export function CompanyMyProfilePage() {
     <PortalLayout title="Company Recruiter Profile">
       <div style={{ maxWidth: '760px', margin: '0 auto' }}>
         <div className="card" style={{ padding: '28px', marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: '0 0 6px', color: 'var(--navy, #173b76)' }}>
-            🏢 {company?.companyName || 'Company Profile'}
+          <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: '0 0 6px', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BuildingIcon size={22} color="var(--primary, #0284c7)" /> {company?.companyName || 'Company Profile'}
             {company?.companyId && (
               <span style={{ marginLeft: '10px', fontSize: '0.85rem', fontWeight: '600', color: '#2563eb', backgroundColor: '#eff6ff', padding: '3px 8px', borderRadius: '4px' }}>
                 {company.companyId}
@@ -240,7 +241,7 @@ export function CompanyMyProfilePage() {
               {/* SECTION 1: Company Identity */}
               <div style={{ marginTop: '4px', marginBottom: '2px' }}>
                 <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  🏢 Company Identity
+                  <BuildingIcon size={16} color="var(--primary, #0284c7)" /> Company Identity
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                   Core organization details and founding year
@@ -335,7 +336,7 @@ export function CompanyMyProfilePage() {
               {/* SECTION 2: Recruiter Contact */}
               <div style={{ marginTop: '8px', marginBottom: '2px', borderTop: '1px solid #e9eef3', paddingTop: '14px' }}>
                 <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  👤 Recruiter Contact
+                  <UserIcon size={16} color="var(--primary, #0284c7)" /> Recruiter Contact
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                   Primary point of contact for placement rounds and official communication
@@ -424,7 +425,7 @@ export function CompanyMyProfilePage() {
               {/* SECTION 3: Overview & Location */}
               <div style={{ marginTop: '8px', marginBottom: '2px', borderTop: '1px solid #e9eef3', paddingTop: '14px' }}>
                 <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  📍 Overview & Location
+                  <MapPinIcon size={16} color="var(--primary, #0284c7)" /> Overview & Location
                 </h3>
                 <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                   Physical office address and descriptive overview visible to candidates

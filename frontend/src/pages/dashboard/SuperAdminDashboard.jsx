@@ -5,6 +5,21 @@ import { studentService } from '../../services/student.service.js';
 import { companyService } from '../../services/company.service.js';
 import { placementOfficerService } from '../../services/placement_officer.service.js';
 import { sessionService } from '../../services/session.service.js';
+import {
+  GraduationCapIcon,
+  BuildingIcon,
+  BriefcaseIcon,
+  DocumentIcon,
+  CalendarIcon,
+  TargetIcon,
+  UserPlusIcon,
+  ImportIcon,
+  UsersIcon,
+  ShieldIcon,
+  KeyIcon,
+  BookIcon,
+  LockIcon
+} from '../../components/common/Icons.jsx';
 
 function formatTimeAgo(date) {
   if (!date || isNaN(date.getTime())) return 'Recently';
@@ -89,7 +104,7 @@ export function SuperAdminDashboard() {
                   desc: s.ipAddress ? `IP: ${s.ipAddress}` : 'User signed in',
                   time: s.createdAt ? formatTimeAgo(new Date(s.createdAt)) : 'Recently',
                   tag: 'Security',
-                  icon: '🔑',
+                  icon: <LockIcon size={18} color="#2563eb" />,
                   bg: '#eff6ff',
                   color: '#2563eb'
                 }))
@@ -204,7 +219,7 @@ export function SuperAdminDashboard() {
   // Quick actions filtered by RBAC permissions
   const availableQuickActions = [
     {
-      icon: '👤',
+      icon: <UserPlusIcon size={20} color="#0284c7" />,
       label: 'Add Student',
       link: '#/students',
       bg: '#e0f2fe',
@@ -212,7 +227,7 @@ export function SuperAdminDashboard() {
       show: has('USER_CREATE') || has('STUDENT_CREATE')
     },
     {
-      icon: '🏢',
+      icon: <BuildingIcon size={20} color="#16a34a" />,
       label: 'Add Company',
       link: '#/companies',
       bg: '#dcfce7',
@@ -220,7 +235,7 @@ export function SuperAdminDashboard() {
       show: has('USER_CREATE') || has('COMPANY_CREATE')
     },
     {
-      icon: '📥',
+      icon: <ImportIcon size={20} color="#7c3aed" />,
       label: 'Import Students',
       link: '#/import/student',
       bg: '#ede9fe',
@@ -228,7 +243,7 @@ export function SuperAdminDashboard() {
       show: has('STUDENT_IMPORT')
     },
     {
-      icon: '📥',
+      icon: <ImportIcon size={20} color="#d97706" />,
       label: 'Import Companies',
       link: '#/import/company',
       bg: '#fef3c7',
@@ -236,7 +251,7 @@ export function SuperAdminDashboard() {
       show: has('COMPANY_IMPORT')
     },
     {
-      icon: '👥',
+      icon: <UsersIcon size={20} color="#db2777" />,
       label: 'Manage Officers',
       link: '#/placement-officers',
       bg: '#fce7f3',
@@ -244,7 +259,7 @@ export function SuperAdminDashboard() {
       show: has('USER_READ') || has('PLACEMENT_USER_READ') || has('PLACEMENT_USER_IMPORT')
     },
     {
-      icon: '◈',
+      icon: <ShieldIcon size={20} color="#475569" />,
       label: 'Manage Roles',
       link: '#/roles',
       bg: '#f1f5f9',
@@ -252,7 +267,7 @@ export function SuperAdminDashboard() {
       show: has('ROLE_READ')
     },
     {
-      icon: '⌘',
+      icon: <KeyIcon size={20} color="#334155" />,
       label: 'Permissions',
       link: '#/permissions',
       bg: '#e2e8f0',
@@ -260,7 +275,7 @@ export function SuperAdminDashboard() {
       show: has('PERMISSION_READ')
     },
     {
-      icon: '📚',
+      icon: <BookIcon size={20} color="#0d9488" />,
       label: 'Courses',
       link: '#/courses',
       bg: '#ccfbf1',
@@ -381,11 +396,10 @@ export function SuperAdminDashboard() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '1.3rem',
                   flexShrink: 0
                 }}
               >
-                🎓
+                <GraduationCapIcon size={22} color="#ffffff" />
               </div>
               <div>
                 <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
@@ -422,11 +436,10 @@ export function SuperAdminDashboard() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '1.3rem',
                   flexShrink: 0
                 }}
               >
-                🏢
+                <BuildingIcon size={22} color="#ffffff" />
               </div>
               <div>
                 <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
@@ -463,11 +476,10 @@ export function SuperAdminDashboard() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '1.3rem',
                   flexShrink: 0
                 }}
               >
-                💼
+                <BriefcaseIcon size={22} color="#ffffff" />
               </div>
               <div>
                 <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
@@ -504,11 +516,10 @@ export function SuperAdminDashboard() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '1.3rem',
                   flexShrink: 0
                 }}
               >
-                📄
+                <DocumentIcon size={22} color="#ffffff" />
               </div>
               <div>
                 <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
@@ -545,11 +556,10 @@ export function SuperAdminDashboard() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '1.3rem',
                   flexShrink: 0
                 }}
               >
-                📅
+                <CalendarIcon size={22} color="#ffffff" />
               </div>
               <div>
                 <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
@@ -586,11 +596,10 @@ export function SuperAdminDashboard() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '1.3rem',
                   flexShrink: 0
                 }}
               >
-                🎯
+                <TargetIcon size={22} color="#ffffff" />
               </div>
               <div>
                 <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
@@ -1057,7 +1066,7 @@ export function SuperAdminDashboard() {
                   gap: '8px'
                 }}
               >
-                <div style={{ fontSize: '1.8rem', opacity: 0.5 }}>📋</div>
+                <DocumentIcon size={32} color="#94a3b8" />
                 <div>No recent activity to display</div>
               </div>
             )}
@@ -1110,7 +1119,7 @@ export function SuperAdminDashboard() {
                 gap: '8px'
               }}
             >
-              <div style={{ fontSize: '1.8rem', opacity: 0.5 }}>📅</div>
+              <CalendarIcon size={32} color="#94a3b8" />
               <div>No upcoming interviews scheduled</div>
             </div>
           </div>

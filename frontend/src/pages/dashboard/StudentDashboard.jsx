@@ -2,6 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { studentService } from '../../services/student.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
+import {
+  UserIcon,
+  BriefcaseIcon,
+  DocumentIcon,
+  CalendarIcon,
+  TargetIcon,
+  FolderIcon,
+  MegaphoneIcon,
+  EditIcon,
+  SettingsIcon,
+  KeyIcon,
+  ExternalLinkIcon,
+  AlertTriangleIcon,
+  ClockIcon,
+  GraduationCapIcon
+} from '../../components/common/Icons.jsx';
 
 function calculateProfileCompletion(student) {
   if (!student) return { percentage: 0, missingItems: [] };
@@ -87,7 +103,7 @@ export function StudentDashboard() {
               textDecoration: 'none'
             }}
           >
-            <span>👤</span>
+            <UserIcon size={16} />
             <span>View Full Profile</span>
           </a>
         </div>
@@ -106,7 +122,9 @@ export function StudentDashboard() {
               marginBottom: '20px'
             }}
           >
-            <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>⏳</div>
+            <div style={{ marginBottom: '8px' }}>
+              <ClockIcon size={32} color="#64748b" />
+            </div>
             <div style={{ fontWeight: 600, color: '#334155' }}>Loading your personalized academic profile…</div>
           </div>
         ) : error ? (
@@ -122,7 +140,7 @@ export function StudentDashboard() {
               gap: '16px'
             }}
           >
-            <span style={{ fontSize: '1.8rem' }}>⚠️</span>
+            <AlertTriangleIcon size={28} color="#d97706" />
             <div>
               <h3 style={{ margin: '0 0 6px 0', fontSize: '1.05rem', color: '#92400e', fontWeight: 700 }}>
                 Student Profile Notice
@@ -183,7 +201,7 @@ export function StudentDashboard() {
                       flexShrink: 0
                     }}
                   >
-                    🎓
+                    <GraduationCapIcon size={24} color="#2563eb" />
                   </div>
                   <div>
                     <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -285,7 +303,7 @@ export function StudentDashboard() {
                       flexShrink: 0
                     }}
                   >
-                    🗓️
+                    <CalendarIcon size={24} color="#9333ea" />
                   </div>
                   <div>
                     <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -373,7 +391,7 @@ export function StudentDashboard() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '1.3rem' }}>💼</span>
+                  <BriefcaseIcon size={20} color="#2563eb" />
                   <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
                     Eligible Job Drives
                   </div>
@@ -397,7 +415,7 @@ export function StudentDashboard() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '1.3rem' }}>📄</span>
+                  <DocumentIcon size={20} color="#0284c7" />
                   <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
                     My Applications
                   </div>
@@ -421,7 +439,7 @@ export function StudentDashboard() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '1.3rem' }}>📅</span>
+                  <CalendarIcon size={20} color="#7c3aed" />
                   <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
                     Upcoming Interviews
                   </div>
@@ -445,7 +463,7 @@ export function StudentDashboard() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '1.3rem' }}>🎯</span>
+                  <TargetIcon size={20} color="#16a34a" />
                   <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
                     Placement Offers
                   </div>
@@ -498,7 +516,7 @@ export function StudentDashboard() {
                     gap: '10px'
                   }}
                 >
-                  <div style={{ fontSize: '2rem', opacity: 0.6 }}>📂</div>
+                  <FolderIcon size={36} color="#94a3b8" />
                   <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#475569' }}>
                     No applications submitted yet
                   </div>
@@ -539,7 +557,7 @@ export function StudentDashboard() {
                     gap: '10px'
                   }}
                 >
-                  <div style={{ fontSize: '2rem', opacity: 0.6 }}>📢</div>
+                  <MegaphoneIcon size={36} color="#94a3b8" />
                   <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#475569' }}>
                     No announcements today
                   </div>
@@ -601,11 +619,10 @@ export function StudentDashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.1rem',
                         flexShrink: 0
                       }}
                     >
-                      👤
+                      <UserIcon size={18} color="#2563eb" />
                     </div>
                     <div>
                       <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
@@ -649,11 +666,10 @@ export function StudentDashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.1rem',
                         flexShrink: 0
                       }}
                     >
-                      ✏️
+                      <EditIcon size={18} color="#0284c7" />
                     </div>
                     <div>
                       <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
@@ -697,11 +713,10 @@ export function StudentDashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.1rem',
                         flexShrink: 0
                       }}
                     >
-                      ⚙️
+                      <SettingsIcon size={18} color="#475569" />
                     </div>
                     <div>
                       <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
@@ -745,11 +760,10 @@ export function StudentDashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.1rem',
                         flexShrink: 0
                       }}
                     >
-                      🔑
+                      <KeyIcon size={18} color="#d97706" />
                     </div>
                     <div>
                       <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
@@ -796,11 +810,10 @@ export function StudentDashboard() {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '1.1rem',
                           flexShrink: 0
                         }}
                       >
-                        🌐
+                        <ExternalLinkIcon size={18} color="#16a34a" />
                       </div>
                       <div>
                         <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>

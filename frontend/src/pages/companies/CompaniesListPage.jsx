@@ -9,6 +9,13 @@ import { CompanyModal } from '../../components/companies/CompanyModal.jsx';
 import { CreateUserModal } from '../../components/users/CreateUserModal.jsx';
 import { CompanyRecruitersModal } from '../../components/companies/CompanyRecruitersModal.jsx';
 import { CompanyViewModal } from '../../components/companies/CompanyViewModal.jsx';
+import {
+  DownloadIcon,
+  UploadIcon,
+  FilterIcon,
+  TrashIcon,
+  PlusIcon
+} from '../../components/common/Icons.jsx';
 
 export function CompaniesListPage() {
   const { has } = useAuth();
@@ -134,14 +141,14 @@ export function CompaniesListPage() {
             title="Download blank Excel template matching company form fields"
             onClick={handleDownloadTemplate}
           >
-            📥 Template
+            <DownloadIcon size={15} /> Template
           </button>
           <a
             className="secondary"
             href="#/import/company"
-            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+            style={{ textDecoration: 'none' }}
           >
-            ⬆️ Import Excel
+            <UploadIcon size={15} /> Import Excel
           </a>
         </>
       )}
@@ -153,7 +160,7 @@ export function CompaniesListPage() {
             disabled={exporting || companies.length === 0}
             onClick={handleExportAll}
           >
-            📊 Export All
+            <DownloadIcon size={16} /> Export All
           </button>
           <button
             className="secondary"
@@ -161,7 +168,7 @@ export function CompaniesListPage() {
             disabled={exporting || filteredCompanies.length === 0}
             onClick={handleExportFiltered}
           >
-            🔍 Export Filtered ({filteredCompanies.length})
+            <FilterIcon size={16} /> Export Filtered ({filteredCompanies.length})
           </button>
         </>
       )}
@@ -172,7 +179,7 @@ export function CompaniesListPage() {
           style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm(true)}
         >
-          🗑️ Delete All Companies ({filteredCompanies.length})
+          <TrashIcon size={16} /> Delete All Companies ({filteredCompanies.length})
         </button>
       )}
       {has('USER_CREATE') && (
@@ -182,7 +189,7 @@ export function CompaniesListPage() {
           type="button"
           onClick={() => setCreateModalOpen(true)}
         >
-          + Create Company
+          <PlusIcon size={16} /> Create Company
         </button>
       )}
     </div>

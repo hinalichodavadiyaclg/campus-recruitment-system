@@ -20,6 +20,15 @@ import { CompanyModal } from '../../components/companies/CompanyModal.jsx';
 import { CompanyRecruitersModal } from '../../components/companies/CompanyRecruitersModal.jsx';
 import { CompanyViewModal } from '../../components/companies/CompanyViewModal.jsx';
 import { PlacementOfficerModal } from '../../components/placement/PlacementOfficerModal.jsx';
+import {
+  KeyIcon,
+  TrashIcon,
+  PlusIcon,
+  UsersIcon,
+  GraduationCapIcon,
+  BuildingIcon,
+  BriefcaseIcon
+} from '../../components/common/Icons.jsx';
 
 export function UsersListPage() {
   const { user: currentUser, has } = useAuth();
@@ -430,7 +439,7 @@ export function UsersListPage() {
         type="button"
         onClick={() => setDefaultPasswordsOpen(true)}
       >
-        🔑 Default Passwords
+        <KeyIcon size={16} /> Default Passwords
       </button>
 
       {has('USER_DELETE') && activeTab === 'students' && filteredStudents.length > 0 && (
@@ -440,7 +449,7 @@ export function UsersListPage() {
           style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm({ type: 'students' })}
         >
-          🗑️ Delete All Students ({filteredStudents.length})
+          <TrashIcon size={16} /> Delete All Students ({filteredStudents.length})
         </button>
       )}
 
@@ -451,7 +460,7 @@ export function UsersListPage() {
           style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm({ type: 'company' })}
         >
-          🗑️ Delete All Companies ({filteredCompanies.length})
+          <TrashIcon size={16} /> Delete All Companies ({filteredCompanies.length})
         </button>
       )}
 
@@ -462,7 +471,7 @@ export function UsersListPage() {
           style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm({ type: 'placement' })}
         >
-          🗑️ Delete All Officers ({filteredOfficers.length})
+          <TrashIcon size={16} /> Delete All Officers ({filteredOfficers.length})
         </button>
       )}
 
@@ -473,7 +482,7 @@ export function UsersListPage() {
           style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm({ type: 'all' })}
         >
-          🗑️ Delete All Accounts ({filteredUsers.length})
+          <TrashIcon size={16} /> Delete All Accounts ({filteredUsers.length})
         </button>
       )}
 
@@ -486,7 +495,7 @@ export function UsersListPage() {
             setCreateUserOpen(true);
           }}
         >
-          + Create Student
+          <PlusIcon size={16} /> Create Student
         </button>
       )}
 
@@ -499,7 +508,7 @@ export function UsersListPage() {
             setCreateUserOpen(true);
           }}
         >
-          + Create Company
+          <PlusIcon size={16} /> Create Company
         </button>
       )}
 
@@ -512,7 +521,7 @@ export function UsersListPage() {
             setCreateUserOpen(true);
           }}
         >
-          + Create Placement Officer
+          <PlusIcon size={16} /> Create Placement Officer
         </button>
       )}
 
@@ -526,7 +535,7 @@ export function UsersListPage() {
             setCreateUserOpen(true);
           }}
         >
-          + Create Account
+          <PlusIcon size={16} /> Create Account
         </button>
       )}
     </div>
@@ -551,7 +560,7 @@ export function UsersListPage() {
               setSearch('');
             }}
           >
-            👥 All Accounts
+            <UsersIcon size={16} /> All Accounts
           </button>
           <button
             type="button"
@@ -564,7 +573,7 @@ export function UsersListPage() {
               setStudentCourseFilter('');
             }}
           >
-            🎓 Students
+            <GraduationCapIcon size={16} /> Students
           </button>
           <button
             type="button"
@@ -575,7 +584,7 @@ export function UsersListPage() {
               setSearch('');
             }}
           >
-            🏢 Company
+            <BuildingIcon size={16} /> Company
           </button>
           <button
             type="button"
@@ -586,7 +595,7 @@ export function UsersListPage() {
               setSearch('');
             }}
           >
-            👔 Placement Cell
+            <BriefcaseIcon size={16} /> Placement Cell
           </button>
         </div>
 

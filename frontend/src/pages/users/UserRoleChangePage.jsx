@@ -5,6 +5,7 @@ import { roleService } from '../../services/role.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { Loading } from '../../components/common/Loading.jsx';
 import { ConfirmModal } from '../../components/common/ConfirmModal.jsx';
+import { UsersIcon } from '../../components/common/Icons.jsx';
 
 export function UserRoleChangePage({ userId }) {
   const { toast } = useToast();
@@ -85,7 +86,7 @@ export function UserRoleChangePage({ userId }) {
           {/* Section: Role Selection */}
           <div style={{ marginTop: '4px', marginBottom: '2px' }}>
             <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              👥 Role Assignment
+              <UsersIcon size={18} color="#2563eb" /> Role Assignment
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Select target role and inspect newly granted permission capabilities

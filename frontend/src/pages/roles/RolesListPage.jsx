@@ -6,6 +6,7 @@ import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { Loading } from '../../components/common/Loading.jsx';
 import { ConfirmModal } from '../../components/common/ConfirmModal.jsx';
+import { TrashIcon, PlusIcon } from '../../components/common/Icons.jsx';
 
 export function RolesListPage() {
   const { has } = useAuth();
@@ -74,12 +75,12 @@ export function RolesListPage() {
           style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm(true)}
         >
-          🗑️ Delete All Custom Roles
+          <TrashIcon size={16} /> Delete All Custom Roles
         </button>
       )}
       {has('ROLE_CREATE') && (
         <a className="primary" href="#/roles/new">
-          + Create role
+          <PlusIcon size={16} /> Create role
         </a>
       )}
     </div>

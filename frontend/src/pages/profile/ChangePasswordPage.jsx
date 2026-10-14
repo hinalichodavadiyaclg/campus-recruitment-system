@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { authService } from '../../services/auth.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
+import { KeyIcon } from '../../components/common/Icons.jsx';
 
 export function ChangePasswordPage({ firstLogin = false }) {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -81,7 +82,7 @@ export function ChangePasswordPage({ firstLogin = false }) {
           {/* Section: Password Security */}
           <div style={{ marginTop: '4px', marginBottom: '2px' }}>
             <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              🔑 Security Credentials
+              <KeyIcon size={16} color="var(--primary, #0284c7)" /> Security Credentials
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Enter current password and choose a secure new password

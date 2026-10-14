@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal.jsx';
+import { BuildingIcon } from '../common/Icons.jsx';
 
 export function DepartmentModal({ isOpen, department = null, onClose, onSubmit, isProcessing }) {
   const isEdit = Boolean(department?._id);
@@ -125,7 +126,7 @@ export function DepartmentModal({ isOpen, department = null, onClose, onSubmit, 
                 gap: '6px'
               }}
             >
-              🏛️ Department Information
+              <BuildingIcon size={16} color="var(--primary, #0284c7)" /> Department Information
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Academic division name, official code, and optional description

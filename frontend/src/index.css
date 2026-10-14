@@ -260,6 +260,7 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   justify-content: center;
   text-align: center;
+  gap: 7px;
 }
 
 .primary {
@@ -752,6 +753,9 @@ a { color: inherit; text-decoration: none; }
   background: transparent;
   border: 0;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .link-button:hover {

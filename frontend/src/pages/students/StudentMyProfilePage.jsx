@@ -6,6 +6,7 @@ import { getAssetUrl } from '../../services/api.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { Modal } from '../../components/common/Modal.jsx';
 import { ConfirmModal } from '../../components/common/ConfirmModal.jsx';
+import { GraduationCapIcon, InfoIcon, AwardIcon, ExternalLinkIcon } from '../../components/common/Icons.jsx';
 
 export function StudentMyProfilePage() {
   const { user } = useAuth();
@@ -540,10 +541,10 @@ export function StudentMyProfilePage() {
           <div className="card" style={{ padding: '16px 20px', backgroundColor: 'var(--surface-subtle, #f8fafc)', border: '1px solid var(--border)', borderRadius: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                🎓 Official Academic Record <span className="badge" style={{ fontSize: '11px', background: '#e2e8f0', color: '#475569' }}>Read-Only</span>
+                <GraduationCapIcon size={16} color="var(--primary, #0284c7)" /> Official Academic Record <span className="badge" style={{ fontSize: '11px', background: '#e2e8f0', color: '#475569' }}>Read-Only</span>
               </h3>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                ℹ️ Academic records are verified and managed by Placement Cell staff
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <InfoIcon size={14} color="var(--text-muted)" /> Academic records are verified and managed by Placement Cell staff
               </span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', fontSize: '13px' }}>
@@ -740,7 +741,7 @@ export function StudentMyProfilePage() {
                 {/* Section 2: Online Presence & Portfolios */}
                 <div style={{ marginTop: '8px', marginBottom: '2px', borderTop: '1px solid #e9eef3', paddingTop: '14px' }}>
                   <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    🌐 Professional Links & Visibility
+                    <ExternalLinkIcon size={16} color="var(--primary, #0284c7)" /> Professional Links & Visibility
                   </h3>
                   <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                     Social coding links, portfolio URLs, and public profile switch
@@ -1017,7 +1018,9 @@ export function StudentMyProfilePage() {
                     <div key={c._id} style={{ padding: '16px', border: '1px solid var(--border)', borderRadius: '8px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <div>
-                          <h4 style={{ margin: 0 }}>📜 {c.name}</h4>
+                          <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <AwardIcon size={16} color="#0d9488" /> {c.name}
+                          </h4>
                           <p style={{ margin: '4px 0', color: 'var(--text-muted)' }}>
                             Issued by {c.issuingOrganization} {c.issueDate ? `• ${c.issueDate}` : ''}
                             {c.credentialId ? ` (Credential ID: ${c.credentialId})` : ''}
@@ -1111,7 +1114,9 @@ export function StudentMyProfilePage() {
                     <div key={a._id} style={{ padding: '16px', border: '1px solid var(--border)', borderRadius: '8px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <div>
-                          <h4 style={{ margin: 0 }}>🏆 {a.title}</h4>
+                          <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <AwardIcon size={16} color="#d97706" /> {a.title}
+                          </h4>
                           <small style={{ color: 'var(--text-muted)' }}>
                             {a.issuingOrganization} {a.date ? `• ${a.date}` : ''}
                           </small>
