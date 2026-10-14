@@ -16,8 +16,7 @@ import {
   ExternalLinkIcon,
   AlertTriangleIcon,
   ClockIcon,
-  GraduationCapIcon,
-  CalendarIcon
+  GraduationCapIcon
 } from '../../components/common/Icons.jsx';
 
 function calculateProfileCompletion(student) {
