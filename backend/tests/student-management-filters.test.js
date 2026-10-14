@@ -22,7 +22,7 @@ describe('Student Management - Department and Course Filtering', () => {
     { _id: 'course_power', name: 'B.Tech Power Systems', code: 'POWER', departmentId: 'dept_ee' }
   ];
 
-  // Mock Student records with relational departmentId and courseId
+  // Mock Student records with relational departmentId and courseId, plus academic metrics
   const students = [
     {
       _id: 's1',
@@ -33,7 +33,10 @@ describe('Student Management - Department and Course Filtering', () => {
       departmentId: 'dept_cs',
       courseId: 'course_ai',
       department: 'Computer Science & Engineering',
-      branch: 'B.Tech AI & Data Science'
+      branch: 'B.Tech AI & Data Science',
+      semester: 6,
+      cgpa: 8.5,
+      backlogs: 0
     },
     {
       _id: 's2',
@@ -44,7 +47,10 @@ describe('Student Management - Department and Course Filtering', () => {
       departmentId: { _id: 'dept_cs' },
       courseId: { _id: 'course_web' },
       department: 'Computer Science & Engineering',
-      branch: 'B.Tech Software Engineering'
+      branch: 'B.Tech Software Engineering',
+      semester: 6,
+      cgpa: 6.8,
+      backlogs: 1
     },
     {
       _id: 's3',
@@ -55,7 +61,10 @@ describe('Student Management - Department and Course Filtering', () => {
       departmentId: 'dept_mech',
       courseId: 'course_robotics',
       department: 'Mechanical Engineering',
-      branch: 'B.Tech Robotics & Automation'
+      branch: 'B.Tech Robotics & Automation',
+      semester: 4,
+      cgpa: 9.1,
+      backlogs: 0
     },
     {
       _id: 's4',
@@ -66,7 +75,10 @@ describe('Student Management - Department and Course Filtering', () => {
       departmentId: 'dept_ee',
       courseId: 'course_power',
       department: 'Electrical Engineering',
-      branch: 'B.Tech Power Systems'
+      branch: 'B.Tech Power Systems',
+      semester: 8,
+      cgpa: 7.2,
+      backlogs: 3
     }
   ];
 
@@ -222,5 +234,111 @@ describe('Student Management - Department and Course Filtering', () => {
     // Available courses with no department filter should return all courses
     const allCourses = getAvailableCourses(courses, '');
     assert.equal(allCourses.length, 4);
+  });
+
+  // Test 7: Semester filtering
+  it('7. Filtering by semester: returns only students enrolled in the specified semester', () => {
+    const sem6Students = filterStudents({
+      students,
+      semester: 6
+    });
+    assert.equal(sem6Students.length, 2);
+    assert.deepEqual(
+      sem6Students.map((s) => s.universityId).sort(),
+      ['STU-001', 'STU-002']
+    );
+
+    const sem4Students = filterStudents({
+      students,
+      semester: 4
+    });
+    assert.equal(sem4Students.length, 1);
+    assert.equal(sem4Students[0].universityId, 'STU-003');
+
+    const sem1Students = filterStudents({
+      students,
+      semester: 1
+    });
+    assert.equal(sem1Students.length, 0);
+  });
+
+  // Test 8: Min CGPA filtering
+  it('8. Filtering by minimum CGPA: returns only students meeting or exceeding the threshold', () => {
+    const highCgpaStudents = filterStudents({
+      students,
+      minCgpa: 8.0
+    });
+    assert.equal(highCgpaStudents.length, 2);
+    assert.deepEqual(
+      highCgpaStudents.map((s) => s.universityId).sort(),
+      ['STU-001', 'STU-003']
+    );
+
+    const topCgpaStudents = filterStudents({
+      students,
+      minCgpa: 9.0
+    });
+    assert.equal(topCgpaStudents.length, 1);
+    assert.equal(topCgpaStudents[0].universityId, 'STU-003');
+  });
+
+  // Test 9: Active backlogs filtering
+  it('9. Filtering by active backlogs: supports zero, max1, max2, and has backlog conditions', () => {
+    // 0 Backlogs (eligible / clean)
+    const zeroBacklog = filterStudents({
+      students,
+      backlogs: '0'
+    });
+    assert.equal(zeroBacklog.length, 2);
+    assert.deepEqual(
+      zeroBacklog.map((s) => s.universityId).sort(),
+      ['STU-001', 'STU-003']
+    );
+
+    // Max 1 Backlog (0 or 1)
+    const max1Backlog = filterStudents({
+      students,
+      backlogs: 'max1'
+    });
+    assert.equal(max1Backlog.length, 3);
+    assert.deepEqual(
+      max1Backlog.map((s) => s.universityId).sort(),
+      ['STU-001', 'STU-002', 'STU-003']
+    );
+
+    // Has Backlogs (>0)
+    const hasBacklog = filterStudents({
+      students,
+      backlogs: 'has'
+    });
+    assert.equal(hasBacklog.length, 2);
+    assert.deepEqual(
+      hasBacklog.map((s) => s.universityId).sort(),
+      ['STU-002', 'STU-004']
+    );
+  });
+
+  // Test 10: Combined academic & relational filtering
+  it('10. Combined academic filtering: narrows down across department, semester, cgpa, and backlogs', () => {
+    // CS + Sem 6 + Min CGPA 8.0 + 0 Backlogs -> only Alice (STU-001)
+    const eligibleStudents = filterStudents({
+      students,
+      departmentId: 'dept_cs',
+      semester: 6,
+      minCgpa: 8.0,
+      backlogs: '0'
+    });
+    assert.equal(eligibleStudents.length, 1);
+    assert.equal(eligibleStudents[0].universityId, 'STU-001');
+
+    // CS + Sem 6 + Min CGPA 6.0 + Max 1 Backlog -> Alice and Bob
+    const broadCsStudents = filterStudents({
+      students,
+      departmentId: 'dept_cs',
+      semester: 6,
+      minCgpa: 6.0,
+      backlogs: 'max1'
+    });
+    assert.equal(broadCsStudents.length, 2);
   });
 });

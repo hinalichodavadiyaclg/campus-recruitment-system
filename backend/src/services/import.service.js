@@ -1725,7 +1725,20 @@ export async function confirmImport(type, inputSource, options = {}) {
 /**
  * Generates an Excel workbook for Export (All or Filtered)
  */
-export async function exportDataToExcel(type, { search = '', filtered = false, department = '', course = '' } = {}) {
+export async function exportDataToExcel(
+  type,
+  {
+    search = '',
+    filtered = false,
+    department = '',
+    course = '',
+    role = '',
+    designation = '',
+    semester = '',
+    minCgpa = '',
+    backlogs = ''
+  } = {}
+) {
   const config = MODULE_CONFIGS[type];
   if (!config) throw new AppError(400, 'INVALID_IMPORT_TYPE', `Unknown export type: ${type}`);
 
@@ -1757,6 +1770,19 @@ export async function exportDataToExcel(type, { search = '', filtered = false, d
       } else {
         query.branch = new RegExp(course.trim(), 'i');
       }
+    }
+    if (filtered && semester !== '' && semester !== undefined && semester !== null) {
+      query.semester = Number(semester);
+    }
+    if (filtered && minCgpa !== '' && minCgpa !== undefined && minCgpa !== null) {
+      query.cgpa = { $gte: Number(minCgpa) };
+    }
+    if (filtered && backlogs !== '' && backlogs !== undefined && backlogs !== null) {
+      if (backlogs === '0' || backlogs === 'zero') query.backlogs = 0;
+      else if (backlogs === 'max1') query.backlogs = { $lte: 1 };
+      else if (backlogs === 'max2') query.backlogs = { $lte: 2 };
+      else if (backlogs === 'has') query.backlogs = { $gt: 0 };
+      else if (!isNaN(Number(backlogs))) query.backlogs = { $lte: Number(backlogs) };
     }
 
     const students = await Student.find(query)
@@ -1823,6 +1849,44 @@ export async function exportDataToExcel(type, { search = '', filtered = false, d
         { role: regex },
         { department: regex }
       ];
+    }
+    if (filtered && role && role.trim()) {
+      const r = role.trim();
+      if (r === 'ROLE_PLACEMENT_HEAD' || r === 'HEAD') {
+        const headConditions = [
+          { role: 'ROLE_PLACEMENT_HEAD' },
+          { designation: new RegExp('Head', 'i') }
+        ];
+        if (query.$or) {
+          query.$and = [{ $or: query.$or }, { $or: headConditions }];
+          delete query.$or;
+        } else {
+          query.$or = headConditions;
+        }
+      } else if (r === 'ROLE_PLACEMENT_COORDINATOR' || r === 'COORDINATOR') {
+        const coordConditions = [
+          { role: 'ROLE_PLACEMENT_COORDINATOR' },
+          { designation: new RegExp('Coordinator', 'i') }
+        ];
+        if (query.$or) {
+          query.$and = [{ $or: query.$or }, { $or: coordConditions }];
+          delete query.$or;
+        } else {
+          query.$or = coordConditions;
+        }
+      } else {
+        query.role = r;
+      }
+    }
+    if (filtered && department && department.trim()) {
+      if (mongoose.Types.ObjectId.isValid(department)) {
+        query.departmentId = department;
+      } else {
+        query.department = new RegExp(department.trim(), 'i');
+      }
+    }
+    if (filtered && designation && designation.trim()) {
+      query.designation = new RegExp(designation.trim(), 'i');
     }
 
     const officers = await PlacementOfficer.find(query)

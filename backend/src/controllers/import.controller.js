@@ -74,8 +74,23 @@ export const exportData = asyncHandler(async (request, response) => {
   const search = typeof request.query.search === 'string' ? request.query.search : '';
   const department = typeof request.query.department === 'string' ? request.query.department : (typeof request.query.departmentId === 'string' ? request.query.departmentId : '');
   const course = typeof request.query.course === 'string' ? request.query.course : (typeof request.query.courseId === 'string' ? request.query.courseId : '');
+  const role = typeof request.query.role === 'string' ? request.query.role : '';
+  const designation = typeof request.query.designation === 'string' ? request.query.designation : '';
+  const semester = request.query.semester;
+  const minCgpa = request.query.minCgpa || request.query.cgpa;
+  const backlogs = request.query.backlogs;
 
-  const buffer = await importService.exportDataToExcel(type, { search, filtered, department, course });
+  const buffer = await importService.exportDataToExcel(type, {
+    search,
+    filtered,
+    department,
+    course,
+    role,
+    designation,
+    semester,
+    minCgpa,
+    backlogs
+  });
 
   const timestamp = new Date().toISOString().slice(0, 10);
   const filename = `${type}_${filtered ? 'filtered_' : 'all_'}${timestamp}.xlsx`;
