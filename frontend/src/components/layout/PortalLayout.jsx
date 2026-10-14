@@ -81,6 +81,26 @@ export {
   LogOutIcon
 };
 
+import { NAVIGATION_GROUPS, getVisibleNavGroups } from './navigationConfig.js';
+
+const NAV_ICONS = {
+  HomeIcon,
+  UserIcon,
+  UsersIcon,
+  BuildingIcon,
+  BookIcon,
+  BriefcaseIcon,
+  DocumentIcon,
+  CalendarIcon,
+  GraduationCapIcon,
+  WorkshopsIcon,
+  ShieldIcon,
+  KeyIcon,
+  ImportIcon,
+  ChartIcon,
+  SettingsIcon
+};
+
 export function PortalLayout({
   title,
   subtitle,
@@ -91,7 +111,7 @@ export function PortalLayout({
   section,
   hideEyebrow = false
 }) {
-  const { user, role, logout } = useAuth();
+  const { user, role, loading, has, logout } = useAuth();
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -115,6 +135,8 @@ export function PortalLayout({
     return currentPath === route || currentPath.startsWith(route + '/');
   };
 
+  const visibleGroups = getVisibleNavGroups(NAVIGATION_GROUPS, has, { loading });
+
   return (
     <div className="portal">
       <aside className="sidebar">
@@ -127,136 +149,51 @@ export function PortalLayout({
         </a>
 
         <nav>
-          {/* Top ungrouped items */}
-          <a
-            className={'nav-link ' + (isNavActive('/dashboard') ? 'active' : '')}
-            href="#/dashboard"
-          >
-            <span className="nav-icon"><HomeIcon /></span>
-            Dashboard
-          </a>
-          <a
-            className={'nav-link ' + (isNavActive('/profile') ? 'active' : '')}
-            href="#/profile"
-          >
-            <span className="nav-icon"><UserIcon /></span>
-            My Account
-          </a>
-
-          {/* USERS */}
-          <span className="nav-label">USERS</span>
-          <a
-            className={'nav-link ' + (isNavActive('/users') ? 'active' : '')}
-            href="#/users"
-          >
-            <span className="nav-icon"><UsersIcon /></span>
-            Users
-          </a>
-
-          {/* MASTER DATA */}
-          <span className="nav-label">MASTER DATA</span>
-          <a
-            className={'nav-link ' + (isNavActive('/departments') ? 'active' : '')}
-            href="#/departments"
-          >
-            <span className="nav-icon"><BuildingIcon /></span>
-            Departments
-          </a>
-          <a
-            className={'nav-link ' + (isNavActive('/courses') ? 'active' : '')}
-            href="#/courses"
-          >
-            <span className="nav-icon"><BookIcon /></span>
-            Courses
-          </a>
-
-          {/* RECRUITMENT */}
-          <span className="nav-label">RECRUITMENT</span>
-          <a
-            className={'nav-link ' + (isNavActive('/job-postings') ? 'active' : '')}
-            href="#/job-postings"
-          >
-            <span className="nav-icon"><BriefcaseIcon /></span>
-            Job Postings
-          </a>
-          <a
-            className={'nav-link ' + (isNavActive('/applications') ? 'active' : '')}
-            href="#/applications"
-          >
-            <span className="nav-icon"><DocumentIcon /></span>
-            Applications
-          </a>
-          <a
-            className={'nav-link ' + (isNavActive('/interviews') ? 'active' : '')}
-            href="#/interviews"
-          >
-            <span className="nav-icon"><CalendarIcon /></span>
-            Interviews
-          </a>
-          <a
-            className={'nav-link ' + (isNavActive('/placements') ? 'active' : '')}
-            href="#/placements"
-          >
-            <span className="nav-icon"><GraduationCapIcon /></span>
-            Placements
-          </a>
-          <a
-            className={'nav-link ' + (isNavActive('/training-workshops') ? 'active' : '')}
-            href="#/training-workshops"
-          >
-            <span className="nav-icon"><WorkshopsIcon /></span>
-            Training & Workshops
-          </a>
-
-          {/* ACCESS MANAGEMENT */}
-          <span className="nav-label">ACCESS MANAGEMENT</span>
-          <a
-            className={'nav-link ' + (isNavActive('/roles') ? 'active' : '')}
-            href="#/roles"
-          >
-            <span className="nav-icon"><ShieldIcon /></span>
-            Roles
-          </a>
-          <a
-            className={'nav-link ' + (isNavActive('/permissions') ? 'active' : '')}
-            href="#/permissions"
-          >
-            <span className="nav-icon"><KeyIcon /></span>
-            Permissions
-          </a>
-
-          {/* DATA IMPORT */}
-          <span className="nav-label">DATA IMPORT</span>
-          <a
-            className={'nav-link ' + (isNavActive('/import') ? 'active' : '')}
-            href="#/import"
-          >
-            <span className="nav-icon"><ImportIcon /></span>
-            Import Data
-          </a>
-
-          {/* REPORTS */}
-          <span className="nav-label">REPORTS</span>
-          <a
-            className={'nav-link ' + (isNavActive('/reports') ? 'active' : '')}
-            href="#/reports"
-          >
-            <span className="nav-icon"><ChartIcon /></span>
-            Reports & Analytics
-          </a>
-
-          {/* DIVIDER */}
-          <div className="sidebar-divider" />
-
-          {/* SYSTEM */}
-          <span className="nav-label">SYSTEM</span>
-          <a
-            className={'nav-link ' + (isNavActive('/settings') ? 'active' : '')}
-            href="#/settings"
-          >
-            <span className="nav-icon"><SettingsIcon /></span>
-            Settings
-          </a>
+          {visibleGroups.map((group, groupIndex) => {
+            return (
+              <React.Fragment key={group.id || group.label || groupIndex}>
+                {group.divider && <div className="sidebar-divider" />}
+                {group.label && <span className="nav-label">{group.label}</span>}
+                {group.items.map((item) => {
+                  const Icon = NAV_ICONS[item.icon];
+                  return (
+                    <React.Fragment key={item.path || item.id}>
+                      <a
+                        className={'nav-link ' + (isNavActive(item.path) ? 'active' : '')}
+                        href={'#' + item.path}
+                      >
+                        <span className="nav-icon">{Icon ? <Icon /> : null}</span>
+                        {item.label}
+                      </a>
+                      {Array.isArray(item.children) && item.children.length > 0 && (
+                        <div className="nav-submenu">
+                          {item.children.map((child) => {
+                            const ChildIcon = NAV_ICONS[child.icon];
+                            return (
+                              <a
+                                key={child.path || child.id}
+                                className={
+                                  'nav-link nav-sub-link ' +
+                                  (isNavActive(child.path) ? 'active' : '')
+                                }
+                                href={'#' + child.path}
+                                style={{ paddingLeft: '32px' }}
+                              >
+                                <span className="nav-icon">
+                                  {ChildIcon ? <ChildIcon /> : null}
+                                </span>
+                                {child.label}
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })}
         </nav>
 
         <div className="sidebar-footer">
