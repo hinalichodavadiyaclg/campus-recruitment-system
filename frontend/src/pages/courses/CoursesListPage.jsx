@@ -5,6 +5,7 @@ import { courseService } from '../../services/course.service.js';
 import { departmentService } from '../../services/department.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { CourseModal, COURSE_LEVEL_OPTIONS } from '../../components/courses/CourseModal.jsx';
+import { PlusIcon } from '../../components/common/Icons.jsx';
 
 const LEVEL_LABEL_MAP = {
   UNDERGRADUATE: 'Undergraduate',
@@ -114,7 +115,7 @@ export function CoursesListPage() {
             setModalOpen(true);
           }}
         >
-          + Add Course
+          <PlusIcon size={16} /> Add Course
         </button>
       )}
     </div>

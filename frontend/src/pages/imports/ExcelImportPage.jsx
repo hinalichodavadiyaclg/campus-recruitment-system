@@ -5,6 +5,22 @@ import { importService } from '../../services/import.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
 import { ConfirmModal } from '../../components/common/ConfirmModal.jsx';
+import {
+  CheckIcon,
+  GraduationCapIcon,
+  BuildingIcon,
+  UsersIcon,
+  DownloadIcon,
+  ChartIcon,
+  SearchIcon,
+  ArrowRightIcon,
+  SlidersIcon,
+  AlertTriangleIcon,
+  KeyIcon,
+  FolderIcon,
+  InfoIcon,
+  ClockIcon
+} from '../../components/common/Icons.jsx';
 
 export function ExcelImportPage({ type: initialType = 'student' }) {
   const { has } = useAuth();
@@ -194,7 +210,7 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
                 flexShrink: 0
               }}
             >
-              🎓
+              <GraduationCapIcon size={24} color={type === 'student' ? '#1e3a8a' : '#64748b'} />
             </div>
             <div>
               <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: type === 'student' ? '#1e3a8a' : '#0f172a' }}>
@@ -232,7 +248,7 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
                 flexShrink: 0
               }}
             >
-              🏢
+              <BuildingIcon size={24} color={type === 'company' ? '#1e3a8a' : '#64748b'} />
             </div>
             <div>
               <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: type === 'company' ? '#1e3a8a' : '#0f172a' }}>
@@ -270,7 +286,7 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
                 flexShrink: 0
               }}
             >
-              👥
+              <UsersIcon size={24} color={type === 'placement' ? '#1e3a8a' : '#64748b'} />
             </div>
             <div>
               <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: type === 'placement' ? '#1e3a8a' : '#0f172a' }}>
@@ -344,7 +360,7 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
                 transition: 'all 0.15s ease'
               }}
             >
-              📥 Download {moduleSingular[type]} Template (.xlsx)
+              <DownloadIcon size={16} /> Download {moduleSingular[type]} Template (.xlsx)
             </button>
           </div>
 
@@ -376,7 +392,7 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
                   flexShrink: 0
                 }}
               >
-                📊
+                <ChartIcon size={22} color="#9333ea" />
               </div>
               <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
                 2. Export Existing Data <span style={{ color: '#64748b', fontWeight: 500, fontSize: '0.88rem' }}>(Optional)</span>
@@ -404,7 +420,15 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
                   transition: 'all 0.15s ease'
                 }}
               >
-                {exporting ? '⏳ Exporting...' : `📊 Export All ${modulePlural[type]} (.xlsx)`}
+                {exporting ? (
+                  <>
+                    <ClockIcon size={14} /> Exporting...
+                  </>
+                ) : (
+                  <>
+                    <DownloadIcon size={14} /> Export All {modulePlural[type]} (.xlsx)
+                  </>
+                )}
               </button>
               <a
                 href={type === 'student' ? '#/students/filtered' : listPath}
@@ -424,7 +448,7 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
                   transition: 'all 0.15s ease'
                 }}
               >
-                🔍 Filtered Export in List ➔
+                <SearchIcon size={14} /> Filtered Export in List <ArrowRightIcon size={14} />
               </a>
             </div>
           </div>
@@ -464,7 +488,7 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
                   flexShrink: 0
                 }}
               >
-                ⚙️
+                <SlidersIcon size={20} color="#d97706" />
               </div>
               <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#0f172a' }}>
                 Import Modes & Behavior
@@ -495,8 +519,8 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
               </label>
             </div>
             {!createNew && !updateExisting && (
-              <p style={{ color: '#dc2626', margin: '10px 0 0', fontSize: '0.8rem' }}>
-                ⚠️ Warning: Both creation and update modes are disabled. All rows will be skipped.
+              <p style={{ color: '#dc2626', margin: '10px 0 0', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <AlertTriangleIcon size={14} /> Warning: Both creation and update modes are disabled. All rows will be skipped.
               </p>
             )}
           </div>
@@ -526,7 +550,7 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
                   flexShrink: 0
                 }}
               >
-                🔑
+                <KeyIcon size={20} color="#0284c7" />
               </div>
               <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#0284c7' }}>
                 Initial Account Setup
@@ -630,7 +654,7 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
                   fileInputRef.current?.click();
                 }}
               >
-                📁 Select File
+                <FolderIcon size={16} /> Select File
               </button>
               <div style={{ marginTop: '14px', fontSize: '0.82rem', color: '#64748b' }}>
                 Supported file formats: .xlsx, .xls, .csv
@@ -683,8 +707,8 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
 
               {/* Ignored Columns Information */}
               {validationData.ignoredColumns?.length > 0 && (
-                <div className="notice" style={{ marginBottom: '16px', background: '#fef3c7', borderColor: '#f59e0b', color: '#92400e' }}>
-                  ℹ️ <strong>Extra Columns Ignored:</strong> The following unsupported extra columns were found and will safely be ignored: <code>{validationData.ignoredColumns.join(', ')}</code>.
+                <div className="notice" style={{ marginBottom: '16px', background: '#fef3c7', borderColor: '#f59e0b', color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <InfoIcon size={16} color="#d97706" /> <span><strong>Extra Columns Ignored:</strong> The following unsupported extra columns were found and will safely be ignored: <code>{validationData.ignoredColumns.join(', ')}</code>.</span>
                 </div>
               )}
 
@@ -796,7 +820,9 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
           {/* Final Import Summary Report */}
           {importResult && (
             <div className="center" style={{ padding: '24px 0', textAlign: 'center' }}>
-              <div className="success-icon" style={{ fontSize: '3rem', color: '#10b981', marginBottom: '8px' }}>✓</div>
+              <div className="success-icon" style={{ marginBottom: '8px' }}>
+                <CheckIcon size={34} strokeWidth={2.5} color="#10b981" />
+              </div>
               <h2 style={{ margin: '0 0 8px 0' }}>Import Completed Successfully</h2>
               <p className="subcopy" style={{ color: 'var(--muted, #64748b)', margin: '0 auto 20px', maxWidth: '540px' }}>
                 All approved database records have been securely written to MongoDB. User accounts and domain relationships remain consistent.

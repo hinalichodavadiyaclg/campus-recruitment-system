@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal.jsx';
+import { BuildingIcon, UserIcon, MapPinIcon } from '../common/Icons.jsx';
 import { companyService } from '../../services/company.service.js';
 import { isValidMobile, MOBILE_VALIDATION_MESSAGE } from '../../utils/validation.js';
 
@@ -266,7 +267,7 @@ export function CompanyModal({ isOpen, company = null, onClose, onSuccess }) {
                 gap: '6px'
               }}
             >
-              🏢 Company Identity
+              <BuildingIcon size={16} color="var(--primary, #0284c7)" /> Company Identity
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Organization name, industry domain, and founding year
@@ -388,7 +389,7 @@ export function CompanyModal({ isOpen, company = null, onClose, onSuccess }) {
                 gap: '6px'
               }}
             >
-              👤 Recruiter Contact
+              <UserIcon size={16} color="var(--primary, #0284c7)" /> Recruiter Contact
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Primary point of contact for placement rounds and official communication
@@ -508,7 +509,7 @@ export function CompanyModal({ isOpen, company = null, onClose, onSuccess }) {
                 gap: '6px'
               }}
             >
-              📍 Overview & Location
+              <MapPinIcon size={16} color="var(--primary, #0284c7)" /> Overview & Location
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Physical office address and descriptive overview visible to candidates

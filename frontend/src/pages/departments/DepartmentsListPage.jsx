@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { departmentService } from '../../services/department.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { DepartmentModal } from '../../components/departments/DepartmentModal.jsx';
+import { PlusIcon } from '../../components/common/Icons.jsx';
 
 export function DepartmentsListPage() {
   const { has } = useAuth();
@@ -91,7 +92,7 @@ export function DepartmentsListPage() {
             setModalOpen(true);
           }}
         >
-          + Add Department
+          <PlusIcon size={16} /> Add Department
         </button>
       )}
     </div>

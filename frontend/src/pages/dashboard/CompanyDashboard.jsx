@@ -2,6 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { companyService } from '../../services/company.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
+import {
+  BuildingIcon,
+  BriefcaseIcon,
+  UsersIcon,
+  CalendarIcon,
+  AwardIcon,
+  EditIcon,
+  SettingsIcon,
+  KeyIcon,
+  AlertTriangleIcon,
+  ClockIcon
+} from '../../components/common/Icons.jsx';
 
 function calculateCompanyProfileCompletion(company) {
   if (!company) return { percentage: 0, missingItems: [] };
@@ -86,7 +98,7 @@ export function CompanyDashboard() {
               textDecoration: 'none'
             }}
           >
-            <span>🏢</span>
+            <BuildingIcon size={15} />
             <span>Company Profile</span>
           </a>
         </div>
@@ -105,7 +117,9 @@ export function CompanyDashboard() {
               marginBottom: '20px'
             }}
           >
-            <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>⏳</div>
+            <div style={{ marginBottom: '8px' }}>
+              <ClockIcon size={32} color="#64748b" />
+            </div>
             <div style={{ fontWeight: 600, color: '#334155' }}>Loading company recruitment portal…</div>
           </div>
         ) : error ? (
@@ -121,7 +135,7 @@ export function CompanyDashboard() {
               gap: '16px'
             }}
           >
-            <span style={{ fontSize: '1.8rem' }}>⚠️</span>
+            <AlertTriangleIcon size={28} color="#d97706" />
             <div>
               <h3 style={{ margin: '0 0 6px 0', fontSize: '1.05rem', color: '#92400e', fontWeight: 700 }}>
                 Company Account Notice
@@ -182,7 +196,7 @@ export function CompanyDashboard() {
                       flexShrink: 0
                     }}
                   >
-                    🏢
+                    <BuildingIcon size={24} color="#2563eb" />
                   </div>
                   <div>
                     <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -373,7 +387,7 @@ export function CompanyDashboard() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '1.3rem' }}>💼</span>
+                  <BriefcaseIcon size={20} color="#2563eb" />
                   <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
                     Active Job Drives
                   </div>
@@ -397,7 +411,7 @@ export function CompanyDashboard() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '1.3rem' }}>👥</span>
+                  <UsersIcon size={20} color="#0284c7" />
                   <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
                     Total Applicants
                   </div>
@@ -421,7 +435,7 @@ export function CompanyDashboard() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '1.3rem' }}>📅</span>
+                  <CalendarIcon size={20} color="#7c3aed" />
                   <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
                     Candidate Interviews
                   </div>
@@ -445,7 +459,7 @@ export function CompanyDashboard() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '1.3rem' }}>⭐</span>
+                  <AwardIcon size={20} color="#eab308" />
                   <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
                     Shortlisted Candidates
                   </div>
@@ -498,7 +512,7 @@ export function CompanyDashboard() {
                     gap: '10px'
                   }}
                 >
-                  <div style={{ fontSize: '2rem', opacity: 0.6 }}>💼</div>
+                  <BriefcaseIcon size={36} color="#94a3b8" />
                   <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#475569' }}>
                     No job drives published
                   </div>
@@ -539,7 +553,7 @@ export function CompanyDashboard() {
                     gap: '10px'
                   }}
                 >
-                  <div style={{ fontSize: '2rem', opacity: 0.6 }}>📅</div>
+                  <CalendarIcon size={36} color="#94a3b8" />
                   <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#475569' }}>
                     No interviews scheduled
                   </div>
@@ -601,11 +615,10 @@ export function CompanyDashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.1rem',
                         flexShrink: 0
                       }}
                     >
-                      🏢
+                      <BuildingIcon size={18} color="#2563eb" />
                     </div>
                     <div>
                       <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
@@ -649,11 +662,10 @@ export function CompanyDashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.1rem',
                         flexShrink: 0
                       }}
                     >
-                      ✏️
+                      <EditIcon size={18} color="#0284c7" />
                     </div>
                     <div>
                       <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
@@ -697,11 +709,10 @@ export function CompanyDashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.1rem',
                         flexShrink: 0
                       }}
                     >
-                      👥
+                      <UsersIcon size={18} color="#16a34a" />
                     </div>
                     <div>
                       <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
@@ -745,11 +756,10 @@ export function CompanyDashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.1rem',
                         flexShrink: 0
                       }}
                     >
-                      ⚙️
+                      <SettingsIcon size={18} color="#475569" />
                     </div>
                     <div>
                       <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
@@ -793,11 +803,10 @@ export function CompanyDashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.1rem',
                         flexShrink: 0
                       }}
                     >
-                      🔑
+                      <KeyIcon size={18} color="#d97706" />
                     </div>
                     <div>
                       <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>

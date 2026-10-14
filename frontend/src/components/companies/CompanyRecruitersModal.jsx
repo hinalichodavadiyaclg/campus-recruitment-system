@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Modal } from '../common/Modal.jsx';
 import { Badge } from '../common/Badge.jsx';
 import { ConfirmModal } from '../common/ConfirmModal.jsx';
+import { PlusIcon, UserPlusIcon, EditIcon, TrashIcon } from '../common/Icons.jsx';
 import { companyService } from '../../services/company.service.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -343,7 +344,7 @@ export function CompanyRecruitersModal({ isOpen, company, onClose, onUpdated }) 
                 setAddGeneralError('');
               }}
             >
-              + Add Recruiter
+              <PlusIcon size={14} /> Add Recruiter
             </button>
           )}
         </div>
@@ -356,7 +357,7 @@ export function CompanyRecruitersModal({ isOpen, company, onClose, onUpdated }) 
           >
             <div style={{ marginBottom: '12px' }}>
               <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                👤 Add Recruiter to {company?.companyName}
+                <UserPlusIcon size={16} color="var(--primary, #0284c7)" /> Add Recruiter to {company?.companyName}
               </h3>
               <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                 Configure recruiter contact details. A secure default login password will be generated automatically.
@@ -510,7 +511,7 @@ export function CompanyRecruitersModal({ isOpen, company, onClose, onUpdated }) 
           >
             <div style={{ marginBottom: '12px' }}>
               <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                ✏️ Edit Recruiter: {editingRecruiter.email}
+                <EditIcon size={16} color="var(--primary, #0284c7)" /> Edit Recruiter: {editingRecruiter.email}
               </h3>
               <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
                 Update recruiter details and account status
@@ -737,7 +738,7 @@ export function CompanyRecruitersModal({ isOpen, company, onClose, onUpdated }) 
                             gap: '4px'
                           }}
                         >
-                          ⭐ Primary
+                          Primary
                         </span>
                       ) : (
                         <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Secondary</span>
@@ -751,7 +752,7 @@ export function CompanyRecruitersModal({ isOpen, company, onClose, onUpdated }) 
                           type="button"
                           onClick={() => startEdit(r)}
                         >
-                          Edit
+                          <EditIcon size={13} /> Edit
                         </button>
                       )}
                       {has('USER_DELETE') && (
@@ -761,7 +762,7 @@ export function CompanyRecruitersModal({ isOpen, company, onClose, onUpdated }) 
                           type="button"
                           onClick={() => setDeletingRecruiter(r)}
                         >
-                          Delete
+                          <TrashIcon size={13} /> Delete
                         </button>
                       )}
                     </td>

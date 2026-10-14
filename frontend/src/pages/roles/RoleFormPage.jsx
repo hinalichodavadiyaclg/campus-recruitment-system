@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { roleService } from '../../services/role.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { Loading } from '../../components/common/Loading.jsx';
+import { ShieldIcon } from '../../components/common/Icons.jsx';
 
 export function RoleFormPage({ roleId }) {
   const editing = Boolean(roleId);
@@ -125,7 +126,7 @@ export function RoleFormPage({ roleId }) {
           {/* Section: Role Configuration */}
           <div style={{ marginTop: '4px', marginBottom: '2px' }}>
             <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              🛡️ Role Configuration
+              <ShieldIcon size={18} color="#2563eb" /> Role Configuration
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Define RBAC role identifier, display name, and purpose

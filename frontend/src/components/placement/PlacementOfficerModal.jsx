@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal.jsx';
+import { BriefcaseIcon, UserIcon } from '../common/Icons.jsx';
 import { placementOfficerService } from '../../services/placement_officer.service.js';
 import { departmentService } from '../../services/department.service.js';
 import { isValidMobile, MOBILE_VALIDATION_MESSAGE } from '../../utils/validation.js';
@@ -190,7 +191,7 @@ export function PlacementOfficerModal({ isOpen, officer = null, onClose, onSucce
                 gap: '6px'
               }}
             >
-              💼 Professional Identity & Credentials
+              <BriefcaseIcon size={16} color="var(--primary, #0284c7)" /> Professional Identity & Credentials
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Staff employee number, job title, and system role
@@ -331,7 +332,7 @@ export function PlacementOfficerModal({ isOpen, officer = null, onClose, onSucce
                 gap: '6px'
               }}
             >
-              👤 Personal Details & Contact
+              <UserIcon size={16} color="var(--primary, #0284c7)" /> Personal Details & Contact
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Staff legal name and official contact email

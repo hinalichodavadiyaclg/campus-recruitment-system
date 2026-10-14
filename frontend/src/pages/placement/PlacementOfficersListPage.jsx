@@ -7,6 +7,13 @@ import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { ConfirmModal } from '../../components/common/ConfirmModal.jsx';
 import { PlacementOfficerModal } from '../../components/placement/PlacementOfficerModal.jsx';
 import { CreateUserModal } from '../../components/users/CreateUserModal.jsx';
+import {
+  DownloadIcon,
+  UploadIcon,
+  FilterIcon,
+  TrashIcon,
+  PlusIcon
+} from '../../components/common/Icons.jsx';
 
 export function PlacementOfficersListPage() {
   const { user: currentUser, has } = useAuth();
@@ -141,14 +148,14 @@ export function PlacementOfficersListPage() {
             title="Download blank Excel template matching placement officer form fields"
             onClick={handleDownloadTemplate}
           >
-            📥 Template
+            <DownloadIcon size={15} /> Template
           </button>
           <a
             className="secondary"
             href="#/import/placement"
-            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+            style={{ textDecoration: 'none' }}
           >
-            ⬆️ Import Excel
+            <UploadIcon size={15} /> Import Excel
           </a>
         </>
       )}
@@ -160,7 +167,7 @@ export function PlacementOfficersListPage() {
             disabled={exporting || officers.length === 0}
             onClick={handleExportAll}
           >
-            📊 Export All
+            <DownloadIcon size={16} /> Export All
           </button>
           <button
             className="secondary"
@@ -168,7 +175,7 @@ export function PlacementOfficersListPage() {
             disabled={exporting || filteredOfficers.length === 0}
             onClick={handleExportFiltered}
           >
-            🔍 Export Filtered ({filteredOfficers.length})
+            <FilterIcon size={16} /> Export Filtered ({filteredOfficers.length})
           </button>
         </>
       )}
@@ -179,7 +186,7 @@ export function PlacementOfficersListPage() {
           style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm(true)}
         >
-          🗑️ Delete All Officers ({filteredOfficers.length})
+          <TrashIcon size={16} /> Delete All Officers ({filteredOfficers.length})
         </button>
       )}
       {has('USER_CREATE') && (
@@ -189,7 +196,7 @@ export function PlacementOfficersListPage() {
           type="button"
           onClick={() => setCreateModalOpen(true)}
         >
-          + Create Placement Officer
+          <PlusIcon size={16} /> Create Placement Officer
         </button>
       )}
     </div>

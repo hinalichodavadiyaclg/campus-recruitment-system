@@ -10,6 +10,13 @@ import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { ConfirmModal } from '../../components/common/ConfirmModal.jsx';
 import { StudentModal } from '../../components/students/StudentModal.jsx';
 import { CreateUserModal } from '../../components/users/CreateUserModal.jsx';
+import {
+  DownloadIcon,
+  UploadIcon,
+  FilterIcon,
+  TrashIcon,
+  PlusIcon
+} from '../../components/common/Icons.jsx';
 
 function getHashQueryParams() {
   const hash = window.location.hash || '';
@@ -184,14 +191,14 @@ export function StudentsListPage() {
             title="Download blank Excel template matching student form fields"
             onClick={handleDownloadTemplate}
           >
-            📥 Template
+            <DownloadIcon size={15} /> Template
           </button>
           <a
             className="secondary"
             href="#/import/student"
-            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+            style={{ textDecoration: 'none' }}
           >
-            ⬆️ Import Excel
+            <UploadIcon size={15} /> Import Excel
           </a>
         </>
       )}
@@ -203,7 +210,7 @@ export function StudentsListPage() {
             disabled={exporting || students.length === 0}
             onClick={handleExportAll}
           >
-            📊 Export All
+            <DownloadIcon size={16} /> Export All
           </button>
           <button
             className="secondary"
@@ -212,7 +219,7 @@ export function StudentsListPage() {
             disabled={filteredStudents.length === 0}
             onClick={handleExportFiltered}
           >
-            🔍 Export Filtered ({filteredStudents.length})
+            <FilterIcon size={16} /> Export Filtered ({filteredStudents.length})
           </button>
         </>
       )}
@@ -223,7 +230,7 @@ export function StudentsListPage() {
           style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm(true)}
         >
-          🗑️ Delete All Students ({filteredStudents.length})
+          <TrashIcon size={16} /> Delete All Students ({filteredStudents.length})
         </button>
       )}
       {(has('USER_CREATE') || has('STUDENT_CREATE')) && (
@@ -236,7 +243,7 @@ export function StudentsListPage() {
             setStudentModalOpen(true);
           }}
         >
-          + Create Student
+          <PlusIcon size={16} /> Create Student
         </button>
       )}
     </div>

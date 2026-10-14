@@ -2,6 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { studentService } from '../../services/student.service.js';
 import { getAssetUrl } from '../../services/api.js';
 import { Modal } from '../../components/common/Modal.jsx';
+import {
+  LockIcon,
+  GraduationCapIcon,
+  DocumentIcon,
+  ZapIcon,
+  FolderIcon,
+  BriefcaseIcon,
+  AwardIcon,
+  CodeIcon,
+  ExternalLinkIcon
+} from '../../components/common/Icons.jsx';
 
 export function StudentPublicProfilePage({ studentId }) {
   const [student, setStudent] = useState(null);
@@ -66,7 +77,9 @@ export function StudentPublicProfilePage({ studentId }) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg, #f8fafc)', padding: '20px' }}>
         <div className="card" style={{ maxWidth: '480px', width: '100%', textAlign: 'center', padding: '32px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+            <LockIcon size={48} color="var(--text-muted, #64748b)" />
+          </div>
           <h2>Profile Unavailable</h2>
           <p className="notice warning" style={{ marginTop: '12px' }}>
             {error || 'This student profile does not exist or is set to private by the student.'}
@@ -126,7 +139,7 @@ export function StudentPublicProfilePage({ studentId }) {
 
                 {student.resume?.url && (
                   <a href={getAssetUrl(student.resume.url)} target="_blank" rel="noreferrer" className="button primary">
-                    📄 View Resume
+                    <DocumentIcon size={16} /> View Resume
                   </a>
                 )}
               </div>
@@ -140,18 +153,18 @@ export function StudentPublicProfilePage({ studentId }) {
               {/* Social / Link Badges */}
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '16px' }}>
                 {student.githubUrl && (
-                  <a href={student.githubUrl} target="_blank" rel="noreferrer" className="badge" style={{ background: '#24292e', color: '#fff', textDecoration: 'none' }}>
-                    💻 GitHub Profile
+                  <a href={student.githubUrl} target="_blank" rel="noreferrer" className="badge" style={{ background: '#24292e', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <CodeIcon size={14} /> GitHub Profile
                   </a>
                 )}
                 {student.linkedinUrl && (
-                  <a href={student.linkedinUrl} target="_blank" rel="noreferrer" className="badge" style={{ background: '#0a66c2', color: '#fff', textDecoration: 'none' }}>
-                    🔗 LinkedIn Profile
+                  <a href={student.linkedinUrl} target="_blank" rel="noreferrer" className="badge" style={{ background: '#0a66c2', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <ExternalLinkIcon size={14} /> LinkedIn Profile
                   </a>
                 )}
                 {student.portfolioUrl && (
-                  <a href={student.portfolioUrl} target="_blank" rel="noreferrer" className="badge" style={{ background: 'var(--blue, #0284c7)', color: '#fff', textDecoration: 'none' }}>
-                    🌐 Portfolio Website
+                  <a href={student.portfolioUrl} target="_blank" rel="noreferrer" className="badge" style={{ background: 'var(--blue, #0284c7)', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <ExternalLinkIcon size={14} /> Portfolio Website
                   </a>
                 )}
               </div>
@@ -161,7 +174,9 @@ export function StudentPublicProfilePage({ studentId }) {
 
         {/* Academic Highlights */}
         <article className="card" style={{ padding: '24px' }}>
-          <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>🎓 Academic Summary</h3>
+          <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <GraduationCapIcon size={20} color="var(--primary, #0284c7)" /> Academic Summary
+          </h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginTop: '16px' }}>
             <div>
               <small style={{ color: 'var(--text-muted)' }}>Department</small>
@@ -189,7 +204,9 @@ export function StudentPublicProfilePage({ studentId }) {
         {/* About / Bio */}
         {student.bio && (
           <article className="card" style={{ padding: '24px' }}>
-            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>📝 About</h3>
+            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <DocumentIcon size={20} color="var(--primary, #0284c7)" /> About
+            </h3>
             <p style={{ lineHeight: 1.6, margin: '12px 0 0' }}>{student.bio}</p>
           </article>
         )}
@@ -197,7 +214,9 @@ export function StudentPublicProfilePage({ studentId }) {
         {/* Skills */}
         {student.skills?.length > 0 && (
           <article className="card" style={{ padding: '24px' }}>
-            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>⚡ Skills & Technical Expertise</h3>
+            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ZapIcon size={20} color="#eab308" /> Skills & Technical Expertise
+            </h3>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
               {student.skills.map((s, idx) => (
                 <span key={idx} className="badge" style={{ padding: '6px 12px', fontSize: '0.9em', background: 'var(--blue-light, #e0f2fe)', color: 'var(--blue, #0284c7)' }}>
@@ -211,15 +230,17 @@ export function StudentPublicProfilePage({ studentId }) {
         {/* Projects */}
         {student.projects?.length > 0 && (
           <article className="card" style={{ padding: '24px' }}>
-            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>🚀 Projects</h3>
+            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FolderIcon size={20} color="#7c3aed" /> Projects
+            </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
               {student.projects.map((p) => (
                 <div key={p._id} style={{ borderLeft: '3px solid var(--blue, #0284c7)', paddingLeft: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                     <h4 style={{ margin: 0, fontSize: '1.1em' }}>{p.title}</h4>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      {p.projectUrl && <a href={p.projectUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.85em' }}>Live Demo ↗</a>}
-                      {p.githubUrl && <a href={p.githubUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.85em' }}>GitHub ↗</a>}
+                      {p.projectUrl && <a href={p.projectUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.85em', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>Live Demo <ExternalLinkIcon size={12} /></a>}
+                      {p.githubUrl && <a href={p.githubUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.85em', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>GitHub <ExternalLinkIcon size={12} /></a>}
                     </div>
                   </div>
                   <p style={{ margin: '6px 0', color: 'var(--text-muted)' }}>{p.description}</p>
@@ -239,7 +260,9 @@ export function StudentPublicProfilePage({ studentId }) {
         {/* Internships & Experience */}
         {student.internships?.length > 0 && (
           <article className="card" style={{ padding: '24px' }}>
-            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>💼 Internships & Experience</h3>
+            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BriefcaseIcon size={20} color="#16a34a" /> Internships & Experience
+            </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
               {student.internships.map((exp) => (
                 <div key={exp._id} style={{ borderLeft: '3px solid var(--green, #16a34a)', paddingLeft: '16px' }}>
@@ -257,12 +280,16 @@ export function StudentPublicProfilePage({ studentId }) {
         {/* Certifications */}
         {student.certificates?.length > 0 && (
           <article className="card" style={{ padding: '24px' }}>
-            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>📜 Certifications</h3>
+            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AwardIcon size={20} color="#0d9488" /> Certifications
+            </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginTop: '16px' }}>
               {student.certificates.map((c) => (
                 <div key={c._id} style={{ padding: '16px', border: '1px solid var(--border)', borderRadius: '8px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
-                    <h4 style={{ margin: 0, fontSize: '1.1em' }}>📜 {c.name}</h4>
+                    <h4 style={{ margin: 0, fontSize: '1.1em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <AwardIcon size={16} color="#0d9488" /> {c.name}
+                    </h4>
                     <p style={{ margin: '4px 0 10px', fontSize: '0.9em', color: 'var(--text-muted)' }}>
                       Issued by <strong>{c.issuingOrganization}</strong> {c.issueDate ? `• ${c.issueDate}` : ''}
                     </p>
@@ -307,7 +334,9 @@ export function StudentPublicProfilePage({ studentId }) {
         {/* Achievements */}
         {student.achievements?.length > 0 && (
           <article className="card" style={{ padding: '24px' }}>
-            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>🏆 Honors & Achievements</h3>
+            <h3 style={{ marginTop: 0, borderBottom: '1px solid var(--border)', paddingBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AwardIcon size={20} color="#d97706" /> Honors & Achievements
+            </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
               {student.achievements.map((a) => (
                 <div key={a._id}>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal } from '../common/Modal.jsx';
+import { GraduationCapIcon, BuildingIcon, ChartIcon } from '../common/Icons.jsx';
 import { studentService } from '../../services/student.service.js';
 import { departmentService } from '../../services/department.service.js';
 import { courseService } from '../../services/course.service.js';
@@ -362,7 +363,7 @@ export function StudentModal({ isOpen, student = null, onClose, onSuccess }) {
                 gap: '6px'
               }}
             >
-              🎓 Student Identity & Contact
+              <GraduationCapIcon size={16} color="var(--primary, #0284c7)" /> Student Identity & Contact
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Official roll number, student name, and primary contact details
@@ -499,7 +500,7 @@ export function StudentModal({ isOpen, student = null, onClose, onSuccess }) {
                 gap: '6px'
               }}
             >
-              🏫 Department & Academic Program
+              <BuildingIcon size={16} color="var(--primary, #0284c7)" /> Department & Academic Program
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Department enrollment, degree specialization, and graduation year
@@ -671,7 +672,7 @@ export function StudentModal({ isOpen, student = null, onClose, onSuccess }) {
                 gap: '6px'
               }}
             >
-              📊 Academic Performance
+              <ChartIcon size={16} color="var(--primary, #0284c7)" /> Academic Performance
             </h3>
             <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
               Cumulative CGPA and active backlog count
