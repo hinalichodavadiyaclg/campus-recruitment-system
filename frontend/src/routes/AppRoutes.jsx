@@ -154,16 +154,27 @@ export function AppRoutes() {
   }
 
   if (parts[0] === 'departments') {
-    return has('DEPARTMENT_READ') ? <DepartmentsListPage /> : <DashboardPage />;
+    if (!has('DEPARTMENT_READ')) {
+      window.location.hash = '#/dashboard';
+      return <DashboardPage />;
+    }
+    return <DepartmentsListPage />;
   }
 
   if (parts[0] === 'courses') {
-    return has('COURSE_READ') ? <CoursesListPage /> : <DashboardPage />;
+    if (!has('COURSE_READ')) {
+      window.location.hash = '#/dashboard';
+      return <DashboardPage />;
+    }
+    return <CoursesListPage />;
   }
 
   // Users routes
   if (parts[0] === 'users') {
-    if (!has('USER_READ')) return <DashboardPage />;
+    if (!has('USER_READ')) {
+      window.location.hash = '#/dashboard';
+      return <DashboardPage />;
+    }
     if (parts.length === 1) return <UsersListPage />;
     if (parts[2] === 'role') return <UserRoleChangePage userId={parts[1]} />;
     if (parts[1]) return <UserDetailsPage userId={parts[1]} />;
@@ -171,7 +182,10 @@ export function AppRoutes() {
 
   // Roles routes
   if (parts[0] === 'roles') {
-    if (!has('ROLE_READ')) return <DashboardPage />;
+    if (!has('ROLE_READ')) {
+      window.location.hash = '#/dashboard';
+      return <DashboardPage />;
+    }
     if (parts[1] === 'new') return <RoleFormPage />;
     if (parts[2] === 'edit') return <RoleFormPage roleId={parts[1]} />;
     if (parts[2] === 'permissions') return <RolePermissionsPage roleId={parts[1]} />;
@@ -181,7 +195,10 @@ export function AppRoutes() {
 
   // Permissions routes
   if (parts[0] === 'permissions') {
-    if (!has('PERMISSION_READ')) return <DashboardPage />;
+    if (!has('PERMISSION_READ')) {
+      window.location.hash = '#/dashboard';
+      return <DashboardPage />;
+    }
     if (parts[1] === 'new') return <PermissionFormPage />;
     if (parts[2] === 'edit') return <PermissionFormPage permissionId={parts[1]} />;
     if (parts[1]) return <PermissionDetailsPage permissionId={parts[1]} />;
