@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { studentService } from '../../services/student.service.js';
@@ -6,7 +6,32 @@ import { getAssetUrl } from '../../services/api.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { Modal } from '../../components/common/Modal.jsx';
 import { ConfirmModal } from '../../components/common/ConfirmModal.jsx';
-import { GraduationCapIcon, InfoIcon, AwardIcon, ExternalLinkIcon } from '../../components/common/Icons.jsx';
+import './StudentProfile.css';
+import {
+  GraduationCapIcon,
+  InfoIcon,
+  AwardIcon,
+  ExternalLinkIcon,
+  UserIcon,
+  PhoneIcon,
+  MailIcon,
+  BuildingIcon,
+  GlobeIcon,
+  CameraIcon,
+  CopyIcon,
+  TrendingUpIcon,
+  TrophyIcon,
+  GithubIcon,
+  LinkedinIcon,
+  UploadIcon,
+  EditIcon,
+  FolderIcon,
+  FileTextIcon,
+  LinkIcon,
+  CalendarIcon,
+  DocumentIcon,
+  BriefcaseIcon
+} from '../../components/common/Icons.jsx';
 
 export function StudentMyProfilePage() {
   const { user } = useAuth();
@@ -15,6 +40,16 @@ export function StudentMyProfilePage() {
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+
+  const photoInputRef = useRef(null);
+  const bioTextareaRef = useRef(null);
+
+  const handleFocusBio = () => {
+    if (bioTextareaRef.current) {
+      bioTextareaRef.current.focus();
+      bioTextareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
 
   // Form states for modals
   const [certModalOpen, setCertModalOpen] = useState(false);
@@ -467,8 +502,9 @@ export function StudentMyProfilePage() {
   return (
     <PortalLayout
       title="My Student Profile"
-      subtitle="Manage your academic, professional details, resume, projects, and public profile."
+      subtitle=""
       currentPath="/my-profile"
+      hideEyebrow={true}
     >
       {loading ? (
         <article className="card">
@@ -480,351 +516,456 @@ export function StudentMyProfilePage() {
         </article>
       ) : (
         <section style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Header Summary Card */}
-          <article className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '50%',
-                  background: 'var(--blue-light, #e0f2fe)',
-                  color: 'var(--blue, #0284c7)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '24px',
-                  fontWeight: 'bold',
-                  overflow: 'hidden'
-                }}
-              >
-                {student.profilePhoto ? (
-                  <img src={getAssetUrl(student.profilePhoto)} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                ) : (
-                  `${student.firstName ? student.firstName[0] : ''}${student.lastName ? student.lastName[0] : ''}`
-                )}
+          {/* Top Profile Summary Card */}
+          <article className="student-profile-header-card">
+            <div className="profile-main-info">
+              <div className="profile-avatar-wrapper">
+                <div className="profile-avatar-circle">
+                  {student.profilePhoto ? (
+                    <img
+                      src={getAssetUrl(student.profilePhoto)}
+                      alt="Profile"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  ) : (
+                    `${student.firstName ? student.firstName[0] : ''}${student.lastName ? student.lastName[0] : ''}`
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="profile-camera-btn"
+                  title="Upload profile photo"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                >
+                  <CameraIcon size={14} color="#475569" />
+                </button>
+                <input
+                  type="file"
+                  ref={photoInputRef}
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  style={{ display: 'none' }}
+                />
               </div>
-              <div>
-                <h2 style={{ margin: 0 }}>{student.firstName} {student.lastName}</h2>
-                <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
-                  {student.branch} ({student.department}) • ID: <strong>{student.universityId}</strong>
+
+              <div className="profile-name-block">
+                <h2 className="profile-name">{student.firstName} {student.lastName}</h2>
+                <p className="profile-subtitle">
+                  {student.branch || student.department} ({student.department || 'Department'}) • ID: {student.universityId}
                 </p>
-                <span className={`badge ${student.isPublicProfile ? 'success' : 'warning'}`} style={{ marginTop: '6px', display: 'inline-block' }}>
-                  {student.isPublicProfile ? 'Public Profile Enabled' : 'Private Profile'}
-                </span>
+                {student.isPublicProfile ? (
+                  <span className="profile-badge-public">
+                    <GlobeIcon size={12} color="#16a34a" /> PUBLIC PROFILE ENABLED
+                  </span>
+                ) : (
+                  <span className="profile-badge-private">
+                    <GlobeIcon size={12} color="#64748b" /> PRIVATE PROFILE
+                  </span>
+                )}
+
+                <div className="profile-header-actions">
+                  <a
+                    className="btn-view-shareable"
+                    href={`#/student-profile/${student._id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLinkIcon size={14} color="#ffffff" /> View Shareable Profile
+                  </a>
+                  <button
+                    className="btn-copy-link"
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(shareableUrl);
+                      toast('Shareable profile URL copied to clipboard!');
+                    }}
+                  >
+                    Copy Link <CopyIcon size={14} color="#475569" />
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <a
-                className="button primary"
-                href={`#/student-profile/${student._id}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                View Shareable Profile ↗
-              </a>
-              <button
-                className="button ghost"
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(shareableUrl);
-                  toast('Shareable profile URL copied to clipboard!');
-                }}
-              >
-                Copy Link 📋
-              </button>
+            <div className="profile-contact-list">
+              <div className="profile-contact-item">
+                <MailIcon size={18} color="#2563eb" />
+                <span title={student.email}>{student.email}</span>
+              </div>
+              <div className="profile-contact-item">
+                <PhoneIcon size={18} color="#2563eb" />
+                <span>{student.mobileNumber || 'N/A'}</span>
+              </div>
+              <div className="profile-contact-item">
+                <BuildingIcon size={18} color="#2563eb" />
+                <span title={student.department}>{student.department || 'N/A'}</span>
+              </div>
+              <div className="profile-contact-item">
+                <GraduationCapIcon size={18} color="#2563eb" />
+                <span title={student.branch}>{student.branch || student.department || 'N/A'}</span>
+              </div>
             </div>
           </article>
 
           {/* Official Academic Record Card (Read-Only) */}
-          <div className="card" style={{ padding: '16px 20px', backgroundColor: 'var(--surface-subtle, #f8fafc)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <GraduationCapIcon size={16} color="var(--primary, #0284c7)" /> Official Academic Record <span className="badge" style={{ fontSize: '11px', background: '#e2e8f0', color: '#475569' }}>Read-Only</span>
+          <div className="academic-record-card">
+            <div className="academic-record-header">
+              <h3>
+                <GraduationCapIcon size={18} color="#0284c7" /> Official Academic Record
               </h3>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <InfoIcon size={14} color="var(--text-muted)" /> Academic records are verified and managed by Placement Cell staff
-              </span>
+              <span className="badge-read-only">READ-ONLY</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', fontSize: '13px' }}>
-              <div><span style={{ color: 'var(--text-muted)' }}>University ID:</span> <strong>{student.universityId}</strong></div>
-              <div><span style={{ color: 'var(--text-muted)' }}>Department:</span> <strong>{student.department}</strong></div>
-              <div><span style={{ color: 'var(--text-muted)' }}>Branch:</span> <strong>{student.branch}</strong></div>
-              <div><span style={{ color: 'var(--text-muted)' }}>Semester:</span> <strong>{student.semester}</strong></div>
-              <div><span style={{ color: 'var(--text-muted)' }}>CGPA:</span> <strong>{student.cgpa} / 10.0</strong></div>
-              <div><span style={{ color: 'var(--text-muted)' }}>Backlogs:</span> <strong>{student.backlogs ?? 0}</strong></div>
-              <div><span style={{ color: 'var(--text-muted)' }}>Passing Year:</span> <strong>{student.passingYear || 'N/A'}</strong></div>
+
+            <div className="academic-grid-row-1">
+              <div>
+                <div className="academic-item-label">University ID</div>
+                <div className="academic-item-value">{student.universityId}</div>
+              </div>
+              <div>
+                <div className="academic-item-label">Department</div>
+                <div className="academic-item-value">{student.department}</div>
+              </div>
+              <div>
+                <div className="academic-item-label">Branch</div>
+                <div className="academic-item-value">{student.branch}</div>
+              </div>
+            </div>
+
+            <div className="academic-grid-row-2">
+              <div>
+                <div className="academic-item-label">Semester</div>
+                <div className="academic-item-value">{student.semester}</div>
+              </div>
+              <div>
+                <div className="academic-item-label">CGPA</div>
+                <div className="academic-item-value">
+                  {typeof student.cgpa === 'number' ? student.cgpa.toFixed(2) : student.cgpa || '0.00'} / 10.0
+                </div>
+              </div>
+              <div>
+                <div className="academic-item-label">Backlogs</div>
+                <div className="academic-item-value">{student.backlogs ?? 0}</div>
+              </div>
+              <div>
+                <div className="academic-item-label">Passing Year</div>
+                <div className="academic-item-value">{student.passingYear || 'N/A'}</div>
+              </div>
             </div>
           </div>
 
           {/* Tab Navigation */}
-          <div className="tab-nav" style={{ display: 'flex', gap: '10px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+          <div className="profile-tabs-nav">
             <button
               type="button"
-              className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
+              className={`profile-tab-item ${activeTab === 'overview' ? 'active' : ''}`}
               onClick={() => setActiveTab('overview')}
-              style={{ padding: '8px 16px', background: activeTab === 'overview' ? 'var(--blue, #0284c7)' : 'transparent', color: activeTab === 'overview' ? '#fff' : 'inherit', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
             >
-              Overview & Bio
+              <UserIcon size={16} /> Overview & Bio
             </button>
             <button
               type="button"
-              className={`tab-btn ${activeTab === 'resume' ? 'active' : ''}`}
+              className={`profile-tab-item ${activeTab === 'resume' ? 'active' : ''}`}
               onClick={() => setActiveTab('resume')}
-              style={{ padding: '8px 16px', background: activeTab === 'resume' ? 'var(--blue, #0284c7)' : 'transparent', color: activeTab === 'resume' ? '#fff' : 'inherit', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
             >
-              Resume
+              <FileTextIcon size={16} /> Resume
             </button>
             <button
               type="button"
-              className={`tab-btn ${activeTab === 'projects' ? 'active' : ''}`}
+              className={`profile-tab-item ${activeTab === 'projects' ? 'active' : ''}`}
               onClick={() => setActiveTab('projects')}
-              style={{ padding: '8px 16px', background: activeTab === 'projects' ? 'var(--blue, #0284c7)' : 'transparent', color: activeTab === 'projects' ? '#fff' : 'inherit', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
             >
-              Projects ({student.projects?.length || 0})
+              <FolderIcon size={16} /> Projects ({student.projects?.length || 0})
             </button>
             <button
               type="button"
-              className={`tab-btn ${activeTab === 'internships' ? 'active' : ''}`}
+              className={`profile-tab-item ${activeTab === 'internships' ? 'active' : ''}`}
               onClick={() => setActiveTab('internships')}
-              style={{ padding: '8px 16px', background: activeTab === 'internships' ? 'var(--blue, #0284c7)' : 'transparent', color: activeTab === 'internships' ? '#fff' : 'inherit', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
             >
-              Experience ({student.internships?.length || 0})
+              <BriefcaseIcon size={16} /> Experience ({student.internships?.length || 0})
             </button>
             <button
               type="button"
-              className={`tab-btn ${activeTab === 'certificates' ? 'active' : ''}`}
+              className={`profile-tab-item ${activeTab === 'certificates' ? 'active' : ''}`}
               onClick={() => setActiveTab('certificates')}
-              style={{ padding: '8px 16px', background: activeTab === 'certificates' ? 'var(--blue, #0284c7)' : 'transparent', color: activeTab === 'certificates' ? '#fff' : 'inherit', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
             >
-              Certificates ({student.certificates?.length || 0})
+              <AwardIcon size={16} /> Certificates ({student.certificates?.length || 0})
             </button>
             <button
               type="button"
-              className={`tab-btn ${activeTab === 'achievements' ? 'active' : ''}`}
+              className={`profile-tab-item ${activeTab === 'achievements' ? 'active' : ''}`}
               onClick={() => setActiveTab('achievements')}
-              style={{ padding: '8px 16px', background: activeTab === 'achievements' ? 'var(--blue, #0284c7)' : 'transparent', color: activeTab === 'achievements' ? '#fff' : 'inherit', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
             >
-              Achievements ({student.achievements?.length || 0})
+              <TrophyIcon size={16} /> Achievements ({student.achievements?.length || 0})
             </button>
           </div>
 
           {/* TAB 1: OVERVIEW & BIO */}
           {activeTab === 'overview' && (
-            <article className="card">
-              <h3>Personal & Academic Overview</h3>
-              <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', margin: '16px 0 24px' }}>
+            <form onSubmit={handleSaveBio} noValidate>
+              <div className="profile-overview-columns">
+                {/* Left Column */}
                 <div>
-                  <small style={{ color: 'var(--text-muted)' }}>Email</small>
-                  <div><strong>{student.email}</strong></div>
-                </div>
-                <div>
-                  <small style={{ color: 'var(--text-muted)' }}>Mobile</small>
-                  <div><strong>{student.mobileNumber}</strong></div>
-                </div>
-                <div>
-                  <small style={{ color: 'var(--text-muted)' }}>Semester</small>
-                  <div><strong>Semester {student.semester}</strong></div>
-                </div>
-                <div>
-                  <small style={{ color: 'var(--text-muted)' }}>CGPA</small>
-                  <div><strong>{student.cgpa?.toFixed(2)}</strong></div>
-                </div>
-                <div>
-                  <small style={{ color: 'var(--text-muted)' }}>Backlogs</small>
-                  <div><strong>{student.backlogs ?? 0}</strong></div>
-                </div>
-                <div>
-                  <small style={{ color: 'var(--text-muted)' }}>Passing Year</small>
-                  <div><strong>{student.passingYear || 'N/A'}</strong></div>
-                </div>
-              </div>
-
-              <hr style={{ borderColor: 'var(--border)', margin: '24px 0' }} />
-
-              <h3>Edit About & Links</h3>
-              <form
-                onSubmit={handleSaveBio}
-                noValidate
-                style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}
-              >
-                {/* Section 1: Profile Media & Bio */}
-                <div style={{ marginTop: '4px', marginBottom: '2px' }}>
-                  <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    👤 Profile Media & Bio
-                  </h3>
-                  <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
-                    Avatar image, professional biography, and career goals
-                  </p>
-                </div>
-
-                <div className="field">
-                  <label>Profile Photo</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '8px', padding: '12px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--bg-card-subtle, #f8fafc)' }}>
-                    <div
-                      style={{
-                        width: '56px',
-                        height: '56px',
-                        borderRadius: '50%',
-                        background: 'var(--blue-light, #e0f2fe)',
-                        color: 'var(--blue, #0284c7)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 'bold',
-                        fontSize: '20px',
-                        overflow: 'hidden',
-                        flexShrink: 0
-                      }}
-                    >
-                      {student.profilePhoto ? (
-                        <img src={getAssetUrl(student.profilePhoto)} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                      ) : (
-                        `${student.firstName ? student.firstName[0] : ''}${student.lastName ? student.lastName[0] : ''}`
-                      )}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handlePhotoUpload}
-                        disabled={uploadingPhoto}
-                      />
-                      <small style={{ display: 'block', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        Upload a photo from your device (PNG, JPG, JPEG, WebP)
-                      </small>
-                    </div>
-                    {student.profilePhoto && (
+                  {/* Card 1: Personal & Academic Overview */}
+                  <article className="overview-metrics-card">
+                    <div className="card-title-row">
+                      <h3>
+                        <UserIcon size={18} color="#0284c7" /> Personal & Academic Overview
+                      </h3>
                       <button
                         type="button"
-                        className="button ghost"
-                        style={{ color: 'var(--red, red)' }}
-                        onClick={handleDeletePhoto}
+                        className="btn-edit-links"
+                        onClick={handleFocusBio}
+                      >
+                        <EditIcon size={13} /> Edit About & Links
+                      </button>
+                    </div>
+
+                    <div className="metrics-tile-grid">
+                      {/* Email */}
+                      <div className="metric-tile">
+                        <div className="metric-icon-box" style={{ background: '#dbeafe', color: '#2563eb' }}>
+                          <MailIcon size={18} color="#2563eb" />
+                        </div>
+                        <div className="metric-tile-content">
+                          <span className="metric-tile-label">Email</span>
+                          <span className="metric-tile-value" title={student.email}>{student.email}</span>
+                        </div>
+                      </div>
+
+                      {/* Mobile */}
+                      <div className="metric-tile">
+                        <div className="metric-icon-box" style={{ background: '#dcfce7', color: '#16a34a' }}>
+                          <PhoneIcon size={18} color="#16a34a" />
+                        </div>
+                        <div className="metric-tile-content">
+                          <span className="metric-tile-label">Mobile</span>
+                          <span className="metric-tile-value">{student.mobileNumber || 'N/A'}</span>
+                        </div>
+                      </div>
+
+                      {/* Semester */}
+                      <div className="metric-tile">
+                        <div className="metric-icon-box" style={{ background: '#f3e8ff', color: '#9333ea' }}>
+                          <CalendarIcon size={18} color="#9333ea" />
+                        </div>
+                        <div className="metric-tile-content">
+                          <span className="metric-tile-label">Semester</span>
+                          <span className="metric-tile-value">Semester {student.semester}</span>
+                        </div>
+                      </div>
+
+                      {/* CGPA */}
+                      <div className="metric-tile">
+                        <div className="metric-icon-box" style={{ background: '#d1fae5', color: '#059669' }}>
+                          <TrendingUpIcon size={18} color="#059669" />
+                        </div>
+                        <div className="metric-tile-content">
+                          <span className="metric-tile-label">CGPA</span>
+                          <span className="metric-tile-value">
+                            {typeof student.cgpa === 'number' ? student.cgpa.toFixed(2) : student.cgpa || '0.00'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Backlogs */}
+                      <div className="metric-tile">
+                        <div className="metric-icon-box" style={{ background: '#fef3c7', color: '#d97706' }}>
+                          <DocumentIcon size={18} color="#d97706" />
+                        </div>
+                        <div className="metric-tile-content">
+                          <span className="metric-tile-label">Backlogs</span>
+                          <span className="metric-tile-value">{student.backlogs ?? 0}</span>
+                        </div>
+                      </div>
+
+                      {/* Passing Year */}
+                      <div className="metric-tile">
+                        <div className="metric-icon-box" style={{ background: '#ffe4e6', color: '#e11d48' }}>
+                          <CalendarIcon size={18} color="#e11d48" />
+                        </div>
+                        <div className="metric-tile-content">
+                          <span className="metric-tile-label">Passing Year</span>
+                          <span className="metric-tile-value">{student.passingYear || 'N/A'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+
+                  {/* Card 2: Professional Links & Visibility */}
+                  <article className="professional-links-card">
+                    <div className="card-title-row">
+                      <h3>
+                        <LinkIcon size={18} color="#0284c7" /> Professional Links & Visibility
+                      </h3>
+                    </div>
+
+                    <div className="input-field-group">
+                      <label>GitHub Profile Link</label>
+                      <div className="input-with-prefix-icon" style={bioErrors.githubUrl ? { borderColor: '#ef4444' } : {}}>
+                        <GithubIcon size={18} color="#181717" />
+                        <input
+                          type="text"
+                          placeholder="https://github.com/username"
+                          value={bioForm.githubUrl}
+                          onChange={(e) => {
+                            setBioForm({ ...bioForm, githubUrl: e.target.value });
+                            if (bioErrors.githubUrl) setBioErrors((prev) => ({ ...prev, githubUrl: '' }));
+                          }}
+                        />
+                      </div>
+                      {bioErrors.githubUrl && (
+                        <span style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
+                          {bioErrors.githubUrl}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="input-field-group">
+                      <label>LinkedIn Profile Link</label>
+                      <div className="input-with-prefix-icon" style={bioErrors.linkedinUrl ? { borderColor: '#ef4444' } : {}}>
+                        <LinkedinIcon size={18} color="#0a66c2" />
+                        <input
+                          type="text"
+                          placeholder="https://linkedin.com/in/username"
+                          value={bioForm.linkedinUrl}
+                          onChange={(e) => {
+                            setBioForm({ ...bioForm, linkedinUrl: e.target.value });
+                            if (bioErrors.linkedinUrl) setBioErrors((prev) => ({ ...prev, linkedinUrl: '' }));
+                          }}
+                        />
+                      </div>
+                      {bioErrors.linkedinUrl && (
+                        <span style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
+                          {bioErrors.linkedinUrl}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="input-field-group">
+                      <label>Portfolio / Personal Website</label>
+                      <div className="input-with-prefix-icon" style={bioErrors.portfolioUrl ? { borderColor: '#ef4444' } : {}}>
+                        <GlobeIcon size={18} color="#0284c7" />
+                        <input
+                          type="text"
+                          placeholder="https://myportfolio.example.com"
+                          value={bioForm.portfolioUrl}
+                          onChange={(e) => {
+                            setBioForm({ ...bioForm, portfolioUrl: e.target.value });
+                            if (bioErrors.portfolioUrl) setBioErrors((prev) => ({ ...prev, portfolioUrl: '' }));
+                          }}
+                        />
+                      </div>
+                      {bioErrors.portfolioUrl && (
+                        <span style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
+                          {bioErrors.portfolioUrl}
+                        </span>
+                      )}
+                    </div>
+
+                    <label className="switch-container">
+                      <div className="switch-toggle">
+                        <input
+                          type="checkbox"
+                          checked={bioForm.isPublicProfile}
+                          onChange={(e) => setBioForm({ ...bioForm, isPublicProfile: e.target.checked })}
+                        />
+                        <span className="switch-slider"></span>
+                      </div>
+                      <span className="switch-label-text">Enable Public Shareable Profile</span>
+                    </label>
+                  </article>
+                </div>
+
+                {/* Right Column: Profile Media & Bio */}
+                <article className="profile-media-bio-card">
+                  <div className="card-title-row">
+                    <h3>
+                      <UserIcon size={18} color="#0284c7" /> Profile Media & Bio
+                    </h3>
+                  </div>
+
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+                      Profile Photo
+                    </label>
+                    <div className="media-photo-row">
+                      <div className="media-photo-thumb">
+                        {student.profilePhoto ? (
+                          <img
+                            src={getAssetUrl(student.profilePhoto)}
+                            alt="Avatar"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        ) : (
+                          `${student.firstName ? student.firstName[0] : ''}${student.lastName ? student.lastName[0] : ''}`
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-choose-file"
+                        onClick={() => photoInputRef.current?.click()}
                         disabled={uploadingPhoto}
                       >
-                        Remove Photo
+                        <UploadIcon size={14} color="#2563eb" /> Choose File
                       </button>
-                    )}
+                      {student.profilePhoto && (
+                        <button
+                          type="button"
+                          className="link-button"
+                          style={{ color: '#ef4444', fontSize: '12.5px' }}
+                          onClick={handleDeletePhoto}
+                          disabled={uploadingPhoto}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <div className="field">
-                  <label>About / Bio</label>
-                  <textarea
-                    rows="3"
-                    placeholder="Brief professional intro..."
-                    value={bioForm.bio}
-                    onChange={(e) => setBioForm({ ...bioForm, bio: e.target.value })}
-                  />
-                </div>
+                  <div className="input-field-group">
+                    <label>About / Bio</label>
+                    <textarea
+                      ref={bioTextareaRef}
+                      className="form-textarea"
+                      rows={3}
+                      placeholder="Brief professional intro..."
+                      value={bioForm.bio}
+                      onChange={(e) => setBioForm({ ...bioForm, bio: e.target.value })}
+                    />
+                  </div>
 
-                <div className="field">
-                  <label>Career Objective</label>
-                  <textarea
-                    rows="2"
-                    placeholder="Your primary career goals..."
-                    value={bioForm.careerObjective}
-                    onChange={(e) => setBioForm({ ...bioForm, careerObjective: e.target.value })}
-                  />
-                </div>
+                  <div className="input-field-group">
+                    <label>Career Objective</label>
+                    <input
+                      type="text"
+                      className="form-input-text"
+                      placeholder="Your primary career goals..."
+                      value={bioForm.careerObjective}
+                      onChange={(e) => setBioForm({ ...bioForm, careerObjective: e.target.value })}
+                    />
+                  </div>
 
-                <div className="field">
-                  <label>Skills (comma separated)</label>
-                  <input
-                    placeholder="JavaScript, React, Node.js, Python, SQL"
-                    value={bioForm.skills}
-                    onChange={(e) => setBioForm({ ...bioForm, skills: e.target.value })}
-                  />
-                </div>
+                  <div className="input-field-group">
+                    <label>Skills (comma separated)</label>
+                    <input
+                      type="text"
+                      className="form-input-text"
+                      placeholder="JavaScript, React, Node.js, Python, SQL"
+                      value={bioForm.skills}
+                      onChange={(e) => setBioForm({ ...bioForm, skills: e.target.value })}
+                    />
+                  </div>
 
-                {/* Section 2: Online Presence & Portfolios */}
-                <div style={{ marginTop: '8px', marginBottom: '2px', borderTop: '1px solid #e9eef3', paddingTop: '14px' }}>
-                  <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <ExternalLinkIcon size={16} color="var(--primary, #0284c7)" /> Professional Links & Visibility
-                  </h3>
-                  <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
-                    Social coding links, portfolio URLs, and public profile switch
-                  </p>
-                </div>
-
-                <div className="field">
-                  <label>GitHub Profile Link</label>
-                  <input
-                    placeholder="https://github.com/username"
-                    value={bioForm.githubUrl}
-                    onChange={(e) => {
-                      setBioForm({ ...bioForm, githubUrl: e.target.value });
-                      if (bioErrors.githubUrl) setBioErrors((prev) => ({ ...prev, githubUrl: '' }));
-                    }}
-                    style={bioErrors.githubUrl ? { borderColor: 'var(--red, #e53e3e)' } : {}}
-                    aria-invalid={Boolean(bioErrors.githubUrl)}
-                  />
-                  {bioErrors.githubUrl && (
-                    <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                      {bioErrors.githubUrl}
-                    </span>
-                  )}
-                </div>
-
-                <div className="field">
-                  <label>LinkedIn Profile Link</label>
-                  <input
-                    placeholder="https://linkedin.com/in/username"
-                    value={bioForm.linkedinUrl}
-                    onChange={(e) => {
-                      setBioForm({ ...bioForm, linkedinUrl: e.target.value });
-                      if (bioErrors.linkedinUrl) setBioErrors((prev) => ({ ...prev, linkedinUrl: '' }));
-                    }}
-                    style={bioErrors.linkedinUrl ? { borderColor: 'var(--red, #e53e3e)' } : {}}
-                    aria-invalid={Boolean(bioErrors.linkedinUrl)}
-                  />
-                  {bioErrors.linkedinUrl && (
-                    <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                      {bioErrors.linkedinUrl}
-                    </span>
-                  )}
-                </div>
-
-                <div className="field">
-                  <label>Portfolio / Personal Website</label>
-                  <input
-                    placeholder="https://myportfolio.example.com"
-                    value={bioForm.portfolioUrl}
-                    onChange={(e) => {
-                      setBioForm({ ...bioForm, portfolioUrl: e.target.value });
-                      if (bioErrors.portfolioUrl) setBioErrors((prev) => ({ ...prev, portfolioUrl: '' }));
-                    }}
-                    style={bioErrors.portfolioUrl ? { borderColor: 'var(--red, #e53e3e)' } : {}}
-                    aria-invalid={Boolean(bioErrors.portfolioUrl)}
-                  />
-                  {bioErrors.portfolioUrl && (
-                    <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                      {bioErrors.portfolioUrl}
-                    </span>
-                  )}
-                </div>
-
-                <div className="field" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <input
-                    type="checkbox"
-                    id="public-profile-toggle"
-                    checked={bioForm.isPublicProfile}
-                    onChange={(e) => setBioForm({ ...bioForm, isPublicProfile: e.target.checked })}
-                    style={{ width: 'auto' }}
-                  />
-                  <label htmlFor="public-profile-toggle" style={{ margin: 0, cursor: 'pointer' }}>
-                    <strong>Enable Public Shareable Profile</strong> (Allows recruiters and placement partners to view your shareable link)
-                  </label>
-                </div>
-
-                <div className="modal-actions" style={{ marginTop: '8px' }}>
-                  <button className="primary" type="submit" disabled={savingBio}>
+                  <button
+                    type="submit"
+                    className="btn-save-profile"
+                    disabled={savingBio}
+                  >
                     {savingBio ? 'Saving…' : 'Save Profile Changes'}
                   </button>
-                </div>
-              </form>
-            </article>
+                </article>
+              </div>
+            </form>
           )}
 
           {/* TAB 2: RESUME MANAGEMENT */}
@@ -925,7 +1066,10 @@ export function StudentMyProfilePage() {
                   ))}
                 </div>
               ) : (
-                <p style={{ color: 'var(--text-muted)' }}>No projects added yet.</p>
+                <div className="empty-tab-state">
+                  <FolderIcon size={32} color="#94a3b8" />
+                  <p style={{ margin: '8px 0 0', fontWeight: 500 }}>No projects added yet.</p>
+                </div>
               )}
             </article>
           )}
@@ -988,7 +1132,10 @@ export function StudentMyProfilePage() {
                   ))}
                 </div>
               ) : (
-                <p style={{ color: 'var(--text-muted)' }}>No internship details added yet.</p>
+                <div className="empty-tab-state">
+                  <BriefcaseIcon size={32} color="#94a3b8" />
+                  <p style={{ margin: '8px 0 0', fontWeight: 500 }}>No internship or experience details added yet.</p>
+                </div>
               )}
             </article>
           )}
@@ -1085,7 +1232,10 @@ export function StudentMyProfilePage() {
                   ))}
                 </div>
               ) : (
-                <p style={{ color: 'var(--text-muted)' }}>No certificates added yet.</p>
+                <div className="empty-tab-state">
+                  <AwardIcon size={32} color="#94a3b8" />
+                  <p style={{ margin: '8px 0 0', fontWeight: 500 }}>No certificates added yet.</p>
+                </div>
               )}
             </article>
           )}
@@ -1149,7 +1299,10 @@ export function StudentMyProfilePage() {
                   ))}
                 </div>
               ) : (
-                <p style={{ color: 'var(--text-muted)' }}>No achievements added yet.</p>
+                <div className="empty-tab-state">
+                  <TrophyIcon size={32} color="#94a3b8" />
+                  <p style={{ margin: '8px 0 0', fontWeight: 500 }}>No achievements added yet.</p>
+                </div>
               )}
             </article>
           )}
