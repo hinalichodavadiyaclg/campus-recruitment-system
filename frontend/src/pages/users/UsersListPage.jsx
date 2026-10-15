@@ -185,6 +185,7 @@ export function UsersListPage() {
       setRoles(rolesData || []);
       setStudents(studentsData.items || []);
       setCompanies(companiesData.items || []);
+      setOfficers(officersData.items || []);
       const resolvedDepts = deptsData.items || deptsData || [];
       const resolvedCourses = coursesData.items || coursesData || [];
       setDepartmentsList(resolvedDepts);
