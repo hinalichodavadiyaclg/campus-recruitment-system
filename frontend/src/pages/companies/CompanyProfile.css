@@ -1,0 +1,526 @@
+/* ==========================================================================
+   COMPANY PROFILE PAGE STYLESHEET
+   Matching modern 2x2 grid corporate profile layout
+   ========================================================================== */
+
+.company-profile-page-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 8px 0 36px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Breadcrumb Navigation */
+.company-profile-breadcrumb {
+  font-size: 0.84rem;
+  color: #64748b;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.company-profile-breadcrumb span.current {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+/* Top Action Header */
+.company-profile-top-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.company-profile-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.company-profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.company-profile-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.company-profile-btn-outline:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.company-profile-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.company-profile-btn-primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+/* --- Hero Company Card --- */
+.company-profile-hero-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.company-profile-hero-content {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  position: relative;
+  z-index: 2;
+  max-width: 820px;
+}
+
+.company-profile-hero-top {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.company-profile-logo-container {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 16px;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.company-profile-logo-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.company-profile-logo-badge:hover {
+  color: #2563eb;
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.company-profile-hero-title-area {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.company-profile-hero-name {
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.company-profile-hero-id {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+/* Hero Meta Pills Row */
+.company-profile-hero-pills {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.company-profile-pill-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.company-profile-pill-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.company-profile-pill-icon.purple {
+  background: #f3e8ff;
+  color: #9333ea;
+}
+
+.company-profile-pill-icon.blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.company-profile-pill-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.company-profile-pill-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.company-profile-pill-label {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-weight: 500;
+  text-transform: capitalize;
+  line-height: 1.2;
+}
+
+.company-profile-hero-graphic {
+  width: 320px;
+  height: 180px;
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@media (max-width: 992px) {
+  .company-profile-hero-graphic {
+    display: none;
+  }
+}
+
+/* --- 2x2 Information Grid --- */
+.company-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .company-profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.company-info-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+
+.company-info-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.company-info-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.company-info-card-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.company-info-card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.company-info-card-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.company-info-card-edit-btn:hover {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+/* Key-Value Rows */
+.company-kv-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.company-kv-row {
+  display: flex;
+  align-items: center;
+  padding: 11px 0;
+  border-bottom: 1px solid #f8fafc;
+}
+
+.company-kv-row:last-child {
+  border-bottom: none;
+}
+
+.company-kv-key {
+  width: 170px;
+  font-size: 0.88rem;
+  color: #64748b;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.company-kv-val {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #0f172a;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.company-kv-link {
+  color: #2563eb;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.15s ease;
+}
+
+.company-kv-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+/* Office Location Card Layout */
+.company-location-layout {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 18px;
+  align-items: stretch;
+}
+
+@media (max-width: 600px) {
+  .company-location-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.company-location-address-area {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.company-location-label {
+  font-size: 0.84rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.company-location-address {
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.5;
+}
+
+.company-map-preview {
+  position: relative;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 110px;
+  display: flex;
+}
+
+.company-map-expand-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: all 0.15s ease;
+}
+
+.company-map-expand-btn:hover {
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+
+/* Company Description Box */
+.company-desc-box {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  padding: 16px 20px;
+  font-size: 0.9rem;
+  color: #334155;
+  line-height: 1.6;
+  min-height: 90px;
+}
+
+.company-desc-empty {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* --- Edit Modal Styles --- */
+.company-edit-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.company-form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 600px) {
+  .company-form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.company-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.company-form-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.company-form-input,
+.company-form-textarea {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.88rem;
+  color: #0f172a;
+  background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+}
+
+.company-form-input:focus,
+.company-form-textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.company-form-error {
+  font-size: 0.78rem;
+  color: #dc2626;
+  margin-top: 2px;
+}

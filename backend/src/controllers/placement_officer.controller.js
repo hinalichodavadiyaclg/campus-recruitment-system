@@ -21,3 +21,12 @@ export const updatePlacementOfficer = asyncHandler(async (request, response) =>
 export const deletePlacementOfficer = asyncHandler(async (request, response) =>
   sendSuccess(response, 200, await placementOfficerService.deletePlacementOfficer(response.locals.input?.params?.id || request.params.id))
 );
+
+export const getMyProfile = asyncHandler(async (request, response) =>
+  sendSuccess(response, 200, await placementOfficerService.getPlacementOfficerByUserId(request.auth.userId))
+);
+
+export const updateMyProfile = asyncHandler(async (request, response) =>
+  sendSuccess(response, 200, await placementOfficerService.updateMyPlacementProfile(request.auth.userId, request.body))
+);
+

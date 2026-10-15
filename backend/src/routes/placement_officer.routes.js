@@ -2,7 +2,7 @@ import { Router } from 'express';
 import * as placementOfficerController from '../controllers/placement_officer.controller.js';
 import { PERMISSION_IDS } from '../utils/access-constants.js';
 import { authenticate } from '../middleware/authenticate.js';
-import { authorizePermissions } from '../middleware/authorize.js';
+import { authorizePermissions, authorizeAnyPermission } from '../middleware/authorize.js';
 import { validate } from '../validators/request.validator.js';
 import {
   placementOfficerCreateSchema,
@@ -13,6 +13,17 @@ import {
 export const placementOfficerRouter = Router();
 
 placementOfficerRouter.use(authenticate);
+
+placementOfficerRouter.get(
+  '/me',
+  authorizeAnyPermission(PERMISSION_IDS.AUTH_READ_SELF, PERMISSION_IDS.USER_READ),
+  placementOfficerController.getMyProfile
+);
+placementOfficerRouter.put(
+  '/me',
+  authorizeAnyPermission(PERMISSION_IDS.AUTH_READ_SELF, PERMISSION_IDS.USER_UPDATE),
+  placementOfficerController.updateMyProfile
+);
 
 placementOfficerRouter.get('/', authorizePermissions(PERMISSION_IDS.USER_READ), placementOfficerController.listPlacementOfficers);
 placementOfficerRouter.post('/', authorizePermissions(PERMISSION_IDS.USER_CREATE), validate(placementOfficerCreateSchema), placementOfficerController.createPlacementOfficer);

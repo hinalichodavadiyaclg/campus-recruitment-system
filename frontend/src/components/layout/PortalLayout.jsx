@@ -59,7 +59,8 @@ import {
   SearchIcon,
   BellIcon,
   MenuIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  ChevronRightIcon
 } from '../common/Icons.jsx';
 
 export {
@@ -125,13 +126,17 @@ export function PortalLayout({
       .slice(0, 2)
       .toUpperCase() || 'U';
 
-  const getDisplayName = (u) =>
-    u?.email?.split('@')[0].replace(/[._-]/g, ' ') || 'Portal User';
+  const getDisplayName = (u) => {
+    if (u?.name) return u.name;
+    const fallback = u?.email?.split('@')[0].replace(/[._-]/g, ' ') || 'Portal User';
+    return fallback.replace(/\b\w/g, (c) => c.toUpperCase());
+  };
 
   const isNavActive = (route) => {
     if (!currentPath) return false;
     if (route === '/dashboard') return currentPath === '/dashboard';
-    if (route === '/profile') return currentPath === '/profile' || currentPath === '/change-password';
+    if (route === '/profile') return currentPath === '/profile';
+    if (route === '/settings') return currentPath === '/settings' || currentPath === '/change-password';
     return currentPath === route || currentPath.startsWith(route + '/');
   };
 
@@ -163,7 +168,10 @@ export function PortalLayout({
                         href={'#' + item.path}
                       >
                         <span className="nav-icon">{Icon ? <Icon /> : null}</span>
-                        {item.label}
+                        <span>{item.label}</span>
+                        {isNavActive(item.path) && (
+                          <ChevronRightIcon size={14} style={{ marginLeft: 'auto', flexShrink: 0 }} />
+                        )}
                       </a>
                       {Array.isArray(item.children) && item.children.length > 0 && (
                         <div className="nav-submenu">
@@ -197,8 +205,14 @@ export function PortalLayout({
         </nav>
 
         <div className="sidebar-footer">
-          <strong>{getDisplayName(user)}</strong>
-          <span>{role?.name || ''}</span>
+          <div className="sidebar-user-avatar-wrap">
+            <span className="sidebar-user-avatar">{getInitials(user?.email)}</span>
+            <span className="sidebar-user-status-dot" />
+          </div>
+          <div className="sidebar-user-info">
+            <strong>{getDisplayName(user)}</strong>
+            <span>{role?.name || ''}</span>
+          </div>
         </div>
       </aside>
 

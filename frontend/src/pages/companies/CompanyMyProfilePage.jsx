@@ -3,8 +3,22 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { companyService } from '../../services/company.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
-import { BuildingIcon, UserIcon, MapPinIcon } from '../../components/common/Icons.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
+import {
+  BuildingIcon,
+  UserIcon,
+  MapPinIcon,
+  CalendarIcon,
+  LinkIcon,
+  EditIcon,
+  EyeIcon,
+  ExternalLinkIcon,
+  MailIcon,
+  PhoneIcon,
+  DocumentIcon
+} from '../../components/common/Icons.jsx';
 import { isValidMobile, MOBILE_VALIDATION_MESSAGE } from '../../utils/validation.js';
+import './CompanyProfile.css';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -19,6 +33,7 @@ export function CompanyMyProfilePage() {
 
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
@@ -66,6 +81,26 @@ export function CompanyMyProfilePage() {
     }
   };
 
+  const handleOpenEdit = () => {
+    if (company) {
+      setFormData({
+        companyName: company.companyName || '',
+        industryType: company.industryType || '',
+        hrRecruiterName: company.hrRecruiterName || '',
+        designation: company.designation || '',
+        email: company.email || '',
+        mobileNumber: company.mobileNumber || '',
+        website: company.website || '',
+        yearEstablished: company.yearEstablished ? String(company.yearEstablished) : '',
+        officeAddress: company.officeAddress || '',
+        description: company.description || ''
+      });
+    }
+    setFieldErrors({});
+    setGeneralError('');
+    setIsEditModalOpen(true);
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -77,7 +112,6 @@ export function CompanyMyProfilePage() {
   const validate = () => {
     const errors = {};
 
-    // 1. Company Name (Required, 1-150)
     const cName = formData.companyName.trim();
     if (!cName) {
       errors.companyName = 'Company Name is required.';
@@ -85,7 +119,6 @@ export function CompanyMyProfilePage() {
       errors.companyName = 'Company Name cannot exceed 150 characters.';
     }
 
-    // 2. Industry Type (Required, 1-100)
     const ind = formData.industryType.trim();
     if (!ind) {
       errors.industryType = 'Industry Type is required.';
@@ -93,7 +126,6 @@ export function CompanyMyProfilePage() {
       errors.industryType = 'Industry Type cannot exceed 100 characters.';
     }
 
-    // 3. HR / Recruiter Name (Required, 1-100)
     const hr = formData.hrRecruiterName.trim();
     if (!hr) {
       errors.hrRecruiterName = 'HR / Recruiter Name is required.';
@@ -101,7 +133,6 @@ export function CompanyMyProfilePage() {
       errors.hrRecruiterName = 'HR / Recruiter Name cannot exceed 100 characters.';
     }
 
-    // 4. Designation (Required, 1-100)
     const desig = formData.designation.trim();
     if (!desig) {
       errors.designation = 'Designation is required.';
@@ -109,17 +140,15 @@ export function CompanyMyProfilePage() {
       errors.designation = 'Designation cannot exceed 100 characters.';
     }
 
-    // 5. Email Address (Required, valid email, max 254)
     const emailVal = formData.email.trim();
     if (!emailVal) {
       errors.email = 'Email Address is required.';
     } else if (!EMAIL_REGEX.test(emailVal)) {
-      errors.email = 'Please enter a valid email address (e.g. recruiter@company.com).';
+      errors.email = 'Please enter a valid email address.';
     } else if (emailVal.length > 254) {
       errors.email = 'Email address cannot exceed 254 characters.';
     }
 
-    // 6. Mobile Number (Required, 10-15 digits)
     const mobile = formData.mobileNumber.trim();
     if (!mobile) {
       errors.mobileNumber = 'Mobile number is required.';
@@ -127,33 +156,18 @@ export function CompanyMyProfilePage() {
       errors.mobileNumber = MOBILE_VALIDATION_MESSAGE;
     }
 
-    // 7. Year Established (Required, 1800-2100 integer)
     const yearVal = formData.yearEstablished !== '' ? Number(formData.yearEstablished) : NaN;
     if (formData.yearEstablished === '' || Number.isNaN(yearVal) || !Number.isInteger(yearVal)) {
-      errors.yearEstablished = 'Year Established is required and must be a whole year (1800–2100).';
+      errors.yearEstablished = 'Year Established is required (1800–2100).';
     } else if (yearVal < 1800 || yearVal > 2100) {
       errors.yearEstablished = 'Year Established must be between 1800 and 2100.';
     }
 
-    // 8. Website URL (Optional, max 300)
     const web = formData.website.trim();
-    if (web) {
-      if (web.length > 300) {
-        errors.website = 'Website URL cannot exceed 300 characters.';
-      } else {
-        try {
-          const testUrl = web.startsWith('http://') || web.startsWith('https://') ? web : `https://${web}`;
-          const parsed = new URL(testUrl);
-          if (!parsed.hostname || !parsed.hostname.includes('.')) {
-            errors.website = 'Please enter a valid URL (e.g. https://company.example.com).';
-          }
-        } catch (_) {
-          errors.website = 'Please enter a valid URL (e.g. https://company.example.com).';
-        }
-      }
+    if (web && web.length > 300) {
+      errors.website = 'Website URL cannot exceed 300 characters.';
     }
 
-    // 9. Office Address (Required, 1-500)
     const addr = formData.officeAddress.trim();
     if (!addr) {
       errors.officeAddress = 'Office Address is required.';
@@ -161,11 +175,8 @@ export function CompanyMyProfilePage() {
       errors.officeAddress = 'Office Address cannot exceed 500 characters.';
     }
 
-    // 10. Description (Required, 1-1000)
     const desc = formData.description.trim();
-    if (!desc) {
-      errors.description = 'Company Description is required.';
-    } else if (desc.length > 1000) {
+    if (desc && desc.length > 1000) {
       errors.description = 'Description cannot exceed 1000 characters.';
     }
 
@@ -200,6 +211,7 @@ export function CompanyMyProfilePage() {
       const updated = await companyService.updateMyProfile(payload);
       toast('Company profile updated successfully!');
       setCompany(updated);
+      setIsEditModalOpen(false);
     } catch (err) {
       const msg = err.message || 'Failed to update company profile.';
       if (msg.toLowerCase().includes('email')) {
@@ -214,296 +226,663 @@ export function CompanyMyProfilePage() {
     }
   };
 
-  return (
-    <PortalLayout title="Company Recruiter Profile">
-      <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-        <div className="card" style={{ padding: '28px', marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: '0 0 6px', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BuildingIcon size={22} color="var(--primary, #0284c7)" /> {company?.companyName || 'Company Profile'}
-            {company?.companyId && (
-              <span style={{ marginLeft: '10px', fontSize: '0.85rem', fontWeight: '600', color: '#2563eb', backgroundColor: '#eff6ff', padding: '3px 8px', borderRadius: '4px' }}>
-                {company.companyId}
-              </span>
-            )}
-          </h2>
-          <p style={{ fontSize: '0.88rem', color: 'var(--muted, #64748b)', margin: '0 0 20px' }}>
-            Manage official company information and recruiter contact details.
-          </p>
+  const handleCopyPublicProfile = () => {
+    const companyIdOrSlug = company?.companyId || company?._id || user?.companyId || 'company';
+    const publicUrl = `${window.location.origin}/#/companies/${companyIdOrSlug}`;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(publicUrl);
+      toast('Public company profile link copied to clipboard!');
+    } else {
+      window.location.hash = `#/companies/${companyIdOrSlug}`;
+    }
+  };
 
-          {loading ? (
-            <p>Loading company profile...</p>
-          ) : (
-            <form
-              onSubmit={handleSubmit}
-              noValidate
-              style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+  const companyName = company?.companyName || 'Company Profile';
+  const companyId = company?.companyId || user?.companyId || '—';
+  const industry = company?.industryType || '—';
+  const establishedYear = company?.yearEstablished ? String(company.yearEstablished) : '—';
+  const location = company?.officeAddress || '—';
+  const website = company?.website || '';
+  const hrName = company?.hrRecruiterName || '—';
+  const designation = company?.designation || '—';
+  const email = company?.email || user?.email || '—';
+  const mobile = company?.mobileNumber || '—';
+  const description = company?.description || '';
+
+  const cityLabel = (company?.officeAddress || 'Ahmedabad').split(',')[0].trim() || 'Headquarters';
+
+  return (
+    <PortalLayout currentPath={window.location.hash.includes('/company-profile') ? '/company-profile' : '/profile'} hideEyebrow={true}>
+      <div className="company-profile-page-container">
+        {/* Breadcrumb Navigation */}
+        <div className="company-profile-breadcrumb">
+          <span>Company</span>
+          <span>/</span>
+          <span className="current">{window.location.hash.includes('/company-profile') ? 'My Company Profile' : 'My Account'}</span>
+        </div>
+
+        {/* Top Header Actions */}
+        <div className="company-profile-top-header">
+          <h1 className="company-profile-title">Company Profile</h1>
+          <div className="company-profile-actions">
+            <button
+              type="button"
+              onClick={handleCopyPublicProfile}
+              className="company-profile-btn-outline"
             >
-              {/* SECTION 1: Company Identity */}
-              <div style={{ marginTop: '4px', marginBottom: '2px' }}>
-                <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <BuildingIcon size={16} color="var(--primary, #0284c7)" /> Company Identity
-                </h3>
-                <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
-                  Core organization details and founding year
-                </p>
+              <EyeIcon size={16} />
+              <span>View Public Profile</span>
+              <ExternalLinkIcon size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenEdit}
+              className="company-profile-btn-primary"
+            >
+              <EditIcon size={16} />
+              <span>Edit Profile</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Hero Company Card */}
+        <div className="company-profile-hero-card">
+          <div className="company-profile-hero-content">
+            <div className="company-profile-hero-top">
+              <div className="company-profile-logo-container">
+                <BuildingIcon size={42} color="#2563eb" />
+                <button
+                  type="button"
+                  onClick={handleOpenEdit}
+                  className="company-profile-logo-badge"
+                  title="Edit logo/details"
+                  aria-label="Edit company profile"
+                >
+                  <EditIcon size={13} />
+                </button>
+              </div>
+              <div className="company-profile-hero-title-area">
+                <h2 className="company-profile-hero-name">{companyName}</h2>
+                {companyId !== '—' && (
+                  <span className="company-profile-hero-id">{companyId}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Metadata Pills */}
+            <div className="company-profile-hero-pills">
+              {/* Industry */}
+              <div className="company-profile-pill-item">
+                <div className="company-profile-pill-icon purple">
+                  <BuildingIcon size={18} />
+                </div>
+                <div className="company-profile-pill-text">
+                  <span className="company-profile-pill-value">{industry}</span>
+                  <span className="company-profile-pill-label">Industry</span>
+                </div>
               </div>
 
-              <div className="field">
-                <label htmlFor="comp-name">Company Name *</label>
+              {/* Established */}
+              <div className="company-profile-pill-item">
+                <div className="company-profile-pill-icon blue">
+                  <CalendarIcon size={18} />
+                </div>
+                <div className="company-profile-pill-text">
+                  <span className="company-profile-pill-value">{establishedYear}</span>
+                  <span className="company-profile-pill-label">Established</span>
+                </div>
+              </div>
+
+              {/* Location */}
+              <div className="company-profile-pill-item">
+                <div className="company-profile-pill-icon blue">
+                  <MapPinIcon size={18} />
+                </div>
+                <div className="company-profile-pill-text">
+                  <span className="company-profile-pill-value">{location}</span>
+                  <span className="company-profile-pill-label">Location</span>
+                </div>
+              </div>
+
+              {/* Website */}
+              <div className="company-profile-pill-item">
+                <div className="company-profile-pill-icon blue">
+                  <LinkIcon size={18} />
+                </div>
+                <div className="company-profile-pill-text">
+                  <span className="company-profile-pill-value">
+                    {website ? (
+                      <a
+                        href={website.startsWith('http') ? website : `https://${website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: '#2563eb', textDecoration: 'none' }}
+                      >
+                        {website}
+                      </a>
+                    ) : (
+                      '—'
+                    )}
+                  </span>
+                  <span className="company-profile-pill-label">Website</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Modern Glass Architecture Graphic */}
+          <div className="company-profile-hero-graphic" aria-hidden="true">
+            <svg viewBox="0 0 320 180" width="320" height="180" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="skyGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
+                  <stop offset="35%" stopColor="#ffffff" stopOpacity="0.8" />
+                  <stop offset="100%" stopColor="#dbeafe" stopOpacity="0.5" />
+                </linearGradient>
+                <linearGradient id="glassGrad1" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#60a5fa" />
+                  <stop offset="50%" stopColor="#3b82f6" />
+                  <stop offset="100%" stopColor="#1e40af" />
+                </linearGradient>
+                <linearGradient id="glassGrad2" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#93c5fd" />
+                  <stop offset="100%" stopColor="#2563eb" />
+                </linearGradient>
+              </defs>
+
+              <rect width="320" height="180" fill="url(#skyGrad)" />
+
+              {/* Glass Tower 1 */}
+              <path d="M120 40L230 15L230 180L120 180Z" fill="url(#glassGrad1)" />
+              <path d="M230 15L310 35L310 180L230 180Z" fill="url(#glassGrad2)" />
+
+              {/* Floor Grid Lines */}
+              <line x1="120" y1="65" x2="230" y2="40" stroke="#93c5fd" strokeWidth="1.5" opacity="0.6"/>
+              <line x1="120" y1="90" x2="230" y2="65" stroke="#93c5fd" strokeWidth="1.5" opacity="0.6"/>
+              <line x1="120" y1="115" x2="230" y2="90" stroke="#93c5fd" strokeWidth="1.5" opacity="0.6"/>
+              <line x1="120" y1="140" x2="230" y2="115" stroke="#93c5fd" strokeWidth="1.5" opacity="0.6"/>
+              <line x1="120" y1="165" x2="230" y2="140" stroke="#93c5fd" strokeWidth="1.5" opacity="0.6"/>
+
+              <line x1="230" y1="40" x2="310" y2="60" stroke="#bfdbfe" strokeWidth="1.5" opacity="0.6"/>
+              <line x1="230" y1="65" x2="310" y2="85" stroke="#bfdbfe" strokeWidth="1.5" opacity="0.6"/>
+              <line x1="230" y1="90" x2="310" y2="110" stroke="#bfdbfe" strokeWidth="1.5" opacity="0.6"/>
+              <line x1="230" y1="115" x2="310" y2="135" stroke="#bfdbfe" strokeWidth="1.5" opacity="0.6"/>
+              <line x1="230" y1="140" x2="310" y2="160" stroke="#bfdbfe" strokeWidth="1.5" opacity="0.6"/>
+
+              {/* Vertical Window Mullions */}
+              <line x1="150" y1="35" x2="150" y2="180" stroke="#1d4ed8" strokeWidth="1" opacity="0.5"/>
+              <line x1="180" y1="30" x2="180" y2="180" stroke="#1d4ed8" strokeWidth="1" opacity="0.5"/>
+              <line x1="210" y1="20" x2="210" y2="180" stroke="#1d4ed8" strokeWidth="1" opacity="0.5"/>
+              <line x1="260" y1="22" x2="260" y2="180" stroke="#60a5fa" strokeWidth="1" opacity="0.5"/>
+              <line x1="290" y1="30" x2="290" y2="180" stroke="#60a5fa" strokeWidth="1" opacity="0.5"/>
+
+              {/* Trees / Greenery at building base */}
+              <ellipse cx="140" cy="175" rx="20" ry="12" fill="#15803d" opacity="0.9"/>
+              <ellipse cx="180" cy="172" rx="24" ry="14" fill="#16a34a" opacity="0.9"/>
+              <ellipse cx="230" cy="174" rx="26" ry="15" fill="#22c55e" opacity="0.85"/>
+              <ellipse cx="280" cy="170" rx="30" ry="16" fill="#15803d" opacity="0.9"/>
+              <ellipse cx="310" cy="172" rx="20" ry="14" fill="#16a34a" opacity="0.9"/>
+            </svg>
+          </div>
+        </div>
+
+        {/* 2x2 Information Grid */}
+        <div className="company-profile-grid">
+          {/* Card 1: Company Information */}
+          <div className="company-info-card">
+            <div className="company-info-card-header">
+              <div className="company-info-card-title-group">
+                <div className="company-info-card-icon-box">
+                  <BuildingIcon size={20} color="#2563eb" />
+                </div>
+                <h3 className="company-info-card-title">Company Information</h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenEdit}
+                className="company-info-card-edit-btn"
+              >
+                <EditIcon size={13} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="company-kv-list">
+              <div className="company-kv-row">
+                <span className="company-kv-key">Company Name</span>
+                <span className="company-kv-val">{companyName}</span>
+              </div>
+              <div className="company-kv-row">
+                <span className="company-kv-key">Industry Type</span>
+                <span className="company-kv-val">{industry}</span>
+              </div>
+              <div className="company-kv-row">
+                <span className="company-kv-key">Established Year</span>
+                <span className="company-kv-val">{establishedYear}</span>
+              </div>
+              <div className="company-kv-row">
+                <span className="company-kv-key">Website URL</span>
+                <span className="company-kv-val">
+                  {website ? (
+                    <a
+                      href={website.startsWith('http') ? website : `https://${website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="company-kv-link"
+                    >
+                      <span>{website}</span>
+                      <ExternalLinkIcon size={13} />
+                    </a>
+                  ) : (
+                    '—'
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Recruiter Contact */}
+          <div className="company-info-card">
+            <div className="company-info-card-header">
+              <div className="company-info-card-title-group">
+                <div className="company-info-card-icon-box">
+                  <UserIcon size={20} color="#2563eb" />
+                </div>
+                <h3 className="company-info-card-title">Recruiter Contact</h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenEdit}
+                className="company-info-card-edit-btn"
+              >
+                <EditIcon size={13} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="company-kv-list">
+              <div className="company-kv-row">
+                <span className="company-kv-key">HR / Recruiter Name</span>
+                <span className="company-kv-val">{hrName}</span>
+              </div>
+              <div className="company-kv-row">
+                <span className="company-kv-key">Designation / Role</span>
+                <span className="company-kv-val">{designation}</span>
+              </div>
+              <div className="company-kv-row">
+                <span className="company-kv-key">Email Address</span>
+                <span className="company-kv-val">
+                  {email !== '—' ? (
+                    <a href={`mailto:${email}`} className="company-kv-link" style={{ color: '#0f172a' }}>
+                      <MailIcon size={15} color="#64748b" />
+                      <span>{email}</span>
+                    </a>
+                  ) : (
+                    '—'
+                  )}
+                </span>
+              </div>
+              <div className="company-kv-row">
+                <span className="company-kv-key">Mobile Number</span>
+                <span className="company-kv-val">
+                  {mobile !== '—' ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      <PhoneIcon size={15} color="#64748b" />
+                      <span>{mobile}</span>
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Office Location */}
+          <div className="company-info-card">
+            <div className="company-info-card-header">
+              <div className="company-info-card-title-group">
+                <div className="company-info-card-icon-box">
+                  <MapPinIcon size={20} color="#2563eb" />
+                </div>
+                <h3 className="company-info-card-title">Office Location</h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenEdit}
+                className="company-info-card-edit-btn"
+              >
+                <EditIcon size={13} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="company-location-layout">
+              <div className="company-location-address-area">
+                <span className="company-location-label">Office Address</span>
+                <span className="company-location-address">{location}</span>
+              </div>
+
+              {/* Map Preview Graphic */}
+              <div className="company-map-preview">
+                <svg viewBox="0 0 200 110" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="200" height="110" rx="8" fill="#f8fafc" />
+                  <path d="M80 0C70 30 110 70 95 110" stroke="#bfdbfe" strokeWidth="18" fill="none" opacity="0.6"/>
+                  <path d="M10 10Q35 25 25 50Q15 70 5 80Z" fill="#dcfce7" opacity="0.8"/>
+                  <path d="M140 10Q180 20 170 55Q150 75 140 60Z" fill="#dcfce7" opacity="0.8"/>
+                  <line x1="0" y1="35" x2="200" y2="35" stroke="#e2e8f0" strokeWidth="3"/>
+                  <line x1="0" y1="75" x2="200" y2="75" stroke="#e2e8f0" strokeWidth="3"/>
+                  <line x1="45" y1="0" x2="45" y2="110" stroke="#e2e8f0" strokeWidth="3"/>
+                  <line x1="145" y1="0" x2="145" y2="110" stroke="#e2e8f0" strokeWidth="3"/>
+                  <path d="M0 60Q70 65 100 45Q130 25 200 30" stroke="#fed7aa" strokeWidth="4" fill="none"/>
+                  <path d="M30 110Q65 60 120 40Q160 20 180 0" stroke="#fed7aa" strokeWidth="4" fill="none"/>
+
+                  <text x="100" y="22" fontSize="8" fill="#94a3b8" fontWeight="600" textAnchor="middle" letterSpacing="0.05em">CENTRAL DISTRICT</text>
+
+                  {/* Red Location Pin */}
+                  <g transform="translate(100, 48)">
+                    <ellipse cx="0" cy="18" rx="6" ry="2.5" fill="#000000" opacity="0.18"/>
+                    <path d="M0 18L-5 6A7 7 0 1 1 5 6L0 18Z" fill="#ef4444"/>
+                    <circle cx="0" cy="4" r="2.5" fill="#ffffff"/>
+                    <text x="0" y="27" fontSize="10" fontWeight="800" fill="#0f172a" textAnchor="middle">
+                      {cityLabel}
+                    </text>
+                  </g>
+                </svg>
+                <a
+                  href={`https://maps.google.com/?q=${encodeURIComponent(location !== '—' ? location : cityLabel)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="company-map-expand-btn"
+                  title="Open location in Google Maps"
+                >
+                  <ExternalLinkIcon size={12} />
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Company Description */}
+          <div className="company-info-card">
+            <div className="company-info-card-header">
+              <div className="company-info-card-title-group">
+                <div className="company-info-card-icon-box">
+                  <DocumentIcon size={20} color="#2563eb" />
+                </div>
+                <h3 className="company-info-card-title">Company Description</h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenEdit}
+                className="company-info-card-edit-btn"
+              >
+                <EditIcon size={13} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="company-desc-box">
+              {description ? (
+                <p style={{ margin: 0 }}>{description}</p>
+              ) : (
+                <p className="company-desc-empty" style={{ margin: 0 }}>
+                  No corporate overview description provided yet. Click edit to describe your organization.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Edit Company Profile Modal */}
+        <Modal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          title="Edit Company Profile"
+          maxWidth="720px"
+        >
+          {generalError && (
+            <div
+              style={{
+                background: '#fee2e2',
+                color: '#b91c1c',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '0.85rem',
+                marginBottom: '14px'
+              }}
+            >
+              {generalError}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} noValidate className="company-edit-modal-form">
+            <div className="company-form-grid-2">
+              {/* Company Name */}
+              <div className="company-form-group">
+                <label className="company-form-label" htmlFor="edit-companyName">
+                  Company Name *
+                </label>
                 <input
-                  id="comp-name"
+                  id="edit-companyName"
                   name="companyName"
+                  type="text"
+                  className="company-form-input"
                   value={formData.companyName}
                   onChange={handleChange}
-                  placeholder="e.g. Infosys Ltd."
                   disabled={saving}
-                  style={fieldErrors.companyName ? { borderColor: 'var(--red, #e53e3e)' } : {}}
-                  aria-invalid={Boolean(fieldErrors.companyName)}
                 />
                 {fieldErrors.companyName && (
-                  <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.companyName}
-                  </span>
+                  <span className="company-form-error">{fieldErrors.companyName}</span>
                 )}
               </div>
 
-              <div className="field">
-                <label htmlFor="comp-industry">Industry Type *</label>
+              {/* Industry Type */}
+              <div className="company-form-group">
+                <label className="company-form-label" htmlFor="edit-industryType">
+                  Industry Type *
+                </label>
                 <input
-                  id="comp-industry"
+                  id="edit-industryType"
                   name="industryType"
+                  type="text"
+                  className="company-form-input"
                   value={formData.industryType}
                   onChange={handleChange}
-                  placeholder="e.g. Information Technology"
                   disabled={saving}
-                  style={fieldErrors.industryType ? { borderColor: 'var(--red, #e53e3e)' } : {}}
-                  aria-invalid={Boolean(fieldErrors.industryType)}
                 />
                 {fieldErrors.industryType && (
-                  <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.industryType}
-                  </span>
+                  <span className="company-form-error">{fieldErrors.industryType}</span>
                 )}
               </div>
+            </div>
 
-              <div className="field">
-                <label htmlFor="comp-year">
-                  Year Established <span style={{ color: 'var(--red, #e53e3e)' }}>*</span>
+            <div className="company-form-grid-2">
+              {/* Year Established */}
+              <div className="company-form-group">
+                <label className="company-form-label" htmlFor="edit-yearEstablished">
+                  Year Established *
                 </label>
                 <select
-                  id="comp-year"
+                  id="edit-yearEstablished"
                   name="yearEstablished"
+                  className="company-form-input"
                   value={formData.yearEstablished}
                   onChange={handleChange}
                   disabled={saving}
-                  style={fieldErrors.yearEstablished ? { borderColor: 'var(--red, #e53e3e)' } : {}}
-                  aria-invalid={Boolean(fieldErrors.yearEstablished)}
                 >
-                  <option value="">— Select Year Established —</option>
+                  <option value="">Select Year</option>
                   {COMPANY_YEAR_OPTIONS.map((y) => (
-                    <option key={y} value={String(y)}>
+                    <option key={y} value={y}>
                       {y}
                     </option>
                   ))}
                 </select>
                 {fieldErrors.yearEstablished && (
-                  <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.yearEstablished}
-                  </span>
+                  <span className="company-form-error">{fieldErrors.yearEstablished}</span>
                 )}
               </div>
 
-              <div className="field">
-                <label htmlFor="comp-web">Website URL</label>
+              {/* Website URL */}
+              <div className="company-form-group">
+                <label className="company-form-label" htmlFor="edit-website">
+                  Website URL
+                </label>
                 <input
-                  id="comp-web"
+                  id="edit-website"
                   name="website"
-                  type="url"
+                  type="text"
                   placeholder="https://company.example.com"
+                  className="company-form-input"
                   value={formData.website}
                   onChange={handleChange}
                   disabled={saving}
-                  style={fieldErrors.website ? { borderColor: 'var(--red, #e53e3e)' } : {}}
-                  aria-invalid={Boolean(fieldErrors.website)}
                 />
                 {fieldErrors.website && (
-                  <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.website}
-                  </span>
+                  <span className="company-form-error">{fieldErrors.website}</span>
                 )}
               </div>
+            </div>
 
-              {/* SECTION 2: Recruiter Contact */}
-              <div style={{ marginTop: '8px', marginBottom: '2px', borderTop: '1px solid #e9eef3', paddingTop: '14px' }}>
-                <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <UserIcon size={16} color="var(--primary, #0284c7)" /> Recruiter Contact
-                </h3>
-                <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
-                  Primary point of contact for placement rounds and official communication
-                </p>
-              </div>
-
-              <div className="field">
-                <label htmlFor="comp-hr">HR / Recruiter Name *</label>
+            <div className="company-form-grid-2">
+              {/* HR Recruiter Name */}
+              <div className="company-form-group">
+                <label className="company-form-label" htmlFor="edit-hrRecruiterName">
+                  HR / Recruiter Name *
+                </label>
                 <input
-                  id="comp-hr"
+                  id="edit-hrRecruiterName"
                   name="hrRecruiterName"
+                  type="text"
+                  className="company-form-input"
                   value={formData.hrRecruiterName}
                   onChange={handleChange}
-                  placeholder="e.g. John Doe"
                   disabled={saving}
-                  style={fieldErrors.hrRecruiterName ? { borderColor: 'var(--red, #e53e3e)' } : {}}
-                  aria-invalid={Boolean(fieldErrors.hrRecruiterName)}
                 />
                 {fieldErrors.hrRecruiterName && (
-                  <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.hrRecruiterName}
-                  </span>
+                  <span className="company-form-error">{fieldErrors.hrRecruiterName}</span>
                 )}
               </div>
 
-              <div className="field">
-                <label htmlFor="comp-desig">Designation / Role *</label>
+              {/* Designation */}
+              <div className="company-form-group">
+                <label className="company-form-label" htmlFor="edit-designation">
+                  Designation / Role *
+                </label>
                 <input
-                  id="comp-desig"
+                  id="edit-designation"
                   name="designation"
+                  type="text"
+                  className="company-form-input"
                   value={formData.designation}
                   onChange={handleChange}
-                  placeholder="e.g. Talent Acquisition Lead"
                   disabled={saving}
-                  style={fieldErrors.designation ? { borderColor: 'var(--red, #e53e3e)' } : {}}
-                  aria-invalid={Boolean(fieldErrors.designation)}
                 />
                 {fieldErrors.designation && (
-                  <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.designation}
-                  </span>
+                  <span className="company-form-error">{fieldErrors.designation}</span>
                 )}
               </div>
+            </div>
 
-              <div className="field">
-                <label htmlFor="comp-email">Email Address *</label>
+            <div className="company-form-grid-2">
+              {/* Email Address */}
+              <div className="company-form-group">
+                <label className="company-form-label" htmlFor="edit-email">
+                  Email Address *
+                </label>
                 <input
-                  id="comp-email"
+                  id="edit-email"
                   name="email"
                   type="email"
+                  className="company-form-input"
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="e.g. recruiter@company.com"
                   disabled={saving}
-                  style={fieldErrors.email ? { borderColor: 'var(--red, #e53e3e)' } : {}}
-                  aria-invalid={Boolean(fieldErrors.email)}
                 />
                 {fieldErrors.email && (
-                  <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.email}
-                  </span>
+                  <span className="company-form-error">{fieldErrors.email}</span>
                 )}
               </div>
 
-              <div className="field">
-                <label htmlFor="comp-mob">Mobile Number *</label>
+              {/* Mobile Number */}
+              <div className="company-form-group">
+                <label className="company-form-label" htmlFor="edit-mobileNumber">
+                  Mobile Number *
+                </label>
                 <input
-                  id="comp-mob"
+                  id="edit-mobileNumber"
                   name="mobileNumber"
-                  type="tel"
-                  placeholder="10-digit mobile number"
-                  maxLength={15}
+                  type="text"
+                  className="company-form-input"
                   value={formData.mobileNumber}
                   onChange={handleChange}
                   disabled={saving}
-                  style={fieldErrors.mobileNumber ? { borderColor: 'var(--red, #e53e3e)' } : {}}
-                  aria-invalid={Boolean(fieldErrors.mobileNumber)}
                 />
                 {fieldErrors.mobileNumber && (
-                  <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.mobileNumber}
-                  </span>
+                  <span className="company-form-error">{fieldErrors.mobileNumber}</span>
                 )}
               </div>
+            </div>
 
-              {/* SECTION 3: Overview & Location */}
-              <div style={{ marginTop: '8px', marginBottom: '2px', borderTop: '1px solid #e9eef3', paddingTop: '14px' }}>
-                <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--navy, #173b76)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <MapPinIcon size={16} color="var(--primary, #0284c7)" /> Overview & Location
-                </h3>
-                <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted, #64748b)' }}>
-                  Physical office address and descriptive overview visible to candidates
-                </p>
-              </div>
-
-              <div className="field">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label htmlFor="comp-addr">Office Address *</label>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--muted, #64748b)' }}>
-                    {formData.officeAddress.length}/500
-                  </span>
-                </div>
-                <textarea
-                  id="comp-addr"
-                  name="officeAddress"
-                  rows="3"
-                  maxLength={500}
-                  value={formData.officeAddress}
-                  onChange={handleChange}
-                  placeholder="Street, City, State, ZIP code"
-                  disabled={saving}
-                  style={{
-                    resize: 'vertical',
-                    ...(fieldErrors.officeAddress ? { borderColor: 'var(--red, #e53e3e)' } : {})
-                  }}
-                  aria-invalid={Boolean(fieldErrors.officeAddress)}
-                />
-                {fieldErrors.officeAddress && (
-                  <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.officeAddress}
-                  </span>
-                )}
-              </div>
-
-              <div className="field">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label htmlFor="comp-desc">Description *</label>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--muted, #64748b)' }}>
-                    {formData.description.length}/1000
-                  </span>
-                </div>
-                <textarea
-                  id="comp-desc"
-                  name="description"
-                  rows="4"
-                  maxLength={1000}
-                  value={formData.description}
-                  onChange={handleChange}
-                  placeholder="Overview of company history, vision, culture, and recruitment profile..."
-                  disabled={saving}
-                  style={{
-                    resize: 'vertical',
-                    ...(fieldErrors.description ? { borderColor: 'var(--red, #e53e3e)' } : {})
-                  }}
-                  aria-invalid={Boolean(fieldErrors.description)}
-                />
-                {fieldErrors.description && (
-                  <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                    {fieldErrors.description}
-                  </span>
-                )}
-              </div>
-
-              {generalError && (
-                <div className="notice error">
-                  {generalError}
-                </div>
+            {/* Office Address */}
+            <div className="company-form-group">
+              <label className="company-form-label" htmlFor="edit-officeAddress">
+                Office Address *
+              </label>
+              <textarea
+                id="edit-officeAddress"
+                name="officeAddress"
+                rows={2}
+                className="company-form-textarea"
+                value={formData.officeAddress}
+                onChange={handleChange}
+                disabled={saving}
+              />
+              {fieldErrors.officeAddress && (
+                <span className="company-form-error">{fieldErrors.officeAddress}</span>
               )}
+            </div>
 
-              <div className="modal-actions" style={{ marginTop: '16px' }}>
-                <button className="primary" type="submit" disabled={saving}>
-                  {saving ? 'Saving...' : 'Save Profile Changes'}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+            {/* Company Description */}
+            <div className="company-form-group">
+              <label className="company-form-label" htmlFor="edit-description">
+                Company Description
+              </label>
+              <textarea
+                id="edit-description"
+                name="description"
+                rows={3}
+                className="company-form-textarea"
+                value={formData.description}
+                onChange={handleChange}
+                disabled={saving}
+              />
+              {fieldErrors.description && (
+                <span className="company-form-error">{fieldErrors.description}</span>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '12px',
+                marginTop: '12px'
+              }}
+            >
+              <button
+                type="button"
+                className="company-profile-btn-outline"
+                onClick={() => setIsEditModalOpen(false)}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="company-profile-btn-primary"
+                disabled={saving}
+              >
+                {saving ? 'Saving Changes…' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       </div>
     </PortalLayout>
   );

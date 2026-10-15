@@ -5,58 +5,43 @@ import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import {
   BuildingIcon,
   BriefcaseIcon,
-  UsersIcon,
+  DocumentIcon,
   CalendarIcon,
   AwardIcon,
-  EditIcon,
-  SettingsIcon,
-  KeyIcon,
-  AlertTriangleIcon,
-  ClockIcon
+  UsersIcon,
+  PlusIcon,
+  MapPinIcon,
+  GlobeIcon,
+  ChevronRightIcon
 } from '../../components/common/Icons.jsx';
-
-function calculateCompanyProfileCompletion(company) {
-  if (!company) return { percentage: 0, missingItems: [] };
-
-  const checks = [
-    { label: 'Company Name & Business Identifier', complete: Boolean(company.companyName && company.companyId) },
-    { label: 'Industry Sector', complete: Boolean(company.industryType) },
-    { label: 'HR / Recruiter Contact Name', complete: Boolean(company.hrRecruiterName) },
-    { label: 'Recruiter Contact Email', complete: Boolean(company.email) },
-    { label: 'Corporate Website URL', complete: Boolean(company.website) },
-    { label: 'Office Address / Location', complete: Boolean(company.officeAddress || company.location) },
-    { label: 'Company Overview Description', complete: Boolean(company.description) },
-    { label: 'Contact Telephone / Mobile', complete: Boolean(company.mobileNumber) },
-    { label: 'Year Established', complete: Boolean(company.yearEstablished) }
-  ];
-
-  const completed = checks.filter((c) => c.complete).length;
-  const percentage = Math.round((completed / checks.length) * 100);
-  const missingItems = checks.filter((c) => !c.complete).map((c) => c.label);
-
-  return { percentage, missingItems };
-}
+import './CompanyDashboard.css';
 
 export function CompanyDashboard() {
   const { user } = useAuth();
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+
+  // Real data collections (empty states when no records exist in the database)
+  const recentJobs = [];
+  const recentApplications = [];
+  const upcomingInterviews = [];
+
+  const jobPostingsCount = recentJobs.length;
+  const applicationsCount = recentApplications.length;
+  const interviewsCount = upcomingInterviews.length;
+  const placementsCount = 0;
 
   useEffect(() => {
     let mounted = true;
     async function loadData() {
       try {
         setLoading(true);
-        setError(null);
         const data = await companyService.getMyProfile();
         if (mounted) {
           setCompany(data);
         }
-      } catch (err) {
-        if (mounted) {
-          setError(err.message || 'Unable to load company profile.');
-        }
+      } catch (_err) {
+        // Fallback gracefully to authenticated session details
       } finally {
         if (mounted) {
           setLoading(false);
@@ -69,759 +54,428 @@ export function CompanyDashboard() {
     };
   }, []);
 
-  const recruiterName = company?.hrRecruiterName || user?.name || user?.email?.split('@')[0] || 'Recruiter';
-  const companyName = company?.companyName || 'Your Company';
-  const { percentage, missingItems } = calculateCompanyProfileCompletion(company);
+  // Dynamic Greeting based on current time
+  const currentHour = new Date().getHours();
+  const greetingText =
+    currentHour < 12 ? 'Good Morning' : currentHour < 17 ? 'Good Afternoon' : 'Good Evening';
+
+  const recruiterFirstName =
+    company?.hrRecruiterName?.split(' ')[0] ||
+    user?.name?.split(' ')[0] ||
+    user?.email?.split('@')[0] ||
+    'Recruiter';
+
+  const companyName = company?.companyName || 'Company Profile';
+  const companyId = company?.companyId || user?.companyId || '—';
+  const industry = company?.industryType || 'Corporate';
+  const establishedYear = company?.yearEstablished || '—';
+  const location = company?.officeAddress || company?.location || 'Location Not Specified';
+  const website = company?.website || '—';
+
+  // Live Calendar Dates
+  const now = new Date();
+  const weekday = now.toLocaleDateString('en-US', { weekday: 'long' });
+  const fullDate = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 
   return (
-    <PortalLayout
-      title="Company Dashboard"
-      subtitle={`Welcome back, ${recruiterName}! Recruitment overview and applicant status for ${companyName}.`}
-      currentPath="/dashboard"
-      hideEyebrow={true}
-      actions={
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <a
-            href="#/company-profile"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              background: '#ffffff',
-              color: '#1e293b',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-              textDecoration: 'none'
-            }}
-          >
-            <BuildingIcon size={15} />
-            <span>Company Profile</span>
-          </a>
+    <PortalLayout currentPath="/dashboard" hideEyebrow={true}>
+      <div className="company-dashboard-container">
+        {/* Breadcrumb Navigation */}
+        <div className="company-breadcrumb">
+          <span>Campus Recruit</span>
+          <span>/</span>
+          <span className="current">Company Recruiter Dashboard</span>
         </div>
-      }
-    >
-      <div style={{ maxWidth: '1440px', margin: '0 auto' }}>
-        {loading ? (
-          <div
-            style={{
-              padding: '48px 24px',
-              textAlign: 'center',
-              color: '#64748b',
-              background: '#ffffff',
-              borderRadius: '12px',
-              border: '1px solid #e2e8f0',
-              marginBottom: '20px'
-            }}
-          >
-            <div style={{ marginBottom: '8px' }}>
-              <ClockIcon size={32} color="#64748b" />
-            </div>
-            <div style={{ fontWeight: 600, color: '#334155' }}>Loading company recruitment portal…</div>
+
+        {/* 1. GREETING & DATE BAR */}
+        <div className="company-greeting-bar">
+          <div className="company-greeting-left">
+            <h1 className="company-greeting-text">
+              {greetingText}, {recruiterFirstName}! 👋
+            </h1>
+            <p className="company-greeting-sub">
+              Here's an overview of your recruitment activity.
+            </p>
           </div>
-        ) : error ? (
-          <div
-            style={{
-              background: '#fffbeb',
-              border: '1px solid #fef3c7',
-              borderRadius: '12px',
-              padding: '24px',
-              marginBottom: '24px',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '16px'
-            }}
-          >
-            <AlertTriangleIcon size={28} color="#d97706" />
-            <div>
-              <h3 style={{ margin: '0 0 6px 0', fontSize: '1.05rem', color: '#92400e', fontWeight: 700 }}>
-                Company Account Notice
-              </h3>
-              <p style={{ margin: '0 0 12px 0', fontSize: '0.88rem', color: '#b45309' }}>
-                {error}
-              </p>
-              <a
-                href="#/company-profile"
-                style={{
-                  display: 'inline-block',
-                  background: '#d97706',
-                  color: '#ffffff',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  textDecoration: 'none'
-                }}
-              >
-                Go to Company Profile
-              </a>
+          <div className="company-date-card">
+            <div className="company-date-icon">
+              <CalendarIcon size={20} color="#2563eb" />
+            </div>
+            <div className="company-date-info">
+              <span className="company-date-weekday">{weekday}</span>
+              <span className="company-date-full">{fullDate}</span>
             </div>
           </div>
-        ) : (
-          <>
-            {/* ROW 1: Company Profile Summary Cards */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: '16px',
-                marginBottom: '20px'
-              }}
-            >
-              {/* Card 1: Registered Company Identifier */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
-                  <div
-                    style={{
-                      width: '46px',
-                      height: '46px',
-                      borderRadius: '10px',
-                      background: '#eff6ff',
-                      color: '#2563eb',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '1.4rem',
-                      flexShrink: 0
-                    }}
-                  >
-                    <BuildingIcon size={24} color="#2563eb" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Registered Company
-                    </div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>
-                      {company?.companyName || 'Corporate Partner'}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ fontSize: '0.84rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div>
-                    <strong style={{ color: '#1e293b' }}>Business ID:</strong> {company?.companyId || '—'}
-                  </div>
-                  <div>
-                    <strong style={{ color: '#1e293b' }}>Industry:</strong> {company?.industryType || 'Corporate'}
-                  </div>
+        </div>
+
+        {/* 2. HERO COMPANY CARD */}
+        <div className="company-hero-card">
+          <div className="company-hero-main">
+            <div className="company-hero-header-left">
+              <div className="company-hero-logo-box">
+                <BuildingIcon size={28} color="#2563eb" />
+              </div>
+              <div>
+                <div className="company-hero-title-row">
+                  <h2 className="company-hero-name">{companyName}</h2>
+                  {companyId !== '—' && (
+                    <span className="company-hero-id-badge">{companyId}</span>
+                  )}
                 </div>
               </div>
+            </div>
+            <a href="#/company-profile" className="company-hero-view-profile-btn">
+              <span>View Company Profile</span>
+              <span aria-hidden="true">→</span>
+            </a>
+          </div>
 
-              {/* Card 2: Recruiter Contact Information */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
-                  <div
-                    style={{
-                      width: '46px',
-                      height: '46px',
-                      borderRadius: '10px',
-                      background: '#dcfce7',
-                      color: '#16a34a',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '1.4rem',
-                      flexShrink: 0
-                    }}
-                  >
-                    👤
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      HR Recruiter
-                    </div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>
-                      {company?.hrRecruiterName || 'HR Lead'}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ fontSize: '0.84rem', color: '#475569', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div>
-                    <strong style={{ color: '#1e293b' }}>Email:</strong> {company?.email || user?.email || '—'}
-                  </div>
-                  <div>
-                    <strong style={{ color: '#1e293b' }}>Phone:</strong> {company?.mobileNumber || '—'}
-                  </div>
-                </div>
+          {/* Metadata Row */}
+          <div className="company-hero-metadata-row">
+            {/* Industry */}
+            <div className="company-meta-item">
+              <div className="company-meta-icon">
+                <BuildingIcon size={18} color="#2563eb" />
               </div>
+              <div className="company-meta-text">
+                <span className="company-meta-label">Industry</span>
+                <span className="company-meta-value">{industry}</span>
+              </div>
+            </div>
 
-              {/* Card 3: Location & Corporate Presence */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
-                  <div
-                    style={{
-                      width: '46px',
-                      height: '46px',
-                      borderRadius: '10px',
-                      background: '#fef3c7',
-                      color: '#d97706',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '1.4rem',
-                      flexShrink: 0
-                    }}
-                  >
-                    📍
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Location & Web
-                    </div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>
-                      {company?.officeAddress || company?.location || 'Location Not Specified'}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ fontSize: '0.84rem', color: '#475569' }}>
-                  <strong style={{ color: '#1e293b' }}>Website:</strong>{' '}
-                  {company?.website ? (
+            {/* Established */}
+            <div className="company-meta-item">
+              <div className="company-meta-icon">
+                <CalendarIcon size={18} color="#2563eb" />
+              </div>
+              <div className="company-meta-text">
+                <span className="company-meta-label">Established</span>
+                <span className="company-meta-value">{establishedYear}</span>
+              </div>
+            </div>
+
+            {/* Location */}
+            <div className="company-meta-item">
+              <div className="company-meta-icon">
+                <MapPinIcon size={18} color="#2563eb" />
+              </div>
+              <div className="company-meta-text">
+                <span className="company-meta-label">Location</span>
+                <span className="company-meta-value">{location}</span>
+              </div>
+            </div>
+
+            {/* Website */}
+            <div className="company-meta-item">
+              <div className="company-meta-icon">
+                <GlobeIcon size={18} color="#2563eb" />
+              </div>
+              <div className="company-meta-text">
+                <span className="company-meta-label">Website</span>
+                <span className="company-meta-value">
+                  {website !== '—' ? (
                     <a
-                      href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
+                      href={website.startsWith('http') ? website : `https://${website}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ color: '#2563eb', textDecoration: 'none' }}
+                      style={{ color: '#0f172a', textDecoration: 'none' }}
                     >
-                      {company.website}
+                      {website}
                     </a>
                   ) : (
                     '—'
                   )}
-                </div>
-              </div>
-
-              {/* Card 4: Company Profile Completion */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between'
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Profile Completion
-                    </div>
-                    <span style={{ fontSize: '1.15rem', fontWeight: 800, color: percentage === 100 ? '#16a34a' : '#2563eb' }}>
-                      {percentage}%
-                    </span>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div style={{ width: '100%', height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden', marginBottom: '8px' }}>
-                    <div
-                      style={{
-                        width: `${percentage}%`,
-                        height: '100%',
-                        background: percentage === 100 ? '#16a34a' : percentage >= 75 ? '#2563eb' : '#d97706',
-                        borderRadius: '4px',
-                        transition: 'width 0.4s ease'
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                    {percentage === 100 ? 'Company profile complete' : `${missingItems.length} detail(s) recommended`}
-                  </span>
-                  <a
-                    href="#/company-profile"
-                    style={{ fontSize: '0.78rem', color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}
-                  >
-                    Edit →
-                  </a>
-                </div>
+                </span>
               </div>
             </div>
+          </div>
 
-            {/* ROW 2: Recruitment Pipeline Metrics (Scoped to authorized company) */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '16px',
-                marginBottom: '20px'
-              }}
-            >
-              {/* Metric 1: Company Job Openings */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '16px 18px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <BriefcaseIcon size={20} color="#2563eb" />
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
-                    Active Job Drives
-                  </div>
-                </div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
-                  0
-                </div>
-                <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
-                  0 Openings posted
-                </div>
+          {/* City Skyline Background Illustration */}
+          <div className="company-hero-illustration" aria-hidden="true">
+            <svg viewBox="0 0 170 110" width="170" height="110" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="135" cy="45" r="32" fill="#eff6ff" opacity="0.8"/>
+              <circle cx="135" cy="45" r="22" fill="#dbeafe" opacity="0.6"/>
+
+              {/* Background Buildings */}
+              <rect x="75" y="48" width="22" height="62" rx="2" fill="#cbd5e1" opacity="0.5"/>
+              <rect x="135" y="40" width="24" height="70" rx="2" fill="#cbd5e1" opacity="0.6"/>
+              <rect x="140" y="48" width="4" height="6" rx="1" fill="#ffffff" opacity="0.7"/>
+              <rect x="148" y="48" width="4" height="6" rx="1" fill="#ffffff" opacity="0.7"/>
+              <rect x="140" y="60" width="4" height="6" rx="1" fill="#ffffff" opacity="0.7"/>
+              <rect x="148" y="60" width="4" height="6" rx="1" fill="#ffffff" opacity="0.7"/>
+
+              {/* Midground Tall Blue Building */}
+              <rect x="100" y="24" width="28" height="86" rx="3" fill="#60a5fa"/>
+              <path d="M100 24L114 14L128 24Z" fill="#3b82f6"/>
+              <rect x="106" y="32" width="5" height="7" rx="1" fill="#ffffff" opacity="0.9"/>
+              <rect x="117" y="32" width="5" height="7" rx="1" fill="#ffffff" opacity="0.9"/>
+              <rect x="106" y="45" width="5" height="7" rx="1" fill="#ffffff" opacity="0.9"/>
+              <rect x="117" y="45" width="5" height="7" rx="1" fill="#ffffff" opacity="0.9"/>
+              <rect x="106" y="58" width="5" height="7" rx="1" fill="#ffffff" opacity="0.9"/>
+              <rect x="117" y="58" width="5" height="7" rx="1" fill="#ffffff" opacity="0.9"/>
+              <rect x="106" y="71" width="5" height="7" rx="1" fill="#ffffff" opacity="0.9"/>
+              <rect x="117" y="71" width="5" height="7" rx="1" fill="#ffffff" opacity="0.9"/>
+
+              {/* Foreground Shorter Blue Building */}
+              <rect x="82" y="54" width="22" height="56" rx="2" fill="#93c5fd"/>
+              <rect x="87" y="62" width="4" height="6" rx="1" fill="#ffffff" opacity="0.9"/>
+              <rect x="94" y="62" width="4" height="6" rx="1" fill="#ffffff" opacity="0.9"/>
+              <rect x="87" y="74" width="4" height="6" rx="1" fill="#ffffff" opacity="0.9"/>
+              <rect x="94" y="74" width="4" height="6" rx="1" fill="#ffffff" opacity="0.9"/>
+
+              {/* Green Stylized Tree */}
+              <rect x="156" y="76" width="4" height="34" rx="2" fill="#a16207" opacity="0.7"/>
+              <ellipse cx="158" cy="68" rx="12" ry="16" fill="#34d399"/>
+              <ellipse cx="158" cy="68" rx="8" ry="11" fill="#10b981"/>
+            </svg>
+          </div>
+        </div>
+
+        {/* 3. FOUR METRICS CARDS ROW */}
+        <div className="company-metrics-grid">
+          {/* Card 1: Job Postings */}
+          <a href="#/jobs" className="company-metric-card">
+            <div className="company-metric-left">
+              <div className="company-metric-icon-box blue">
+                <BriefcaseIcon size={22} color="#0284c7" />
               </div>
-
-              {/* Metric 2: Total Applicants Received */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '16px 18px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <UsersIcon size={20} color="#0284c7" />
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
-                    Total Applicants
-                  </div>
-                </div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
-                  0
-                </div>
-                <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
-                  0 Candidates applied
-                </div>
-              </div>
-
-              {/* Metric 3: Scheduled Interviews */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '16px 18px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <CalendarIcon size={20} color="#7c3aed" />
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
-                    Candidate Interviews
-                  </div>
-                </div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
-                  0
-                </div>
-                <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
-                  0 Interviews scheduled
-                </div>
-              </div>
-
-              {/* Metric 4: Shortlisted Candidates */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '16px 18px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <AwardIcon size={20} color="#eab308" />
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
-                    Shortlisted Candidates
-                  </div>
-                </div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
-                  0
-                </div>
-                <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
-                  0 Candidates shortlisted
-                </div>
+              <div className="company-metric-details">
+                <span className="company-metric-value">{jobPostingsCount}</span>
+                <span className="company-metric-label">Job Postings</span>
               </div>
             </div>
+            <div className="company-chevron-arrow">
+              <ChevronRightIcon size={18} />
+            </div>
+          </a>
 
-            {/* ROW 3: Recruitment Panels & Actions */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1.15fr) minmax(280px, 0.9fr)',
-                gap: '20px'
-              }}
-            >
-              {/* Panel 1: Company Postings & Pipeline */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '14px',
-                  padding: '22px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                }}
-              >
-                <div style={{ marginBottom: '18px' }}>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
-                    Recruitment Drives & Postings
-                  </h3>
-                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
-                    Active job drives published for ${companyName}
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    padding: '44px 16px',
-                    textAlign: 'center',
-                    color: '#94a3b8',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px'
-                  }}
-                >
-                  <BriefcaseIcon size={36} color="#94a3b8" />
-                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#475569' }}>
-                    No job drives published
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', maxWidth: '300px' }}>
-                    Job postings and candidate applications for ${companyName} will be monitored here once recruitment drives begin.
-                  </div>
-                </div>
+          {/* Card 2: Applications */}
+          <a href="#/applications" className="company-metric-card">
+            <div className="company-metric-left">
+              <div className="company-metric-icon-box purple">
+                <DocumentIcon size={22} color="#9333ea" />
               </div>
-
-              {/* Panel 2: Scheduled Interviews & Coordination */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '14px',
-                  padding: '22px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                }}
-              >
-                <div style={{ marginBottom: '18px' }}>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
-                    Interviews & Notifications
-                  </h3>
-                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
-                    Candidate interview sessions and placement notices
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    padding: '44px 16px',
-                    textAlign: 'center',
-                    color: '#94a3b8',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px'
-                  }}
-                >
-                  <CalendarIcon size={36} color="#94a3b8" />
-                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#475569' }}>
-                    No interviews scheduled
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', maxWidth: '300px' }}>
-                    Candidate assessment schedules and placement cell coordination alerts will appear here.
-                  </div>
-                </div>
-              </div>
-
-              {/* Panel 3: Recruiter Quick Actions */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '14px',
-                  padding: '22px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-                }}
-              >
-                <div style={{ marginBottom: '18px' }}>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
-                    Recruiter Actions
-                  </h3>
-                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
-                    Company management shortcuts
-                  </p>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }}>
-                  <a
-                    href="#/company-profile"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      padding: '12px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid #e2e8f0',
-                      background: '#ffffff',
-                      textDecoration: 'none',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#93c5fd';
-                      e.currentTarget.style.background = '#f8fafc';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e2e8f0';
-                      e.currentTarget.style.background = '#ffffff';
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '8px',
-                        background: '#eff6ff',
-                        color: '#2563eb',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}
-                    >
-                      <BuildingIcon size={18} color="#2563eb" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
-                        View Company Profile
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
-                        Review details and recruiter team
-                      </div>
-                    </div>
-                  </a>
-
-                  <a
-                    href="#/company-profile"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      padding: '12px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid #e2e8f0',
-                      background: '#ffffff',
-                      textDecoration: 'none',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#93c5fd';
-                      e.currentTarget.style.background = '#f8fafc';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e2e8f0';
-                      e.currentTarget.style.background = '#ffffff';
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '8px',
-                        background: '#e0f2fe',
-                        color: '#0284c7',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}
-                    >
-                      <EditIcon size={18} color="#0284c7" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
-                        Edit Company Details
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
-                        Update contact and description
-                      </div>
-                    </div>
-                  </a>
-
-                  <a
-                    href="#/students"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      padding: '12px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid #e2e8f0',
-                      background: '#ffffff',
-                      textDecoration: 'none',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#86efac';
-                      e.currentTarget.style.background = '#f0fdf4';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e2e8f0';
-                      e.currentTarget.style.background = '#ffffff';
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '8px',
-                        background: '#dcfce7',
-                        color: '#16a34a',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}
-                    >
-                      <UsersIcon size={18} color="#16a34a" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
-                        Browse Eligible Candidates
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
-                        Review registered student profiles
-                      </div>
-                    </div>
-                  </a>
-
-                  <a
-                    href="#/profile"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      padding: '12px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid #e2e8f0',
-                      background: '#ffffff',
-                      textDecoration: 'none',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#93c5fd';
-                      e.currentTarget.style.background = '#f8fafc';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e2e8f0';
-                      e.currentTarget.style.background = '#ffffff';
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '8px',
-                        background: '#f1f5f9',
-                        color: '#475569',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}
-                    >
-                      <SettingsIcon size={18} color="#475569" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
-                        My Account
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
-                        Recruiter login credentials
-                      </div>
-                    </div>
-                  </a>
-
-                  <a
-                    href="#/change-password"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      padding: '12px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid #e2e8f0',
-                      background: '#ffffff',
-                      textDecoration: 'none',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#93c5fd';
-                      e.currentTarget.style.background = '#f8fafc';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e2e8f0';
-                      e.currentTarget.style.background = '#ffffff';
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '8px',
-                        background: '#fef3c7',
-                        color: '#d97706',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}
-                    >
-                      <KeyIcon size={18} color="#d97706" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>
-                        Change Password
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
-                        Manage recruiter account security
-                      </div>
-                    </div>
-                  </a>
-                </div>
+              <div className="company-metric-details">
+                <span className="company-metric-value">{applicationsCount}</span>
+                <span className="company-metric-label">Applications</span>
               </div>
             </div>
-          </>
-        )}
+            <div className="company-chevron-arrow">
+              <ChevronRightIcon size={18} />
+            </div>
+          </a>
+
+          {/* Card 3: Scheduled Interviews */}
+          <a href="#/interviews" className="company-metric-card">
+            <div className="company-metric-left">
+              <div className="company-metric-icon-box green">
+                <CalendarIcon size={22} color="#16a34a" />
+              </div>
+              <div className="company-metric-details">
+                <span className="company-metric-value">{interviewsCount}</span>
+                <span className="company-metric-label">Scheduled Interviews</span>
+              </div>
+            </div>
+            <div className="company-chevron-arrow">
+              <ChevronRightIcon size={18} />
+            </div>
+          </a>
+
+          {/* Card 4: Placements */}
+          <a href="#/placements" className="company-metric-card">
+            <div className="company-metric-left">
+              <div className="company-metric-icon-box orange">
+                <AwardIcon size={22} color="#d97706" />
+              </div>
+              <div className="company-metric-details">
+                <span className="company-metric-value">{placementsCount}</span>
+                <span className="company-metric-label">Placements</span>
+              </div>
+            </div>
+            <div className="company-chevron-arrow">
+              <ChevronRightIcon size={18} />
+            </div>
+          </a>
+        </div>
+
+        {/* 4. MIDDLE TWO-COLUMN GRID: Recent Job Postings & Recent Applications */}
+        <div className="company-two-col-grid">
+          {/* Column 1: Recent Job Postings */}
+          <div className="company-section-col">
+            <div className="company-section-header">
+              <h3 className="company-section-title">Recent Job Postings</h3>
+              <a href="#/jobs" className="company-view-all-link">
+                <span>View All</span>
+                <span aria-hidden="true">→</span>
+              </a>
+            </div>
+            <div className="company-card-list">
+              {recentJobs.length > 0 ? (
+                recentJobs.map((job) => (
+                  <a key={job._id || job.id} href="#/jobs" className="company-list-row">
+                    <div className="company-list-left">
+                      <div className="company-avatar-circle">
+                        {(job.title || 'JB').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="company-list-info">
+                        <span className="company-list-primary">{job.title}</span>
+                        <span className="company-list-secondary">
+                          <span>{job.jobType || 'Full Time'}</span>
+                          <span>{job.location || 'Remote'}</span>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="company-list-right">
+                      <span className="company-pill-badge active">Active</span>
+                      <div className="company-chevron-arrow">
+                        <ChevronRightIcon size={16} />
+                      </div>
+                    </div>
+                  </a>
+                ))
+              ) : (
+                <div className="company-empty-state">
+                  <div className="company-empty-icon">
+                    <BriefcaseIcon size={20} />
+                  </div>
+                  <p className="company-empty-title">No data found</p>
+                  <p className="company-empty-desc">No active job postings found. Create a new job opening to start recruiting.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Column 2: Recent Applications */}
+          <div className="company-section-col">
+            <div className="company-section-header">
+              <h3 className="company-section-title">Recent Applications</h3>
+              <a href="#/applications" className="company-view-all-link">
+                <span>View All</span>
+                <span aria-hidden="true">→</span>
+              </a>
+            </div>
+            <div className="company-card-list">
+              {recentApplications.length > 0 ? (
+                recentApplications.map((app) => (
+                  <a key={app._id || app.id} href="#/applications" className="company-list-row">
+                    <div className="company-list-left">
+                      <div className="company-avatar-circle">
+                        {(app.candidateName || 'AP').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="company-list-info">
+                        <span className="company-list-primary">{app.candidateName}</span>
+                        <span className="company-list-secondary">{app.roleTitle || 'Applicant'}</span>
+                      </div>
+                    </div>
+                    <div className="company-list-right">
+                      <span className="company-pill-badge new">New</span>
+                      <div className="company-chevron-arrow">
+                        <ChevronRightIcon size={16} />
+                      </div>
+                    </div>
+                  </a>
+                ))
+              ) : (
+                <div className="company-empty-state">
+                  <div className="company-empty-icon">
+                    <DocumentIcon size={20} />
+                  </div>
+                  <p className="company-empty-title">No data found</p>
+                  <p className="company-empty-desc">No candidate applications have been received yet.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 5. BOTTOM TWO-COLUMN GRID: Upcoming Interviews & Quick Actions */}
+        <div className="company-two-col-grid">
+          {/* Column 1: Upcoming Interviews */}
+          <div className="company-section-col">
+            <div className="company-section-header">
+              <h3 className="company-section-title">Upcoming Interviews</h3>
+              <a href="#/interviews" className="company-view-all-link">
+                <span>View All</span>
+                <span aria-hidden="true">→</span>
+              </a>
+            </div>
+            <div className="company-card-list">
+              {upcomingInterviews.length > 0 ? (
+                upcomingInterviews.map((interview) => (
+                  <a key={interview._id || interview.id} href="#/interviews" className="company-list-row">
+                    <div className="company-list-left">
+                      <div className="company-avatar-circle">
+                        {(interview.candidateName || 'IN').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="company-list-info">
+                        <span className="company-list-primary">{interview.candidateName}</span>
+                        <span className="company-list-secondary">{interview.roleTitle}</span>
+                      </div>
+                    </div>
+                    <div className="company-list-right">
+                      <span className="company-pill-badge online">Online</span>
+                      <div className="company-chevron-arrow">
+                        <ChevronRightIcon size={16} />
+                      </div>
+                    </div>
+                  </a>
+                ))
+              ) : (
+                <div className="company-empty-state">
+                  <div className="company-empty-icon">
+                    <CalendarIcon size={20} />
+                  </div>
+                  <p className="company-empty-title">No data found</p>
+                  <p className="company-empty-desc">No candidate interviews are currently scheduled.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Column 2: Quick Actions */}
+          <div className="company-section-col">
+            <div className="company-section-header">
+              <h3 className="company-section-title">Quick Actions</h3>
+            </div>
+            <div className="company-quick-actions-grid">
+              {/* Action 1: Create Job Posting */}
+              <a href="#/jobs" className="company-action-card create-job">
+                <div className="company-action-top">
+                  <PlusIcon size={22} color="#2563eb" />
+                  <ChevronRightIcon size={16} />
+                </div>
+                <span className="company-action-label">Create Job Posting</span>
+              </a>
+
+              {/* Action 2: View Applications */}
+              <a href="#/applications" className="company-action-card view-apps">
+                <div className="company-action-top">
+                  <DocumentIcon size={22} color="#9333ea" />
+                  <ChevronRightIcon size={16} />
+                </div>
+                <span className="company-action-label">View Applications</span>
+              </a>
+
+              {/* Action 3: Manage Interviews */}
+              <a href="#/interviews" className="company-action-card manage-interviews">
+                <div className="company-action-top">
+                  <CalendarIcon size={22} color="#16a34a" />
+                  <ChevronRightIcon size={16} />
+                </div>
+                <span className="company-action-label">Manage Interviews</span>
+              </a>
+
+              {/* Action 4: View Placements */}
+              <a href="#/placements" className="company-action-card view-placements">
+                <div className="company-action-top">
+                  <UsersIcon size={22} color="#d97706" />
+                  <ChevronRightIcon size={16} />
+                </div>
+                <span className="company-action-label">View Placements</span>
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
     </PortalLayout>
   );

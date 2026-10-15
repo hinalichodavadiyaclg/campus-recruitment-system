@@ -496,9 +496,47 @@ a { color: inherit; text-decoration: none; }
 
 .sidebar-footer {
   margin-top: 24px;
-  padding: 12px;
-  background: #ffffff0e;
-  border-radius: 9px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-user-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.sidebar-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #1d68ff;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.5px;
+}
+
+.sidebar-user-status-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 10px;
+  height: 10px;
+  background: #10b981;
+  border: 2px solid #0d2c5e;
+  border-radius: 50%;
+}
+
+.sidebar-user-info {
+  min-width: 0;
+  flex: 1;
 }
 
 .sidebar-footer strong, .sidebar-footer span {
@@ -510,13 +548,14 @@ a { color: inherit; text-decoration: none; }
 
 .sidebar-footer strong {
   color: #fff;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .sidebar-footer span {
-  margin-top: 4px;
+  margin-top: 2px;
   color: #9fb5ce;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
 }
 
 .main {

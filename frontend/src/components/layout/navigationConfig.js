@@ -144,7 +144,7 @@ export const NAVIGATION_GROUPS = [
   {
     id: 'group-system',
     divider: true,
-    label: 'SYSTEM',
+    label: 'OTHER',
     items: [
       {
         id: 'nav-settings',
