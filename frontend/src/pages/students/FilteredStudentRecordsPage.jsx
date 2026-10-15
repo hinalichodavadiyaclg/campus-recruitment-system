@@ -358,7 +358,7 @@ export function FilteredStudentRecordsPage() {
               >
                 <option value="">
                   {!isCoordinator && !departmentFilter
-                    ? 'Select Department First'
+                    ? 'Courses'
                     : availableCourses.length === 0
                     ? 'No courses'
                     : 'All Courses'}

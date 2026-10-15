@@ -281,8 +281,8 @@ export function UsersListPage() {
         const pDeptId = po.departmentId?._id
           ? String(po.departmentId._id)
           : po.departmentId
-          ? String(po.departmentId)
-          : '';
+            ? String(po.departmentId)
+            : '';
         if (pDeptId) {
           if (pDeptId !== String(officerDepartmentFilter)) return false;
         } else if (po.department) {
@@ -323,9 +323,9 @@ export function UsersListPage() {
   const formatDate = (value) =>
     value
       ? new Intl.DateTimeFormat(undefined, {
-          dateStyle: 'medium',
-          timeStyle: 'short'
-        }).format(new Date(value))
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      }).format(new Date(value))
       : '—';
 
   const formatRoleLabel = (role) => {
@@ -449,7 +449,7 @@ export function UsersListPage() {
               item.universityId === u.universityId ||
               item.email?.toLowerCase() === u.email?.toLowerCase()
           );
-        } catch (_) {}
+        } catch (_) { }
       }
       if (s) {
         setEditingStudent(s);
@@ -469,7 +469,7 @@ export function UsersListPage() {
       if (!c && u.companyId) {
         try {
           c = await companyService.getCompany(u.companyId);
-        } catch (_) {}
+        } catch (_) { }
       }
       if (c) {
         setEditingCompany(c);
@@ -728,10 +728,10 @@ export function UsersListPage() {
                 >
                   <option value="">
                     {!isCoordinator && !studentDepartmentFilter
-                      ? 'Select Department First'
+                      ? 'Courses'
                       : availableCourses.length === 0
-                      ? 'No courses available'
-                      : 'All Courses'}
+                        ? 'No courses available'
+                        : 'All Courses'}
                   </option>
                   {availableCourses.map((c) => (
                     <option key={c._id} value={String(c._id)}>
@@ -1353,24 +1353,22 @@ export function UsersListPage() {
       <ConfirmModal
         isOpen={Boolean(deleteAllConfirm)}
         onClose={() => setDeleteAllConfirm(null)}
-        title={`Delete All ${
-          deleteAllConfirm?.type === 'students'
-            ? 'Students'
-            : deleteAllConfirm?.type === 'company'
+        title={`Delete All ${deleteAllConfirm?.type === 'students'
+          ? 'Students'
+          : deleteAllConfirm?.type === 'company'
             ? 'Companies'
             : deleteAllConfirm?.type === 'placement'
-            ? 'Placement Officers'
-            : 'User Accounts'
-        }`}
-        message={`Are you sure you want to delete ALL matching ${
-          deleteAllConfirm?.type === 'students'
-            ? 'student profiles and linked accounts'
-            : deleteAllConfirm?.type === 'company'
+              ? 'Placement Officers'
+              : 'User Accounts'
+          }`}
+        message={`Are you sure you want to delete ALL matching ${deleteAllConfirm?.type === 'students'
+          ? 'student profiles and linked accounts'
+          : deleteAllConfirm?.type === 'company'
             ? 'company profiles and recruiter accounts'
             : deleteAllConfirm?.type === 'placement'
-            ? 'placement officer profiles (excluding your current account)'
-            : 'user accounts (excluding your active logged-in account)'
-        }? This action cannot be undone.`}
+              ? 'placement officer profiles (excluding your current account)'
+              : 'user accounts (excluding your active logged-in account)'
+          }? This action cannot be undone.`}
         confirmLabel="Delete All"
         danger={true}
         onConfirm={handleDeleteAll}
