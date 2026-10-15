@@ -4,11 +4,45 @@ import { Permission } from '../models/permission.model.js';
 import { Role } from '../models/role.model.js';
 import { User } from '../models/user.model.js';
 import { UserSession } from '../models/user-session.model.js';
+import { PlacementOfficer } from '../models/placement_officer.model.js';
+import { Department } from '../models/department.model.js';
+import { ROLE_IDS } from '../utils/access-constants.js';
 import { AppError } from '../utils/app-error.js';
 import { logActivity } from '../utils/logger.js';
 import { assertStrongPassword, DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from '../utils/password.js';
 import { createRawSessionToken, hashSessionToken, passwordHashVersion } from '../utils/session-token.js';
 import { toSafeUser } from './user.service.js';
+
+async function enrichSafeUser(safeUser, user) {
+  if (user.roleId === ROLE_IDS.PLACEMENT_COORDINATOR || user.userType === 'PLACEMENT') {
+    const officer = await PlacementOfficer.findOne({ userId: user._id || safeUser._id }).lean();
+    if (officer) {
+      if (!safeUser.employeeId) safeUser.employeeId = officer.employeeId;
+      safeUser.department = officer.department;
+      safeUser.departmentId = officer.departmentId ? String(officer.departmentId) : undefined;
+      if (officer.departmentId) {
+        const dept = await Department.findById(officer.departmentId).lean();
+        if (dept) {
+          safeUser.departmentName = dept.name;
+          safeUser.departmentCode = dept.code;
+        }
+      } else if (officer.department) {
+        const dept = await Department.findOne({
+          $or: [
+            { name: new RegExp(`^${officer.department.trim()}$`, 'i') },
+            { code: new RegExp(`^${officer.department.trim()}$`, 'i') }
+          ]
+        }).lean();
+        if (dept) {
+          safeUser.departmentId = String(dept._id);
+          safeUser.departmentName = dept.name;
+          safeUser.departmentCode = dept.code;
+        }
+      }
+    }
+  }
+  return safeUser;
+}
 
 async function ensureRoleIsActive(roleId) {
   const role = await Role.exists({ _id: roleId, isActive: true });
@@ -80,7 +114,8 @@ export async function login({ email: loginId, password, ipAddress, userAgent }) 
     isActive: true
   });
   logActivity('auth.login.succeeded', { userId: String(user._id) });
-  return { user: toSafeUser(user), sessionToken, expiresAt };
+  const safeUser = await enrichSafeUser(toSafeUser(user), user);
+  return { user: safeUser, sessionToken, expiresAt };
 }
 
 export async function authenticateSession(rawToken) {
@@ -122,8 +157,10 @@ export async function getCurrentUser(userId) {
   }).lean();
   const activePermissionIds = activePermissions.map((p) => p._id);
 
+  const safeUser = await enrichSafeUser(toSafeUser(user), user);
+
   return {
-    user: toSafeUser(user),
+    user: safeUser,
     role: { id: role._id, name: role.name, description: role.description },
     permissions: activePermissions,
     permissionIds: activePermissionIds

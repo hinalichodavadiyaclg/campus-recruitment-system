@@ -8,8 +8,9 @@ import { ROLE_IDS } from '../utils/access-constants.js';
 import { AppError } from '../utils/app-error.js';
 import { hashPassword } from '../utils/password.js';
 import { PROTECTED_STUDENT_FIELDS, STUDENT_EDITABLE_FIELDS } from '../utils/profile-permissions.js';
+import { getCoordinatorDepartment } from '../utils/department-scope.js';
 
-export async function listStudents({ page = 1, limit = 20, search }) {
+export async function listStudents({ page = 1, limit = 20, search, departmentId, department, courseId, branch, semester, minCgpa, backlogs } = {}, auth = null) {
   const query = {};
   if (search) {
     const regex = new RegExp(search.trim(), 'i');
@@ -22,6 +23,55 @@ export async function listStudents({ page = 1, limit = 20, search }) {
       { department: regex }
     ];
   }
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    // Coordinators can ONLY see students belonging to their assigned department
+    query.$and = query.$and || [];
+    query.$and.push({
+      $or: [
+        { departmentId: coordDept.departmentId },
+        { department: new RegExp(`^${coordDept.departmentName.trim()}$`, 'i') }
+      ]
+    });
+
+    if (departmentId || department) {
+      if (departmentId && mongoose.Types.ObjectId.isValid(departmentId)) {
+        query.$and.push({ departmentId });
+      } else if (department) {
+        query.$and.push({ department: new RegExp(department.trim(), 'i') });
+      }
+    }
+  } else if (departmentId || department) {
+    if (departmentId && mongoose.Types.ObjectId.isValid(departmentId)) {
+      query.departmentId = departmentId;
+    } else if (department) {
+      query.department = new RegExp(department.trim(), 'i');
+    }
+  }
+
+  if (courseId || branch) {
+    if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
+      query.courseId = courseId;
+    } else if (branch) {
+      query.branch = new RegExp(branch.trim(), 'i');
+    }
+  }
+
+  if (semester !== undefined && semester !== '') {
+    query.semester = Number(semester);
+  }
+  if (minCgpa !== undefined && minCgpa !== '') {
+    query.cgpa = { $gte: Number(minCgpa) };
+  }
+  if (backlogs !== undefined && backlogs !== '') {
+    if (backlogs === '0' || backlogs === 'zero') query.backlogs = 0;
+    else if (backlogs === 'max1') query.backlogs = { $lte: 1 };
+    else if (backlogs === 'max2') query.backlogs = { $lte: 2 };
+    else if (backlogs === 'has') query.backlogs = { $gt: 0 };
+    else if (!isNaN(Number(backlogs))) query.backlogs = { $lte: Number(backlogs) };
+  }
+
   const [items, total] = await Promise.all([
     Student.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     Student.countDocuments(query)
@@ -29,13 +79,32 @@ export async function listStudents({ page = 1, limit = 20, search }) {
   return { items, page, limit, total };
 }
 
-export async function getStudentById(id) {
+export async function getStudentById(id, auth = null) {
   const student = await Student.findById(id).lean();
   if (!student) throw new AppError(404, 'STUDENT_NOT_FOUND', 'Student profile not found.');
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    const matchesDeptId = student.departmentId && String(student.departmentId) === String(coordDept.departmentId);
+    const matchesDeptName = student.department && student.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase();
+    if (!matchesDeptId && !matchesDeptName) {
+      throw new AppError(403, 'FORBIDDEN', 'You are not authorized to access students from another department.');
+    }
+  }
+
   return student;
 }
 
-export async function createStudent(input) {
+export async function createStudent(input, auth = null) {
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    if (input.departmentId && String(input.departmentId) !== String(coordDept.departmentId)) {
+      throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators can only create students in their assigned department.');
+    }
+    input.departmentId = coordDept.departmentId;
+    input.department = coordDept.departmentName;
+  }
+
   const email = input.email.toLowerCase().trim();
   const universityId = input.universityId.trim().toUpperCase();
 
@@ -186,9 +255,23 @@ export async function createStudent(input) {
   }
 }
 
-export async function updateStudent(id, input) {
+export async function updateStudent(id, input, auth = null) {
   const student = await Student.findById(id);
   if (!student) throw new AppError(404, 'STUDENT_NOT_FOUND', 'Student profile not found.');
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    const matchesDeptId = student.departmentId && String(student.departmentId) === String(coordDept.departmentId);
+    const matchesDeptName = student.department && student.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase();
+    if (!matchesDeptId && !matchesDeptName) {
+      throw new AppError(403, 'FORBIDDEN', 'You are not authorized to update students from another department.');
+    }
+    if (input.departmentId && String(input.departmentId) !== String(coordDept.departmentId)) {
+      throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators cannot reassign students to another department.');
+    }
+    input.departmentId = coordDept.departmentId;
+    input.department = coordDept.departmentName;
+  }
 
   if (input.email && input.email.toLowerCase().trim() !== student.email) {
     const newEmail = input.email.toLowerCase().trim();
@@ -291,7 +374,20 @@ export async function getPublicStudentProfile(id, requestUser = null) {
   if (!student) throw new AppError(404, 'STUDENT_NOT_FOUND', 'Student profile not found.');
 
   const isOwner = requestUser && String(student.userId) === String(requestUser.userId);
-  const isAuthorizedStaff = requestUser && ['ROLE_SUPER_ADMIN', 'ROLE_PLACEMENT_HEAD', 'ROLE_PLACEMENT_COORDINATOR'].includes(requestUser.roleId);
+  let isAuthorizedStaff = false;
+
+  if (requestUser) {
+    if (['ROLE_SUPER_ADMIN', 'ROLE_PLACEMENT_HEAD'].includes(requestUser.roleId)) {
+      isAuthorizedStaff = true;
+    } else if (requestUser.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
+      const coordDept = await getCoordinatorDepartment(requestUser);
+      if (coordDept) {
+        const matchesDeptId = student.departmentId && String(student.departmentId) === String(coordDept.departmentId);
+        const matchesDeptName = student.department && student.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase();
+        isAuthorizedStaff = Boolean(matchesDeptId || matchesDeptName);
+      }
+    }
+  }
 
   if (!student.isPublicProfile && !isOwner && !isAuthorizedStaff) {
     throw new AppError(403, 'PROFILE_PRIVATE', 'This student profile is currently set to private.');
@@ -530,9 +626,18 @@ export async function deleteAchievement(userId, achievementId) {
   return { message: 'Achievement deleted successfully.' };
 }
 
-export async function deleteStudent(id) {
+export async function deleteStudent(id, auth = null) {
   const student = await Student.findById(id);
   if (!student) throw new AppError(404, 'STUDENT_NOT_FOUND', 'Student profile not found.');
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    const matchesDeptId = student.departmentId && String(student.departmentId) === String(coordDept.departmentId);
+    const matchesDeptName = student.department && student.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase();
+    if (!matchesDeptId && !matchesDeptName) {
+      throw new AppError(403, 'FORBIDDEN', 'You are not authorized to delete students from another department.');
+    }
+  }
 
   const userOr = [];
   if (student.userId) userOr.push({ _id: student.userId });

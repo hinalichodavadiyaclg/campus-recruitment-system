@@ -47,7 +47,7 @@ export const validateImport = asyncHandler(async (request, response) => {
     throw new AppError(400, 'NO_DATA_PROVIDED', 'Please provide an Excel/CSV file or rows payload.');
   }
 
-  const result = await importService.validateImportRows(type, inputSource, options);
+  const result = await importService.validateImportRows(type, inputSource, options, request.auth);
   return sendSuccess(response, 200, result);
 });
 
@@ -64,7 +64,7 @@ export const confirmImport = asyncHandler(async (request, response) => {
     throw new AppError(400, 'NO_DATA_PROVIDED', 'Please provide rows or file to import.');
   }
 
-  const result = await importService.confirmImport(type, inputSource, options);
+  const result = await importService.confirmImport(type, inputSource, options, request.auth);
   return sendSuccess(response, 200, result);
 });
 
@@ -90,7 +90,7 @@ export const exportData = asyncHandler(async (request, response) => {
     semester,
     minCgpa,
     backlogs
-  });
+  }, request.auth);
 
   const timestamp = new Date().toISOString().slice(0, 10);
   const filename = `${type}_${filtered ? 'filtered_' : 'all_'}${timestamp}.xlsx`;

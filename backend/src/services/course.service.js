@@ -2,15 +2,25 @@ import { Course } from '../models/course.model.js';
 import { Department } from '../models/department.model.js';
 import { Student } from '../models/student.model.js';
 import { AppError } from '../utils/app-error.js';
+import { getCoordinatorDepartment } from '../utils/department-scope.js';
 
-export async function listCourses({ page = 1, limit = 20, search, departmentId, level, isActive }) {
+export async function listCourses({ page = 1, limit = 20, search, departmentId, level, isActive } = {}, auth = null) {
   const query = {};
   if (isActive !== undefined) {
     query.isActive = isActive;
   }
-  if (departmentId) {
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    if (departmentId && String(departmentId) !== String(coordDept.departmentId)) {
+      query.departmentId = new mongoose.Types.ObjectId();
+    } else {
+      query.departmentId = coordDept.departmentId;
+    }
+  } else if (departmentId) {
     query.departmentId = departmentId;
   }
+
   if (level) {
     query.level = level;
   }
@@ -45,13 +55,25 @@ export async function listCourses({ page = 1, limit = 20, search, departmentId, 
       }
     }
 
+    const studentMatchQuery = {
+      $or: [
+        { courseId: { $in: courseIds } },
+        { branch: { $in: courseNames } }
+      ]
+    };
+    if (coordDept) {
+      studentMatchQuery.$and = [
+        {
+          $or: [
+            { departmentId: coordDept.departmentId },
+            { department: new RegExp(`^${coordDept.departmentName.trim()}$`, 'i') }
+          ]
+        }
+      ];
+    }
+
     const matchedStudents = await Student.find(
-      {
-        $or: [
-          { courseId: { $in: courseIds } },
-          { branch: { $in: courseNames } }
-        ]
-      },
+      studentMatchQuery,
       { _id: 1, courseId: 1, branch: 1 }
     ).lean();
 
@@ -76,22 +98,51 @@ export async function listCourses({ page = 1, limit = 20, search, departmentId, 
   return { items, page, limit, total };
 }
 
-export async function getCourseById(id) {
+export async function getCourseById(id, auth = null) {
   const course = await Course.findById(id).populate('departmentId', 'name code isActive').lean();
   if (!course) {
     throw new AppError(404, 'COURSE_NOT_FOUND', 'Course not found.');
   }
-  const studentCount = await Student.countDocuments({
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    const courseDeptId = course.departmentId?._id ? String(course.departmentId._id) : String(course.departmentId);
+    if (courseDeptId !== String(coordDept.departmentId)) {
+      throw new AppError(403, 'FORBIDDEN', 'You are not authorized to access courses from another department.');
+    }
+  }
+
+  const studentCountQuery = {
     $or: [
       { courseId: id },
       { branch: course.name }
     ]
-  });
+  };
+  if (coordDept) {
+    studentCountQuery.$and = [
+      {
+        $or: [
+          { departmentId: coordDept.departmentId },
+          { department: new RegExp(`^${coordDept.departmentName.trim()}$`, 'i') }
+        ]
+      }
+    ];
+  }
+
+  const studentCount = await Student.countDocuments(studentCountQuery);
   course.studentCount = studentCount;
   return course;
 }
 
-export async function createCourse(input) {
+export async function createCourse(input, auth = null) {
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    if (input.departmentId && String(input.departmentId) !== String(coordDept.departmentId)) {
+      throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators can only create courses in their assigned department.');
+    }
+    input.departmentId = coordDept.departmentId;
+  }
+
   const name = input.name.trim();
   const code = input.code.trim().toUpperCase();
   const departmentId = input.departmentId;
@@ -132,10 +183,22 @@ export async function createCourse(input) {
   }
 }
 
-export async function updateCourse(id, input) {
+export async function updateCourse(id, input, auth = null) {
   const course = await Course.findById(id);
   if (!course) {
     throw new AppError(404, 'COURSE_NOT_FOUND', 'Course not found.');
+  }
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    const courseDeptId = String(course.departmentId);
+    if (courseDeptId !== String(coordDept.departmentId)) {
+      throw new AppError(403, 'FORBIDDEN', 'You are not authorized to update courses from another department.');
+    }
+    if (input.departmentId && String(input.departmentId) !== String(coordDept.departmentId)) {
+      throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators cannot reassign courses to another department.');
+    }
+    input.departmentId = coordDept.departmentId;
   }
 
   if (input.departmentId && String(input.departmentId) !== String(course.departmentId)) {
@@ -180,10 +243,18 @@ export async function updateCourse(id, input) {
   return populated;
 }
 
-export async function setCourseStatus(id, isActive) {
+export async function setCourseStatus(id, isActive, auth = null) {
   const course = await Course.findById(id);
   if (!course) {
     throw new AppError(404, 'COURSE_NOT_FOUND', 'Course not found.');
+  }
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    const courseDeptId = String(course.departmentId);
+    if (courseDeptId !== String(coordDept.departmentId)) {
+      throw new AppError(403, 'FORBIDDEN', 'You are not authorized to modify course status from another department.');
+    }
   }
 
   course.isActive = Boolean(isActive);

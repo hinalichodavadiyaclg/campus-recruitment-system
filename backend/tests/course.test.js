@@ -17,7 +17,8 @@ const [
   { Course },
   { hashPassword },
   { createRawSessionToken, hashSessionToken },
-  { ROLE_IDS }
+  { ROLE_IDS },
+  { PlacementOfficer }
 ] = await Promise.all([
   import('../src/app.js'),
   import('../src/config/database.js'),
@@ -28,7 +29,8 @@ const [
   import('../src/models/course.model.js'),
   import('../src/utils/password.js'),
   import('../src/utils/session-token.js'),
-  import('../src/utils/access-constants.js')
+  import('../src/utils/access-constants.js'),
+  import('../src/models/placement_officer.model.js')
 ]);
 
 let app;
@@ -75,6 +77,7 @@ after(async () => {
 beforeEach(async () => {
   await Course.deleteMany({});
   await Department.deleteMany({});
+  await PlacementOfficer.deleteMany({});
 });
 
 test('Course API Integration Tests', async (t) => {
@@ -234,8 +237,20 @@ test('Course API Integration Tests', async (t) => {
   });
 
   await t.test('Placement Coordinator with COURSE_READ can view but cannot create or update', async () => {
-    const coordSession = await createAuthenticatedSession(ROLE_IDS.PLACEMENT_COORDINATOR);
     const dept = await Department.create({ name: 'Arts', code: 'ARTS', isActive: true });
+    const coordSession = await createAuthenticatedSession(ROLE_IDS.PLACEMENT_COORDINATOR);
+    await PlacementOfficer.create({
+      userId: coordSession.user._id,
+      employeeId: coordSession.user.employeeId,
+      firstName: 'Arts',
+      lastName: 'Coordinator',
+      email: coordSession.user.email,
+      mobileNumber: '9876543210',
+      designation: 'Assistant Professor',
+      department: dept.name,
+      departmentId: dept._id,
+      role: ROLE_IDS.PLACEMENT_COORDINATOR
+    });
     const course = await Course.create({
       name: 'BA History',
       code: 'BA-HIST',

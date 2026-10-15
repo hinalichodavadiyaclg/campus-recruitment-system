@@ -22,20 +22,30 @@ function getHashQueryParams() {
 }
 
 export function FilteredStudentRecordsPage() {
-  const { has } = useAuth();
+  const { user: currentUser, role, has } = useAuth();
   const { toast } = useToast();
+
+  const isCoordinator = role?.id === 'ROLE_PLACEMENT_COORDINATOR' || currentUser?.roleId === 'ROLE_PLACEMENT_COORDINATOR';
+  const coordinatorDeptId = currentUser?.departmentId;
 
   const queryParams = useMemo(() => getHashQueryParams(), []);
   const [search, setSearch] = useState(queryParams.get('search') || '');
-  const [departmentFilter, setDepartmentFilter] = useState(
-    queryParams.get('department') || queryParams.get('departmentId') || ''
-  );
-  const [courseFilter, setCourseFilter] = useState(
-    queryParams.get('course') || queryParams.get('courseId') || ''
-  );
+  const [departmentFilter, setDepartmentFilter] = useState(() => {
+    if (isCoordinator && coordinatorDeptId) return String(coordinatorDeptId);
+    return String(queryParams.get('department') || queryParams.get('departmentId') || '');
+  });
+  const [courseFilter, setCourseFilter] = useState(() => {
+    return String(queryParams.get('course') || queryParams.get('courseId') || '');
+  });
   const [semesterFilter, setSemesterFilter] = useState(queryParams.get('semester') || '');
   const [minCgpaFilter, setMinCgpaFilter] = useState(queryParams.get('cgpa') || queryParams.get('minCgpa') || '');
   const [backlogFilter, setBacklogFilter] = useState(queryParams.get('backlogs') || '');
+
+  useEffect(() => {
+    if (isCoordinator && coordinatorDeptId && departmentFilter !== String(coordinatorDeptId)) {
+      setDepartmentFilter(String(coordinatorDeptId));
+    }
+  }, [isCoordinator, coordinatorDeptId, departmentFilter]);
 
   const [students, setStudents] = useState([]);
   const [departmentsList, setDepartmentsList] = useState([]);
@@ -55,9 +65,25 @@ export function FilteredStudentRecordsPage() {
         departmentService.listDepartments({ limit: 100, isActive: true }).catch(() => ({ items: [] })),
         courseService.listCourses({ limit: 100, isActive: true }).catch(() => ({ items: [] }))
       ]);
+      const resolvedDepts = deptsData.items || deptsData || [];
+      const resolvedCourses = coursesData.items || coursesData || [];
       setStudents(studentsData.items || []);
-      setDepartmentsList(deptsData.items || deptsData || []);
-      setCoursesList(coursesData.items || coursesData || []);
+      setDepartmentsList(resolvedDepts);
+      setCoursesList(resolvedCourses);
+
+      // Auto-populate department filter when course filter was provided without explicit department
+      if (!isCoordinator) {
+        const activeCourseParam = queryParams.get('course') || queryParams.get('courseId');
+        if (activeCourseParam) {
+          const matchedCourse = resolvedCourses.find(
+            (c) => String(c._id) === String(activeCourseParam) || String(c.code).toLowerCase() === String(activeCourseParam).toLowerCase()
+          );
+          if (matchedCourse?.departmentId) {
+            const deptId = matchedCourse.departmentId._id ? String(matchedCourse.departmentId._id) : String(matchedCourse.departmentId);
+            setDepartmentFilter(deptId);
+          }
+        }
+      }
     } catch (err) {
       toast(err.message || 'Failed to load student records.');
     } finally {
@@ -70,24 +96,24 @@ export function FilteredStudentRecordsPage() {
   }, []);
 
   const availableCourses = useMemo(() => {
+    if (isCoordinator) {
+      if (coordinatorDeptId) {
+        const scoped = getAvailableCourses(coursesList, coordinatorDeptId);
+        return scoped.length > 0 ? scoped : coursesList;
+      }
+      return coursesList;
+    }
     return getAvailableCourses(coursesList, departmentFilter);
-  }, [coursesList, departmentFilter]);
+  }, [coursesList, departmentFilter, isCoordinator, coordinatorDeptId]);
 
   const handleDepartmentFilterChange = (newDeptId) => {
+    if (isCoordinator && coordinatorDeptId) return;
     setDepartmentFilter(newDeptId);
     setCurrentPage(1);
-    if (!newDeptId || shouldResetCourseSelection(courseFilter, newDeptId, coursesList)) {
+    if (newDeptId && shouldResetCourseSelection(courseFilter, newDeptId, coursesList)) {
       setCourseFilter('');
     }
   };
-
-  useEffect(() => {
-    if (!departmentFilter && courseFilter) {
-      setCourseFilter('');
-    } else if (shouldResetCourseSelection(courseFilter, departmentFilter, coursesList)) {
-      setCourseFilter('');
-    }
-  }, [departmentFilter, courseFilter, coursesList]);
 
   // Reset to page 1 on search or filter change
   const handleSearchChange = (val) => {
@@ -275,34 +301,42 @@ export function FilteredStudentRecordsPage() {
               />
             </div>
 
-            <div style={{ flex: '1 1 145px', minWidth: '130px' }}>
-              <label
-                htmlFor="filtered-dept-select"
-                style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', marginBottom: '5px', whiteSpace: 'nowrap' }}
-              >
-                Department
-              </label>
-              <select
-                id="filtered-dept-select"
-                value={departmentFilter}
-                onChange={(e) => handleDepartmentFilterChange(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '7px 8px',
-                  borderRadius: '7px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '0.84rem',
-                  backgroundColor: '#ffffff'
-                }}
-              >
-                <option value="">All Departments</option>
-                {departmentsList.map((d) => (
-                  <option key={d._id} value={d._id}>
-                    {d.name} {d.code ? `(${d.code})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!isCoordinator && (
+              <div style={{ flex: '1 1 145px', minWidth: '130px' }}>
+                <label
+                  htmlFor="filtered-dept-select"
+                  style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', marginBottom: '5px', whiteSpace: 'nowrap' }}
+                >
+                  Department
+                </label>
+                <select
+                  id="filtered-dept-select"
+                  value={String(departmentFilter || '')}
+                  disabled={isCoordinator && Boolean(coordinatorDeptId)}
+                  title={isCoordinator && Boolean(coordinatorDeptId) ? 'Department locked to your assigned department' : 'Filter by department'}
+                  onChange={(e) => handleDepartmentFilterChange(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '7px 8px',
+                    borderRadius: '7px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '0.84rem',
+                    backgroundColor: isCoordinator && Boolean(coordinatorDeptId) ? '#f1f5f9' : '#ffffff',
+                    cursor: isCoordinator && Boolean(coordinatorDeptId) ? 'not-allowed' : 'default',
+                    opacity: isCoordinator && Boolean(coordinatorDeptId) ? 0.85 : 1
+                  }}
+                >
+                  {!isCoordinator && <option value="">All Departments</option>}
+                  {departmentsList
+                    .filter((d) => !isCoordinator || !coordinatorDeptId || String(d._id) === String(coordinatorDeptId))
+                    .map((d) => (
+                      <option key={d._id} value={String(d._id)}>
+                        {d.name} {d.code ? `(${d.code})` : ''}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
 
             <div style={{ flex: '1 1 135px', minWidth: '120px' }}>
               <label
@@ -313,7 +347,7 @@ export function FilteredStudentRecordsPage() {
               </label>
               <select
                 id="filtered-course-select"
-                value={courseFilter}
+                value={String(courseFilter || '')}
                 onChange={(e) => {
                   setCourseFilter(e.target.value);
                   setCurrentPage(1);
@@ -334,7 +368,7 @@ export function FilteredStudentRecordsPage() {
                     : 'All Courses'}
                 </option>
                 {availableCourses.map((c) => (
-                  <option key={c._id} value={c._id}>
+                  <option key={c._id} value={String(c._id)}>
                     {c.name} {c.code ? `(${c.code})` : ''}
                   </option>
                 ))}
@@ -440,7 +474,7 @@ export function FilteredStudentRecordsPage() {
                   className="ghost"
                   onClick={() => {
                     setSearch('');
-                    setDepartmentFilter('');
+                    setDepartmentFilter(isCoordinator && coordinatorDeptId ? coordinatorDeptId : '');
                     setCourseFilter('');
                     setSemesterFilter('');
                     setMinCgpaFilter('');

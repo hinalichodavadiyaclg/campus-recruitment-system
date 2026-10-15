@@ -1,8 +1,9 @@
 import { Department } from '../models/department.model.js';
 import { Student } from '../models/student.model.js';
 import { AppError } from '../utils/app-error.js';
+import { getCoordinatorDepartment } from '../utils/department-scope.js';
 
-export async function listDepartments({ page = 1, limit = 20, search, isActive }) {
+export async function listDepartments({ page = 1, limit = 20, search, isActive }, auth = null) {
   const query = {};
   if (isActive !== undefined) {
     query.isActive = isActive;
@@ -10,6 +11,11 @@ export async function listDepartments({ page = 1, limit = 20, search, isActive }
   if (search) {
     const regex = new RegExp(search.trim(), 'i');
     query.$or = [{ name: regex }, { code: regex }, { description: regex }];
+  }
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    query._id = coordDept.departmentId;
   }
 
   const [items, total] = await Promise.all([
@@ -68,11 +74,17 @@ export async function listDepartments({ page = 1, limit = 20, search, isActive }
   return { items, page, limit, total };
 }
 
-export async function getDepartmentById(id) {
+export async function getDepartmentById(id, auth = null) {
   const department = await Department.findById(id).lean();
   if (!department) {
     throw new AppError(404, 'DEPARTMENT_NOT_FOUND', 'Department not found.');
   }
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept && String(department._id) !== String(coordDept.departmentId)) {
+    throw new AppError(403, 'FORBIDDEN', 'You are not authorized to access another department.');
+  }
+
   const studentCount = await Student.countDocuments({
     $or: [
       { departmentId: id },

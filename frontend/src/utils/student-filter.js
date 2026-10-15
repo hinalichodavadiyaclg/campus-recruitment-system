@@ -30,11 +30,15 @@ export function getAvailableCourses(courses = [], selectedDepartmentId = '') {
  * @returns {boolean} True if the course is incompatible and should be reset.
  */
 export function shouldResetCourseSelection(currentCourseId, newDepartmentId, courses = []) {
-  if (!currentCourseId || !newDepartmentId) return false;
-  const course = courses.find((c) => String(c?._id) === String(currentCourseId));
-  if (!course) return true;
+  if (!currentCourseId || !newDepartmentId || !Array.isArray(courses) || courses.length === 0) return false;
+  const course = courses.find((c) =>
+    String(c?._id) === String(currentCourseId) ||
+    String(c?.code || '').toLowerCase() === String(currentCourseId).toLowerCase() ||
+    String(c?.name || '').toLowerCase() === String(currentCourseId).toLowerCase()
+  );
+  if (!course) return false;
   const cDeptId = course?.departmentId?._id ? String(course.departmentId._id) : (course?.departmentId ? String(course.departmentId) : '');
-  return cDeptId !== String(newDepartmentId);
+  return Boolean(cDeptId && String(cDeptId) !== String(newDepartmentId));
 }
 
 /**

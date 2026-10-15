@@ -3,13 +3,13 @@ import { sendSuccess } from '../utils/api-response.js';
 
 export async function list(req, res) {
   const queryParams = res.locals.input?.query || req.query || {};
-  const result = await departmentService.listDepartments(queryParams);
+  const result = await departmentService.listDepartments(queryParams, req.auth);
   return sendSuccess(res, 200, result);
 }
 
 export async function getById(req, res) {
   const id = res.locals.input?.params?.id || req.params.id;
-  const department = await departmentService.getDepartmentById(id);
+  const department = await departmentService.getDepartmentById(id, req.auth);
   return sendSuccess(res, 200, department);
 }
 

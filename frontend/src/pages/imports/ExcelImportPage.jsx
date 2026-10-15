@@ -41,6 +41,12 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
   const [createNew, setCreateNew] = useState(true);
   const [updateExisting, setUpdateExisting] = useState(true);
 
+  useEffect(() => {
+    if (currentType === 'placement' && !has('PLACEMENT_USER_IMPORT')) {
+      setCurrentType('student');
+    }
+  }, [currentType, has]);
+
   const type = currentType;
 
   const titles = {
@@ -257,42 +263,44 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
           </div>
 
           {/* Placement Cell Module */}
-          <div
-            onClick={() => !validating && !importing && handleTypeChange('placement')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px',
-              padding: '16px 20px',
-              borderRadius: '12px',
-              cursor: validating || importing ? 'not-allowed' : 'pointer',
-              border: type === 'placement' ? '2px solid #2563eb' : '1px solid #e2e8f0',
-              background: type === 'placement' ? '#eff6ff' : '#ffffff',
-              boxShadow: type === 'placement' ? '0 2px 8px rgba(37,99,235,0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
-              transition: 'all 0.15s ease'
-            }}
-          >
+          {has('PLACEMENT_USER_IMPORT') && (
             <div
+              onClick={() => !validating && !importing && handleTypeChange('placement')}
               style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '12px',
-                background: type === 'placement' ? '#dbeafe' : '#f1f5f9',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.5rem',
-                flexShrink: 0
+                gap: '16px',
+                padding: '16px 20px',
+                borderRadius: '12px',
+                cursor: validating || importing ? 'not-allowed' : 'pointer',
+                border: type === 'placement' ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                background: type === 'placement' ? '#eff6ff' : '#ffffff',
+                boxShadow: type === 'placement' ? '0 2px 8px rgba(37,99,235,0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
+                transition: 'all 0.15s ease'
               }}
             >
-              <UsersIcon size={24} color={type === 'placement' ? '#1e3a8a' : '#64748b'} />
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '12px',
+                  background: type === 'placement' ? '#dbeafe' : '#f1f5f9',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.5rem',
+                  flexShrink: 0
+                }}
+              >
+                <UsersIcon size={24} color={type === 'placement' ? '#1e3a8a' : '#64748b'} />
+              </div>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: type === 'placement' ? '#1e3a8a' : '#0f172a' }}>
+                  Placement Cell Module
+                </h4>
+              </div>
             </div>
-            <div>
-              <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: type === 'placement' ? '#1e3a8a' : '#0f172a' }}>
-                Placement Cell Module
-              </h4>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Step 1 & Step 2 Cards (Two Columns Grid) */}

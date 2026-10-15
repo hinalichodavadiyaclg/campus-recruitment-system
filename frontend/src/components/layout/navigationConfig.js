@@ -45,7 +45,7 @@ export const NAVIGATION_GROUPS = [
         label: 'Departments',
         path: '/departments',
         icon: 'BuildingIcon',
-        permission: PERMISSION_IDS.DEPARTMENT_READ
+        permission: PERMISSION_IDS.DEPARTMENT_MANAGE
       },
       {
         id: 'nav-courses',

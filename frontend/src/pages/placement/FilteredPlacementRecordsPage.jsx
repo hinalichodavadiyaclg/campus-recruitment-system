@@ -55,47 +55,29 @@ export function FilteredPlacementRecordsPage() {
   const handleRoleFilterChange = (newRole) => {
     setRoleFilter(newRole);
     setCurrentPage(1);
-    if (newRole !== 'ROLE_PLACEMENT_COORDINATOR') {
-      setDepartmentFilter('');
-    }
   };
 
   const filteredOfficers = useMemo(() => {
     const q = search.toLowerCase().trim();
     return officers.filter((p) => {
-      // 1. Role Filter matching
-      if (roleFilter === 'ROLE_PLACEMENT_HEAD') {
-        const isHead =
-          p.role === 'ROLE_PLACEMENT_HEAD' ||
-          p.role === 'PLACEMENT_HEAD' ||
-          p.designation?.toLowerCase().includes('head');
-        if (!isHead) return false;
-      } else if (roleFilter === 'ROLE_PLACEMENT_COORDINATOR') {
-        const isCoordinator =
-          p.role === 'ROLE_PLACEMENT_COORDINATOR' ||
-          p.role === 'PLACEMENT_COORDINATOR' ||
-          p.designation?.toLowerCase().includes('coordinator');
-        if (!isCoordinator) return false;
-
-        // Dynamic Department scoping (only when Placement Coordinator is selected)
-        if (departmentFilter) {
-          const pDeptId = p.departmentId?._id
-            ? String(p.departmentId._id)
-            : p.departmentId
-            ? String(p.departmentId)
-            : '';
-          if (pDeptId) {
-            if (pDeptId !== String(departmentFilter)) return false;
-          } else if (p.department) {
-            const matchedDept = departmentsList.find(
-              (d) =>
-                d.name?.toLowerCase() === p.department.toLowerCase() ||
-                d.code?.toLowerCase() === p.department.toLowerCase()
-            );
-            if (!matchedDept || String(matchedDept._id) !== String(departmentFilter)) return false;
-          } else {
-            return false;
-          }
+      // 1. Department matching (filters placement coordinators department-wise)
+      if (departmentFilter) {
+        const pDeptId = p.departmentId?._id
+          ? String(p.departmentId._id)
+          : p.departmentId
+          ? String(p.departmentId)
+          : '';
+        if (pDeptId) {
+          if (pDeptId !== String(departmentFilter)) return false;
+        } else if (p.department) {
+          const matchedDept = departmentsList.find(
+            (d) =>
+              d.name?.toLowerCase() === p.department.toLowerCase() ||
+              d.code?.toLowerCase() === p.department.toLowerCase()
+          );
+          if (!matchedDept || String(matchedDept._id) !== String(departmentFilter)) return false;
+        } else {
+          return false;
         }
       }
 
@@ -262,15 +244,18 @@ export function FilteredPlacementRecordsPage() {
 
             <div style={{ flex: '1 1 200px', minWidth: '160px' }}>
               <label
-                htmlFor="filtered-placement-role-select"
+                htmlFor="filtered-placement-dept-select"
                 style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', marginBottom: '5px', whiteSpace: 'nowrap' }}
               >
-                Placement Filter
+                Department
               </label>
               <select
-                id="filtered-placement-role-select"
-                value={roleFilter}
-                onChange={(e) => handleRoleFilterChange(e.target.value)}
+                id="filtered-placement-dept-select"
+                value={departmentFilter}
+                onChange={(e) => {
+                  setDepartmentFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
                 style={{
                   width: '100%',
                   padding: '7px 8px',
@@ -280,57 +265,22 @@ export function FilteredPlacementRecordsPage() {
                   backgroundColor: '#ffffff'
                 }}
               >
-                <option value="">All Placement Roles</option>
-                <option value="ROLE_PLACEMENT_HEAD">Placement Head</option>
-                <option value="ROLE_PLACEMENT_COORDINATOR">Placement Coordinator</option>
+                <option value="">All Departments</option>
+                {departmentsList.map((d) => (
+                  <option key={d._id} value={d._id}>
+                    {d.name} {d.code ? `(${d.code})` : ''}
+                  </option>
+                ))}
               </select>
             </div>
 
-            {/* Dynamic Department Filter — shown ONLY when Placement Coordinator is selected */}
-            {roleFilter === 'ROLE_PLACEMENT_COORDINATOR' && (
-              <div style={{ flex: '1 1 200px', minWidth: '160px' }}>
-                <label
-                  htmlFor="filtered-placement-dept-select"
-                  style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#1e40af', marginBottom: '5px', whiteSpace: 'nowrap' }}
-                >
-                  Department (Coordinator)
-                </label>
-                <select
-                  id="filtered-placement-dept-select"
-                  value={departmentFilter}
-                  onChange={(e) => {
-                    setDepartmentFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '7px 8px',
-                    borderRadius: '7px',
-                    border: '1.5px solid #3b82f6',
-                    fontSize: '0.84rem',
-                    backgroundColor: '#eff6ff',
-                    color: '#1e3a8a',
-                    fontWeight: 600
-                  }}
-                >
-                  <option value="">All Departments</option>
-                  {departmentsList.map((d) => (
-                    <option key={d._id} value={d._id}>
-                      {d.name} {d.code ? `(${d.code})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center' }}>
-              {(search || roleFilter || departmentFilter) && (
+              {(search || departmentFilter) && (
                 <button
                   type="button"
                   className="ghost"
                   onClick={() => {
                     setSearch('');
-                    setRoleFilter('');
                     setDepartmentFilter('');
                     setCurrentPage(1);
                   }}
