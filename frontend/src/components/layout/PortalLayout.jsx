@@ -55,7 +55,12 @@ import {
   ChartIcon,
   ImportIcon,
   SettingsIcon,
-  LogOutIcon
+  LogOutIcon,
+  SearchIcon,
+  BellIcon,
+  MenuIcon,
+  ChevronDownIcon,
+  ChevronRightIcon
 } from '../common/Icons.jsx';
 
 export {
@@ -109,6 +114,8 @@ export function PortalLayout({
 }) {
   const { user, role, loading, has, logout } = useAuth();
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const getInitials = (email = '') =>
     email
@@ -119,13 +126,17 @@ export function PortalLayout({
       .slice(0, 2)
       .toUpperCase() || 'U';
 
-  const getDisplayName = (u) =>
-    u?.email?.split('@')[0].replace(/[._-]/g, ' ') || 'Portal User';
+  const getDisplayName = (u) => {
+    if (u?.name) return u.name;
+    const fallback = u?.email?.split('@')[0].replace(/[._-]/g, ' ') || 'Portal User';
+    return fallback.replace(/\b\w/g, (c) => c.toUpperCase());
+  };
 
   const isNavActive = (route) => {
     if (!currentPath) return false;
     if (route === '/dashboard') return currentPath === '/dashboard';
-    if (route === '/profile') return currentPath === '/profile' || currentPath === '/change-password';
+    if (route === '/profile') return currentPath === '/profile';
+    if (route === '/settings') return currentPath === '/settings' || currentPath === '/change-password';
     return currentPath === route || currentPath.startsWith(route + '/');
   };
 
@@ -157,7 +168,10 @@ export function PortalLayout({
                         href={'#' + item.path}
                       >
                         <span className="nav-icon">{Icon ? <Icon /> : null}</span>
-                        {item.label}
+                        <span>{item.label}</span>
+                        {isNavActive(item.path) && (
+                          <ChevronRightIcon size={14} style={{ marginLeft: 'auto', flexShrink: 0 }} />
+                        )}
                       </a>
                       {Array.isArray(item.children) && item.children.length > 0 && (
                         <div className="nav-submenu">
@@ -191,14 +205,86 @@ export function PortalLayout({
         </nav>
 
         <div className="sidebar-footer">
-          <strong>{getDisplayName(user)}</strong>
-          <span>{role?.name || ''}</span>
+          <div className="sidebar-user-avatar-wrap">
+            <span className="sidebar-user-avatar">{getInitials(user?.email)}</span>
+            <span className="sidebar-user-status-dot" />
+          </div>
+          <div className="sidebar-user-info">
+            <strong>{getDisplayName(user)}</strong>
+            <span>{role?.name || ''}</span>
+          </div>
         </div>
       </aside>
 
       <section className="main">
         <header className="topbar">
-          <div className="breadcrumb">
+          <div className="topbar-left">
+            <button
+              className="topbar-menu-toggle"
+              type="button"
+              aria-label="Toggle navigation"
+              onClick={() => setSidebarOpen((prev) => !prev)}
+            >
+              <MenuIcon size={20} color="#334155" />
+            </button>
+            <div className="topbar-search">
+              <SearchIcon size={16} color="#94a3b8" />
+              <input
+                type="text"
+                placeholder="Search..."
+                className="topbar-search-input"
+              />
+            </div>
+          </div>
+
+          <div className="topbar-actions">
+            <button
+              className="topbar-icon-btn"
+              type="button"
+              aria-label="Notifications"
+              title="Notifications"
+            >
+              <BellIcon size={19} color="#475569" />
+              <span className="topbar-badge">3</span>
+            </button>
+
+            <div className="topbar-user-dropdown" style={{ position: 'relative' }}>
+              <button
+                className="topbar-user-btn"
+                type="button"
+                onClick={() => setUserMenuOpen((prev) => !prev)}
+              >
+                <span className="avatar-circle">{getInitials(user?.email)}</span>
+                <span className="user-email-text">{user?.email}</span>
+                <ChevronDownIcon size={14} color="#64748b" />
+              </button>
+              {userMenuOpen && (
+                <div className="topbar-dropdown-menu">
+                  <a
+                    className="topbar-dropdown-item"
+                    href="#/profile"
+                    onClick={() => setUserMenuOpen(false)}
+                  >
+                    <UserIcon size={16} /> My Account
+                  </a>
+                  <button
+                    className="topbar-dropdown-item danger"
+                    type="button"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      setLogoutModalOpen(true);
+                    }}
+                  >
+                    <LogOutIcon size={16} /> Log out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <main className="page">
+          <div className="page-breadcrumb">
             Campus Recruit <span> / </span>
             {section && (
               <>
@@ -207,22 +293,7 @@ export function PortalLayout({
             )}
             <b>{title}</b>
           </div>
-          <div className="topbar-actions">
-            <a className="user-pill" href="#/profile">
-              <span className="avatar">{getInitials(user?.email)}</span>
-              <span>{user?.email}</span>
-            </a>
-            <button
-              className="ghost"
-              type="button"
-              onClick={() => setLogoutModalOpen(true)}
-            >
-              <LogOutIcon size={15} /> Log out
-            </button>
-          </div>
-        </header>
 
-        <main className="page">
           <header className="page-header">
             <div>
               {!hideEyebrow && (category || role?.name) ? (

@@ -10,6 +10,14 @@ export const placementOfficerService = {
     return apiRequest(`/api/placement-officers${qs ? `?${qs}` : ''}`);
   },
 
+  getMyProfile: () => apiRequest('/api/placement-officers/me'),
+
+  updateMyProfile: (data) =>
+    apiRequest('/api/placement-officers/me', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+
   getPlacementOfficer: (id) => apiRequest(`/api/placement-officers/${id}`),
 
   createPlacementOfficer: (data) =>

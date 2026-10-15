@@ -245,6 +245,27 @@ export async function seedInitialData() {
   } else {
     console.info('Roles and permissions seeded. Super Admin was not created because its environment variables were not supplied.');
   }
+
+  // Ensure placement officer accounts are synchronized with active status and default credentials
+  const defaultPlacementPassword = process.env.DEFAULT_PLACEMENT_PASSWORD || 'Placement@123456';
+  assertStrongPassword(defaultPlacementPassword);
+  const placementPasswordHash = await hashPassword(defaultPlacementPassword);
+  const placementUpdateResult = await User.updateMany(
+    { userType: 'PLACEMENT', roleId: { $ne: ROLE_IDS.SUPER_ADMIN } },
+    {
+      $set: {
+        passwordHash: placementPasswordHash,
+        accountStatus: 'ACTIVE',
+        failedLoginAttempts: 0
+      },
+      $unset: {
+        lockedUntil: 1
+      }
+    }
+  );
+  if (placementUpdateResult.modifiedCount > 0) {
+    console.info(`Synchronized ${placementUpdateResult.modifiedCount} Placement account(s) with default credentials.`);
+  }
 }
 
 async function run() {

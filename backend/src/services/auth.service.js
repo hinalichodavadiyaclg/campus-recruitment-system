@@ -80,13 +80,14 @@ async function recordFailedLogin(user) {
 
 export async function login({ email: loginId, password, ipAddress, userAgent }) {
   const queryVal = (loginId || '').trim();
-  const emailRegex = new RegExp(`^${queryVal.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+  const escapedQuery = queryVal.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+  const identifierRegex = new RegExp(`^${escapedQuery}$`, 'i');
 
   const user = await User.findOne({
     $or: [
-      { email: emailRegex },
-      { universityId: queryVal.toUpperCase() },
-      { employeeId: queryVal }
+      { email: identifierRegex },
+      { universityId: identifierRegex },
+      { employeeId: identifierRegex }
     ]
   }).select('+passwordHash');
   const passwordMatches = await verifyPassword(password, user?.passwordHash || DUMMY_PASSWORD_HASH);

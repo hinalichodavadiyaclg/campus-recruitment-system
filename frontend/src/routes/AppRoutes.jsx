@@ -13,6 +13,7 @@ import { ResetSuccessPage } from '../pages/auth/ResetSuccessPage.jsx';
 import { DashboardPage } from '../pages/dashboard/DashboardPage.jsx';
 import { ProfilePage } from '../pages/profile/ProfilePage.jsx';
 import { ChangePasswordPage } from '../pages/profile/ChangePasswordPage.jsx';
+import { SettingsPage } from '../pages/settings/SettingsPage.jsx';
 
 // Users
 import { UsersListPage } from '../pages/users/UsersListPage.jsx';
@@ -28,6 +29,7 @@ import { FilteredCompanyRecordsPage } from '../pages/companies/FilteredCompanyRe
 import { CompanyMyProfilePage } from '../pages/companies/CompanyMyProfilePage.jsx';
 import { PlacementOfficersListPage } from '../pages/placement/PlacementOfficersListPage.jsx';
 import { FilteredPlacementRecordsPage } from '../pages/placement/FilteredPlacementRecordsPage.jsx';
+import { PlacementMyProfilePage } from '../pages/placement/PlacementMyProfilePage.jsx';
 import { DepartmentsListPage } from '../pages/departments/DepartmentsListPage.jsx';
 import { CoursesListPage } from '../pages/courses/CoursesListPage.jsx';
 
@@ -108,14 +110,28 @@ export function AppRoutes() {
 
   // Authenticated workspace routes
   if (pathname === '/dashboard') return <DashboardPage />;
-  if (pathname === '/profile') return <ProfilePage />;
+  if (pathname === '/profile') {
+    if (user?.userType === 'STUDENT' || role?.id === 'ROLE_STUDENT' || user?.roleId === 'ROLE_STUDENT') return <StudentMyProfilePage />;
+    if (user?.userType === 'COMPANY' || role?.id === 'ROLE_COMPANY' || user?.roleId === 'ROLE_COMPANY') return <CompanyMyProfilePage />;
+    if (user?.userType === 'PLACEMENT' || role?.id === 'ROLE_PLACEMENT_COORDINATOR' || role?.id === 'ROLE_PLACEMENT_HEAD' || user?.roleId === 'ROLE_PLACEMENT_COORDINATOR' || user?.roleId === 'ROLE_PLACEMENT_HEAD') {
+      return <PlacementMyProfilePage />;
+    }
+    return <ProfilePage />;
+  }
   if (pathname === '/my-profile') {
-    return (user?.userType === 'STUDENT' || role?.id === 'ROLE_STUDENT') ? <StudentMyProfilePage /> : <DashboardPage />;
+    if (user?.userType === 'STUDENT' || role?.id === 'ROLE_STUDENT' || user?.roleId === 'ROLE_STUDENT') return <StudentMyProfilePage />;
+    if (user?.userType === 'PLACEMENT' || role?.id === 'ROLE_PLACEMENT_COORDINATOR' || role?.id === 'ROLE_PLACEMENT_HEAD' || user?.roleId === 'ROLE_PLACEMENT_COORDINATOR' || user?.roleId === 'ROLE_PLACEMENT_HEAD') {
+      return <PlacementMyProfilePage />;
+    }
+    return <DashboardPage />;
+  }
+  if (pathname === '/placement-profile' || pathname === '/placement/profile') {
+    return <PlacementMyProfilePage />;
   }
   if (pathname === '/company-profile' || pathname === '/company/profile') {
-    return (user?.userType === 'COMPANY' || role?.id === 'ROLE_COMPANY') ? <CompanyMyProfilePage /> : <DashboardPage />;
+    return (user?.userType === 'COMPANY' || role?.id === 'ROLE_COMPANY' || user?.roleId === 'ROLE_COMPANY') ? <CompanyMyProfilePage /> : <DashboardPage />;
   }
-  if (pathname === '/change-password') return <ChangePasswordPage />;
+  if (pathname === '/change-password') return <SettingsPage />;
   if (pathname === '/first-login-password') return <ChangePasswordPage firstLogin={true} />;
 
   // Excel Data Import routes
@@ -244,7 +260,7 @@ export function AppRoutes() {
 
   // System settings module
   if (parts[0] === 'settings') {
-    return <NotFoundModulePage title="Settings" path="/settings" />;
+    return <SettingsPage />;
   }
 
   // Fallback: render Not found if route is unrecognized

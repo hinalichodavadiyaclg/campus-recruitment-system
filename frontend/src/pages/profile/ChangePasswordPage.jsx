@@ -3,8 +3,13 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { authService } from '../../services/auth.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { KeyIcon } from '../../components/common/Icons.jsx';
+import { SettingsPage } from '../settings/SettingsPage.jsx';
 
 export function ChangePasswordPage({ firstLogin = false }) {
+  if (!firstLogin) {
+    return <SettingsPage />;
+  }
+
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');

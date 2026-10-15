@@ -9,7 +9,7 @@ import { changePasswordSchema, forgotPasswordSchema, loginSchema, resetPasswordS
 
 const authenticationAttemptLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: env.isProduction ? 10 : 100,
   skip: () => env.nodeEnv === 'test',
   standardHeaders: true,
   legacyHeaders: false,

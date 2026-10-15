@@ -14,6 +14,19 @@ export const placementOfficerRouter = Router();
 
 placementOfficerRouter.use(authenticate);
 
+// Profile routes for the authenticated placement officer
+placementOfficerRouter.get(
+  '/me',
+  authorizeAnyPermission(PERMISSION_IDS.AUTH_READ_SELF, PERMISSION_IDS.USER_READ),
+  placementOfficerController.getMyProfile
+);
+placementOfficerRouter.put(
+  '/me',
+  authorizeAnyPermission(PERMISSION_IDS.AUTH_READ_SELF, PERMISSION_IDS.USER_UPDATE),
+  placementOfficerController.updateMyProfile
+);
+
+// Placement Cell management routes (restricted to authorized placement import/officer management)
 placementOfficerRouter.get(
   '/',
   authorizeAnyPermission(PERMISSION_IDS.PLACEMENT_USER_IMPORT, PERMISSION_IDS.USER_CREATE),

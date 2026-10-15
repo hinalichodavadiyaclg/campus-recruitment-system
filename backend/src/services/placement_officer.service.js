@@ -228,3 +228,86 @@ export async function deletePlacementOfficer(id) {
   await PlacementOfficer.findByIdAndDelete(id);
   return { message: 'Placement Officer and linked user account deleted successfully.' };
 }
+
+export async function getPlacementOfficerByUserId(userId) {
+  const user = await User.findById(userId).lean();
+  if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User account not found.');
+
+  const officer = await PlacementOfficer.findOne({
+    $or: [
+      { userId: user._id },
+      { email: user.email },
+      ...(user.employeeId ? [{ employeeId: user.employeeId }] : [])
+    ]
+  }).populate('departmentId', 'name code').lean();
+
+  if (officer) {
+    return {
+      ...officer,
+      accountStatus: user.accountStatus,
+      lastLoginAt: user.lastLoginAt,
+      userType: user.userType,
+      roleId: user.roleId
+    };
+  }
+
+  // Fallback if placement account does not yet have a separate PlacementOfficer document
+  const nameParts = (user.name || user.email.split('@')[0] || '').split(' ');
+  return {
+    _id: user._id,
+    userId: user._id,
+    employeeId: user.employeeId || 'TPC-001',
+    firstName: nameParts[0] || 'Placement',
+    lastName: nameParts.slice(1).join(' ') || 'Coordinator',
+    email: user.email,
+    designation: user.roleId === ROLE_IDS.PLACEMENT_HEAD ? 'Placement Head' : 'Placement Coordinator',
+    department: 'Training & Placement Cell',
+    role: user.roleId,
+    accountStatus: user.accountStatus,
+    lastLoginAt: user.lastLoginAt,
+    userType: user.userType,
+    roleId: user.roleId,
+    createdAt: user.createdAt
+  };
+}
+
+export async function updateMyPlacementProfile(userId, input = {}) {
+  const user = await User.findById(userId);
+  if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User account not found.');
+
+  let officer = await PlacementOfficer.findOne({
+    $or: [
+      { userId: user._id },
+      { email: user.email },
+      ...(user.employeeId ? [{ employeeId: user.employeeId }] : [])
+    ]
+  });
+
+  if (!officer) {
+    const nameParts = (user.name || user.email.split('@')[0] || '').split(' ');
+    officer = new PlacementOfficer({
+      userId: user._id,
+      employeeId: user.employeeId || 'TPC-001',
+      firstName: input.firstName?.trim() || nameParts[0] || 'Placement',
+      lastName: input.lastName?.trim() || nameParts.slice(1).join(' ') || 'Coordinator',
+      email: user.email,
+      designation: input.designation?.trim() || 'Placement Coordinator',
+      department: input.department?.trim() || 'Training & Placement Cell',
+      role: user.roleId || ROLE_IDS.PLACEMENT_COORDINATOR,
+      mobileNumber: input.mobileNumber?.trim()
+    });
+    await officer.save();
+    return officer.toObject();
+  }
+
+  if (input.firstName !== undefined) officer.firstName = input.firstName.trim();
+  if (input.lastName !== undefined) officer.lastName = input.lastName.trim();
+  if (input.mobileNumber !== undefined) officer.mobileNumber = input.mobileNumber ? input.mobileNumber.trim() : undefined;
+  if (input.designation !== undefined) officer.designation = input.designation.trim();
+  if (input.department !== undefined) officer.department = input.department.trim();
+  if (input.departmentId !== undefined) officer.departmentId = input.departmentId;
+
+  await officer.save();
+  return officer.toObject();
+}
+
