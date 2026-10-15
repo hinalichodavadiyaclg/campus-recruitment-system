@@ -198,12 +198,20 @@ export async function updateUser(id, input) {
   return toSafeUser(user);
 }
 
-export async function deleteUser(id, actorId) {
+export async function deleteUser(id, actorId, auth = null) {
   if (actorId && String(id) === String(actorId)) {
     throw new AppError(400, 'CANNOT_DELETE_SELF', 'You cannot delete your own currently logged-in account.');
   }
   const user = await getUserOrThrow(id);
   await guardFinalActiveSuperAdmin(user);
+
+  // Guard: Placement Coordinator cannot delete administrative or placement officer accounts
+  if (auth && (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR || auth.userType === 'PLACEMENT')) {
+    if (user.userType === 'PLACEMENT' || [ROLE_IDS.SUPER_ADMIN, ROLE_IDS.PLACEMENT_HEAD, ROLE_IDS.PLACEMENT_COORDINATOR].includes(user.roleId)) {
+      throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators are not authorized to delete administrative or placement officer accounts.');
+    }
+  }
+
   await invalidateUserSessions(user._id);
 
   // Cascade delete associated domain profiles (Student, Company, PlacementOfficer)

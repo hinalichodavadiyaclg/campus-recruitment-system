@@ -799,3 +799,15 @@ test('6.2 Placement Coordinator cannot read another department record by ID via 
   assert.equal(otherRes.status, 403);
   assert.equal(otherRes.body.success, false);
 });
+
+test('6.3 Placement Coordinator cannot delete other placement officers or administrators', async () => {
+  const coordA = await createCoordinatorSession(deptA);
+  const officerUser = await createAuthenticatedSession(ROLE_IDS.PLACEMENT_COORDINATOR, 'PLACEMENT');
+
+  const res = await request(app)
+    .delete(`/api/users/${officerUser.user._id}`)
+    .set('Authorization', `Bearer ${coordA.token}`);
+
+  assert.equal(res.status, 403);
+  assert.equal(res.body.success, false);
+});

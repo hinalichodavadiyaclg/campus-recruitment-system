@@ -533,7 +533,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_DELETE') && activeTab === 'company' && filteredCompanies.length > 0 && (
+      {!isCoordinator && has('USER_DELETE') && activeTab === 'company' && filteredCompanies.length > 0 && (
         <button
           className="danger"
           type="button"
@@ -544,7 +544,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_DELETE') && activeTab === 'placement' && filteredOfficers.length > 0 && (
+      {!isCoordinator && has('USER_DELETE') && activeTab === 'placement' && filteredOfficers.length > 0 && (
         <button
           className="danger"
           type="button"
@@ -555,7 +555,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_DELETE') && activeTab === 'all' && filteredUsers.length > 0 && (
+      {!isCoordinator && has('USER_DELETE') && activeTab === 'all' && filteredUsers.length > 0 && (
         <button
           className="danger"
           type="button"
@@ -1192,7 +1192,7 @@ export function UsersListPage() {
                               <a className="link-button" href={`#/users/${u._id}`}>
                                 View
                               </a>
-                              {has('USER_UPDATE') && (
+                              {has('USER_UPDATE') && (!isCoordinator || (u.userType !== 'PLACEMENT' && u.roleId !== 'ROLE_SUPER_ADMIN' && u.roleId !== 'ROLE_PLACEMENT_HEAD' && u.roleId !== 'ROLE_PLACEMENT_COORDINATOR')) && (
                                 <button
                                   className="link-button"
                                   type="button"
@@ -1201,7 +1201,7 @@ export function UsersListPage() {
                                   Edit
                                 </button>
                               )}
-                              {has('USER_DELETE') && (
+                              {has('USER_DELETE') && (!isCoordinator || (u.userType !== 'PLACEMENT' && u.roleId !== 'ROLE_SUPER_ADMIN' && u.roleId !== 'ROLE_PLACEMENT_HEAD' && u.roleId !== 'ROLE_PLACEMENT_COORDINATOR')) && (
                                 <button
                                   className="link-button"
                                   style={{ color: 'var(--red)' }}
