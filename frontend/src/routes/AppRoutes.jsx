@@ -78,9 +78,10 @@ export function AppRoutes() {
     return <Loading message="Loading your secure workspace…" />;
   }
 
-  const parts = route.split('/').filter(Boolean);
+  const [pathname] = route.split('?');
+  const parts = pathname.split('/').filter(Boolean);
   const isPublicProfileRoute = parts[0] === 'student-profile' || (parts[0] === 'students' && parts[2] === 'public');
-  const isPublic = PUBLIC_ROUTES.includes(route) || isPublicProfileRoute;
+  const isPublic = PUBLIC_ROUTES.includes(pathname) || isPublicProfileRoute;
 
   // Render public shareable profile route immediately if requested
   if (isPublicProfileRoute) {
@@ -95,21 +96,21 @@ export function AppRoutes() {
   }
 
   // If user is already authenticated and visits login
-  if (me && route === '/login') {
+  if (me && pathname === '/login') {
     window.location.hash = '#/dashboard';
     return <DashboardPage />;
   }
 
   // Public route rendering
-  if (route === '/login') return <LoginPage />;
-  if (route === '/forgot-password') return <ForgotPasswordPage />;
-  if (route === '/verify-reset') return <VerifyResetPage />;
-  if (route === '/reset-password') return <ResetPasswordPage />;
-  if (route === '/reset-success') return <ResetSuccessPage />;
+  if (pathname === '/login') return <LoginPage />;
+  if (pathname === '/forgot-password') return <ForgotPasswordPage />;
+  if (pathname === '/verify-reset') return <VerifyResetPage />;
+  if (pathname === '/reset-password') return <ResetPasswordPage />;
+  if (pathname === '/reset-success') return <ResetSuccessPage />;
 
   // Authenticated workspace routes
-  if (route === '/dashboard') return <DashboardPage />;
-  if (route === '/profile') {
+  if (pathname === '/dashboard') return <DashboardPage />;
+  if (pathname === '/profile') {
     if (user?.userType === 'STUDENT' || role?.id === 'ROLE_STUDENT' || user?.roleId === 'ROLE_STUDENT') return <StudentMyProfilePage />;
     if (user?.userType === 'COMPANY' || role?.id === 'ROLE_COMPANY' || user?.roleId === 'ROLE_COMPANY') return <CompanyMyProfilePage />;
     if (user?.userType === 'PLACEMENT' || role?.id === 'ROLE_PLACEMENT_COORDINATOR' || role?.id === 'ROLE_PLACEMENT_HEAD' || user?.roleId === 'ROLE_PLACEMENT_COORDINATOR' || user?.roleId === 'ROLE_PLACEMENT_HEAD') {
@@ -117,30 +118,30 @@ export function AppRoutes() {
     }
     return <ProfilePage />;
   }
-  if (route === '/my-profile') {
+  if (pathname === '/my-profile') {
     if (user?.userType === 'STUDENT' || role?.id === 'ROLE_STUDENT' || user?.roleId === 'ROLE_STUDENT') return <StudentMyProfilePage />;
     if (user?.userType === 'PLACEMENT' || role?.id === 'ROLE_PLACEMENT_COORDINATOR' || role?.id === 'ROLE_PLACEMENT_HEAD' || user?.roleId === 'ROLE_PLACEMENT_COORDINATOR' || user?.roleId === 'ROLE_PLACEMENT_HEAD') {
       return <PlacementMyProfilePage />;
     }
     return <DashboardPage />;
   }
-  if (route === '/placement-profile' || route === '/placement/profile') {
+  if (pathname === '/placement-profile' || pathname === '/placement/profile') {
     return <PlacementMyProfilePage />;
   }
-  if (route === '/company-profile' || route === '/company/profile') {
+  if (pathname === '/company-profile' || pathname === '/company/profile') {
     return (user?.userType === 'COMPANY' || role?.id === 'ROLE_COMPANY' || user?.roleId === 'ROLE_COMPANY') ? <CompanyMyProfilePage /> : <DashboardPage />;
   }
-  if (route === '/change-password') return <SettingsPage />;
-  if (route === '/first-login-password') return <ChangePasswordPage firstLogin={true} />;
+  if (pathname === '/change-password') return <SettingsPage />;
+  if (pathname === '/first-login-password') return <ChangePasswordPage firstLogin={true} />;
 
   // Excel Data Import routes
-  if (route === '/import' || route === '/import/student') {
+  if (pathname === '/import' || pathname === '/import/student') {
     return has('STUDENT_IMPORT') ? <ExcelImportPage type="student" /> : <NotFoundModulePage title="Import Data" path="/import" />;
   }
-  if (route === '/import/company') {
+  if (pathname === '/import/company') {
     return has('COMPANY_IMPORT') ? <ExcelImportPage type="company" /> : <NotFoundModulePage title="Import Companies" path="/import/company" />;
   }
-  if (route === '/import/placement') {
+  if (pathname === '/import/placement') {
     return has('PLACEMENT_USER_IMPORT') ? <ExcelImportPage type="placement" /> : <NotFoundModulePage title="Import Placement Cell" path="/import/placement" />;
   }
 
@@ -162,15 +163,20 @@ export function AppRoutes() {
   }
 
   if (parts[0] === 'placement-officers') {
+    const canAccessPlacementCell = has('PLACEMENT_USER_IMPORT') || has('USER_CREATE');
+    if (!canAccessPlacementCell) {
+      window.location.hash = '#/dashboard';
+      return <DashboardPage />;
+    }
     const subRoute = (parts[1] || '').split('?')[0];
     if (subRoute === 'filtered') {
-      return has('USER_READ') ? <FilteredPlacementRecordsPage /> : <NotFoundModulePage title="Placement Records" path="/placement-officers/filtered" />;
+      return <FilteredPlacementRecordsPage />;
     }
-    return has('USER_READ') ? <PlacementOfficersListPage /> : <DashboardPage />;
+    return <PlacementOfficersListPage />;
   }
 
   if (parts[0] === 'departments') {
-    if (!has('DEPARTMENT_READ')) {
+    if (!has('DEPARTMENT_MANAGE') && !has('DEPARTMENT_CREATE')) {
       window.location.hash = '#/dashboard';
       return <DashboardPage />;
     }

@@ -30,12 +30,35 @@ import {
   BriefcaseIcon
 } from '../../components/common/Icons.jsx';
 
+function getHashQueryParams() {
+  const hash = window.location.hash || '';
+  const qIdx = hash.indexOf('?');
+  return qIdx !== -1 ? new URLSearchParams(hash.slice(qIdx + 1)) : new URLSearchParams();
+}
+
 export function UsersListPage() {
-  const { user: currentUser, has } = useAuth();
+  const { user: currentUser, role, has } = useAuth();
   const { toast } = useToast();
 
+  const isCoordinator = role?.id === 'ROLE_PLACEMENT_COORDINATOR' || currentUser?.roleId === 'ROLE_PLACEMENT_COORDINATOR';
+  const coordinatorDeptId = currentUser?.departmentId;
+
+  const initialParams = useMemo(() => getHashQueryParams(), []);
+
   // Active Tab: 'all' | 'students' | 'company' | 'placement'
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabParam = initialParams.get('tab');
+    if (tabParam) return tabParam;
+    if (
+      initialParams.get('courseId') ||
+      initialParams.get('course') ||
+      initialParams.get('departmentId') ||
+      initialParams.get('department')
+    ) {
+      return 'students';
+    }
+    return 'all';
+  });
 
   // Data states
   const [users, setUsers] = useState([]);
@@ -54,11 +77,55 @@ export function UsersListPage() {
   // Department & Course data and filters for Student Management
   const [departmentsList, setDepartmentsList] = useState([]);
   const [coursesList, setCoursesList] = useState([]);
-  const [studentDepartmentFilter, setStudentDepartmentFilter] = useState('');
-  const [studentCourseFilter, setStudentCourseFilter] = useState('');
+  const [studentDepartmentFilter, setStudentDepartmentFilter] = useState(() => {
+    if (isCoordinator && coordinatorDeptId) return String(coordinatorDeptId);
+    return String(initialParams.get('departmentId') || initialParams.get('department') || '');
+  });
+  const [studentCourseFilter, setStudentCourseFilter] = useState(() => {
+    return String(initialParams.get('courseId') || initialParams.get('course') || '');
+  });
   const [studentSemesterFilter, setStudentSemesterFilter] = useState('');
   const [studentMinCgpaFilter, setStudentMinCgpaFilter] = useState('');
   const [studentBacklogFilter, setStudentBacklogFilter] = useState('');
+
+  useEffect(() => {
+    if (isCoordinator && coordinatorDeptId && studentDepartmentFilter !== String(coordinatorDeptId)) {
+      setStudentDepartmentFilter(String(coordinatorDeptId));
+    }
+  }, [isCoordinator, coordinatorDeptId, studentDepartmentFilter]);
+
+  // Synchronize on hash changes (e.g. redirected from Course or Department page)
+  useEffect(() => {
+    const applyHashParams = () => {
+      const params = getHashQueryParams();
+      const tabParam = params.get('tab');
+      const courseParam = params.get('courseId') || params.get('course');
+      const deptParam = params.get('departmentId') || params.get('department');
+
+      if (tabParam) {
+        setActiveTab(tabParam);
+      } else if (courseParam || deptParam) {
+        setActiveTab('students');
+      }
+
+      if (courseParam) {
+        setStudentCourseFilter(String(courseParam));
+      } else {
+        setStudentCourseFilter('');
+      }
+
+      if (!isCoordinator) {
+        if (deptParam) {
+          setStudentDepartmentFilter(String(deptParam));
+        } else if (!courseParam) {
+          setStudentDepartmentFilter('');
+        }
+      }
+    };
+
+    window.addEventListener('hashchange', applyHashParams);
+    return () => window.removeEventListener('hashchange', applyHashParams);
+  }, [isCoordinator]);
 
   // Placement Role & Department filter
   const [officerRoleFilter, setOfficerRoleFilter] = useState('');
@@ -83,6 +150,14 @@ export function UsersListPage() {
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(null);
   const [tempPasswordNotice, setTempPasswordNotice] = useState(null);
 
+  const canAccessPlacementOfficers = has('PLACEMENT_USER_IMPORT') || has('USER_CREATE');
+
+  useEffect(() => {
+    if (activeTab === 'placement' && !canAccessPlacementOfficers) {
+      setActiveTab('all');
+    }
+  }, [activeTab, canAccessPlacementOfficers]);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -99,7 +174,9 @@ export function UsersListPage() {
         has('ROLE_READ') ? roleService.listRoles() : Promise.resolve([]),
         studentService.listStudents({ limit: 100 }).catch(() => ({ items: [] })),
         companyService.listCompanies({ limit: 100 }).catch(() => ({ items: [] })),
-        placementOfficerService.listPlacementOfficers({ limit: 100 }).catch(() => ({ items: [] })),
+        canAccessPlacementOfficers
+          ? placementOfficerService.listPlacementOfficers({ limit: 100 }).catch(() => ({ items: [] }))
+          : Promise.resolve({ items: [] }),
         departmentService.listDepartments({ limit: 100, isActive: true }).catch(() => ({ items: [] })),
         courseService.listCourses({ limit: 100, isActive: true }).catch(() => ({ items: [] }))
       ]);
@@ -108,9 +185,24 @@ export function UsersListPage() {
       setRoles(rolesData || []);
       setStudents(studentsData.items || []);
       setCompanies(companiesData.items || []);
-      setOfficers(officersData.items || []);
-      setDepartmentsList(deptsData.items || deptsData || []);
-      setCoursesList(coursesData.items || coursesData || []);
+      const resolvedDepts = deptsData.items || deptsData || [];
+      const resolvedCourses = coursesData.items || coursesData || [];
+      setDepartmentsList(resolvedDepts);
+      setCoursesList(resolvedCourses);
+
+      // Auto-populate department filter when course was selected from URL without explicit department
+      if (!isCoordinator) {
+        const activeCourseParam = initialParams.get('courseId') || initialParams.get('course');
+        if (activeCourseParam) {
+          const matchedCourse = resolvedCourses.find(
+            (c) => String(c._id) === String(activeCourseParam) || String(c.code).toLowerCase() === String(activeCourseParam).toLowerCase()
+          );
+          if (matchedCourse?.departmentId) {
+            const deptId = matchedCourse.departmentId._id ? String(matchedCourse.departmentId._id) : String(matchedCourse.departmentId);
+            setStudentDepartmentFilter(deptId);
+          }
+        }
+      }
     } catch (err) {
       toast(err.message || 'Failed to load user management data');
     } finally {
@@ -140,23 +232,22 @@ export function UsersListPage() {
   }, [users, search, typeFilter, roleFilter, statusFilter]);
 
   const availableCourses = useMemo(() => {
+    if (isCoordinator) {
+      if (coordinatorDeptId) {
+        const scoped = getAvailableCourses(coursesList, coordinatorDeptId);
+        return scoped.length > 0 ? scoped : coursesList;
+      }
+      return coursesList;
+    }
     return getAvailableCourses(coursesList, studentDepartmentFilter);
-  }, [coursesList, studentDepartmentFilter]);
+  }, [coursesList, studentDepartmentFilter, isCoordinator, coordinatorDeptId]);
 
   const handleDepartmentFilterChange = (newDeptId) => {
     setStudentDepartmentFilter(newDeptId);
-    if (!newDeptId || shouldResetCourseSelection(studentCourseFilter, newDeptId, coursesList)) {
+    if (newDeptId && shouldResetCourseSelection(studentCourseFilter, newDeptId, coursesList)) {
       setStudentCourseFilter('');
     }
   };
-
-  useEffect(() => {
-    if (!studentDepartmentFilter && studentCourseFilter) {
-      setStudentCourseFilter('');
-    } else if (shouldResetCourseSelection(studentCourseFilter, studentDepartmentFilter, coursesList)) {
-      setStudentCourseFilter('');
-    }
-  }, [studentDepartmentFilter, studentCourseFilter, coursesList]);
 
   const filteredStudents = useMemo(() => {
     return filterStudents({
@@ -197,39 +288,24 @@ export function UsersListPage() {
   const filteredOfficers = useMemo(() => {
     const q = search.toLowerCase().trim();
     return officers.filter((po) => {
-      // 1. Role matching
-      if (officerRoleFilter === 'ROLE_PLACEMENT_HEAD') {
-        const isHead =
-          po.role === 'ROLE_PLACEMENT_HEAD' ||
-          po.role === 'PLACEMENT_HEAD' ||
-          po.designation?.toLowerCase().includes('head');
-        if (!isHead) return false;
-      } else if (officerRoleFilter === 'ROLE_PLACEMENT_COORDINATOR') {
-        const isCoordinator =
-          po.role === 'ROLE_PLACEMENT_COORDINATOR' ||
-          po.role === 'PLACEMENT_COORDINATOR' ||
-          po.designation?.toLowerCase().includes('coordinator');
-        if (!isCoordinator) return false;
-
-        // Dynamic Department scoping
-        if (officerDepartmentFilter) {
-          const pDeptId = po.departmentId?._id
-            ? String(po.departmentId._id)
-            : po.departmentId
-            ? String(po.departmentId)
-            : '';
-          if (pDeptId) {
-            if (pDeptId !== String(officerDepartmentFilter)) return false;
-          } else if (po.department) {
-            const matchedDept = departmentsList.find(
-              (d) =>
-                d.name?.toLowerCase() === po.department.toLowerCase() ||
-                d.code?.toLowerCase() === po.department.toLowerCase()
-            );
-            if (!matchedDept || String(matchedDept._id) !== String(officerDepartmentFilter)) return false;
-          } else {
-            return false;
-          }
+      // 1. Department matching (filters placement coordinators department-wise)
+      if (officerDepartmentFilter) {
+        const pDeptId = po.departmentId?._id
+          ? String(po.departmentId._id)
+          : po.departmentId
+          ? String(po.departmentId)
+          : '';
+        if (pDeptId) {
+          if (pDeptId !== String(officerDepartmentFilter)) return false;
+        } else if (po.department) {
+          const matchedDept = departmentsList.find(
+            (d) =>
+              d.name?.toLowerCase() === po.department.toLowerCase() ||
+              d.code?.toLowerCase() === po.department.toLowerCase()
+          );
+          if (!matchedDept || String(matchedDept._id) !== String(officerDepartmentFilter)) return false;
+        } else {
+          return false;
         }
       }
 
@@ -413,6 +489,10 @@ export function UsersListPage() {
         return;
       }
     } else if (u.userType === 'PLACEMENT') {
+      if (!canAccessPlacementOfficers) {
+        toast('You do not have permission to view or manage Placement Cell officers.');
+        return;
+      }
       const po =
         u.profile ||
         officers.find(
@@ -453,7 +533,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_DELETE') && activeTab === 'company' && filteredCompanies.length > 0 && (
+      {!isCoordinator && has('USER_DELETE') && activeTab === 'company' && filteredCompanies.length > 0 && (
         <button
           className="danger"
           type="button"
@@ -464,7 +544,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_DELETE') && activeTab === 'placement' && filteredOfficers.length > 0 && (
+      {!isCoordinator && has('USER_DELETE') && activeTab === 'placement' && filteredOfficers.length > 0 && (
         <button
           className="danger"
           type="button"
@@ -475,7 +555,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_DELETE') && activeTab === 'all' && filteredUsers.length > 0 && (
+      {!isCoordinator && has('USER_DELETE') && activeTab === 'all' && filteredUsers.length > 0 && (
         <button
           className="danger"
           type="button"
@@ -586,17 +666,19 @@ export function UsersListPage() {
           >
             <BuildingIcon size={16} /> Company
           </button>
-          <button
-            type="button"
-            className={activeTab === 'placement' ? 'primary' : 'ghost'}
-            style={{ fontSize: '0.88rem', padding: '8px 16px' }}
-            onClick={() => {
-              setActiveTab('placement');
-              setSearch('');
-            }}
-          >
-            <BriefcaseIcon size={16} /> Placement Cell
-          </button>
+          {canAccessPlacementOfficers && (
+            <button
+              type="button"
+              className={activeTab === 'placement' ? 'primary' : 'ghost'}
+              style={{ fontSize: '0.88rem', padding: '8px 16px' }}
+              onClick={() => {
+                setActiveTab('placement');
+                setSearch('');
+              }}
+            >
+              <BriefcaseIcon size={16} /> Placement Cell
+            </button>
+          )}
         </div>
 
         {/* TAB 1: STUDENTS */}
@@ -623,38 +705,37 @@ export function UsersListPage() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
-                  Department
-                </label>
-                <select
-                  id="student-filter-department"
-                  value={studentDepartmentFilter}
-                  onChange={(e) => handleDepartmentFilterChange(e.target.value)}
-                >
-                  <option value="">All Departments</option>
-                  {departmentsList.map((d) => (
-                    <option key={d._id} value={d._id}>
-                      {d.name} {d.code ? `(${d.code})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {!isCoordinator && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
+                    Department
+                  </label>
+                  <select
+                    id="student-filter-department"
+                    value={String(studentDepartmentFilter || '')}
+                    onChange={(e) => handleDepartmentFilterChange(e.target.value)}
+                  >
+                    <option value="">All Departments</option>
+                    {departmentsList.map((d) => (
+                      <option key={d._id} value={String(d._id)}>
+                        {d.name} {d.code ? `(${d.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
                   Course / Branch
                 </label>
                 <select
                   id="student-filter-course"
-                  value={studentCourseFilter}
+                  value={String(studentCourseFilter || '')}
                   onChange={(e) => setStudentCourseFilter(e.target.value)}
-                  disabled={!studentDepartmentFilter}
-                  title={!studentDepartmentFilter ? 'Select a department first' : 'Filter by course'}
-                  style={!studentDepartmentFilter ? { opacity: 0.65, cursor: 'not-allowed', backgroundColor: '#f1f5f9' } : {}}
                 >
                   <option value="">All Courses</option>
                   {availableCourses.map((c) => (
-                    <option key={c._id} value={c._id}>
+                    <option key={c._id} value={String(c._id)}>
                       {c.name} {c.code ? `(${c.code})` : ''}
                     </option>
                   ))}
@@ -908,7 +989,7 @@ export function UsersListPage() {
               className="filters"
               style={{
                 display: 'grid',
-                gridTemplateColumns: officerRoleFilter === 'ROLE_PLACEMENT_COORDINATOR' ? '2fr 1.5fr 1.5fr auto' : '2fr 1.5fr auto',
+                gridTemplateColumns: '2fr 1.5fr auto',
                 gap: '12px',
                 alignItems: 'end',
                 marginBottom: '16px'
@@ -926,52 +1007,28 @@ export function UsersListPage() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
-                  Placement Filter
+                  Department
                 </label>
                 <select
-                  id="user-officer-role-filter"
-                  value={officerRoleFilter}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setOfficerRoleFilter(val);
-                    if (val !== 'ROLE_PLACEMENT_COORDINATOR') {
-                      setOfficerDepartmentFilter('');
-                    }
-                  }}
+                  id="user-officer-dept-filter"
+                  value={officerDepartmentFilter}
+                  onChange={(e) => setOfficerDepartmentFilter(e.target.value)}
                 >
-                  <option value="">All Placement Roles</option>
-                  <option value="ROLE_PLACEMENT_HEAD">Placement Head</option>
-                  <option value="ROLE_PLACEMENT_COORDINATOR">Placement Coordinator</option>
+                  <option value="">All Departments</option>
+                  {departmentsList.map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {d.name} {d.code ? `(${d.code})` : ''}
+                    </option>
+                  ))}
                 </select>
               </div>
-              {officerRoleFilter === 'ROLE_PLACEMENT_COORDINATOR' && (
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#1e40af', marginBottom: '4px' }}>
-                    Department (Coordinator)
-                  </label>
-                  <select
-                    id="user-officer-dept-filter"
-                    value={officerDepartmentFilter}
-                    onChange={(e) => setOfficerDepartmentFilter(e.target.value)}
-                    style={{ backgroundColor: '#eff6ff', borderColor: '#3b82f6', color: '#1e3a8a', fontWeight: 600 }}
-                  >
-                    <option value="">All Departments</option>
-                    {departmentsList.map((d) => (
-                      <option key={d._id} value={d._id}>
-                        {d.name} {d.code ? `(${d.code})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {(search || officerRoleFilter || officerDepartmentFilter) && (
+              {(search || officerDepartmentFilter) && (
                 <div>
                   <button
                     type="button"
                     className="ghost"
                     onClick={() => {
                       setSearch('');
-                      setOfficerRoleFilter('');
                       setOfficerDepartmentFilter('');
                     }}
                     style={{ padding: '8px 12px', fontSize: '0.84rem' }}
@@ -1135,7 +1192,7 @@ export function UsersListPage() {
                               <a className="link-button" href={`#/users/${u._id}`}>
                                 View
                               </a>
-                              {has('USER_UPDATE') && (
+                              {has('USER_UPDATE') && (!isCoordinator || (u.userType !== 'PLACEMENT' && u.roleId !== 'ROLE_SUPER_ADMIN' && u.roleId !== 'ROLE_PLACEMENT_HEAD' && u.roleId !== 'ROLE_PLACEMENT_COORDINATOR')) && (
                                 <button
                                   className="link-button"
                                   type="button"
@@ -1144,7 +1201,7 @@ export function UsersListPage() {
                                   Edit
                                 </button>
                               )}
-                              {has('USER_DELETE') && (
+                              {has('USER_DELETE') && (!isCoordinator || (u.userType !== 'PLACEMENT' && u.roleId !== 'ROLE_SUPER_ADMIN' && u.roleId !== 'ROLE_PLACEMENT_HEAD' && u.roleId !== 'ROLE_PLACEMENT_COORDINATOR')) && (
                                 <button
                                   className="link-button"
                                   style={{ color: 'var(--red)' }}

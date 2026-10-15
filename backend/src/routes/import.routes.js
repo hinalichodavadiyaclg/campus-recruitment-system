@@ -30,7 +30,7 @@ function authorizeExportType() {
     let requiredPermissions = [];
     if (type === 'student') requiredPermissions = [PERMISSION_IDS.STUDENT_READ, PERMISSION_IDS.USER_READ];
     else if (type === 'company') requiredPermissions = [PERMISSION_IDS.USER_READ];
-    else if (type === 'placement') requiredPermissions = [PERMISSION_IDS.USER_READ];
+    else if (type === 'placement') requiredPermissions = [PERMISSION_IDS.PLACEMENT_USER_IMPORT, PERMISSION_IDS.USER_CREATE];
     else return next(new AppError(400, 'INVALID_IMPORT_TYPE', `Unknown export type: ${type}`));
 
     return authorizeAnyPermission(...requiredPermissions)(request, response, next);

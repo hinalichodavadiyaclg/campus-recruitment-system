@@ -136,66 +136,127 @@ export function DepartmentsListPage() {
                     </td>
                   </tr>
                 ) : filteredDepartments.length > 0 ? (
-                  filteredDepartments.map((dept) => (
-                    <tr key={dept._id}>
-                      <td>
-                        <span className="badge badge-info">{dept.code}</span>
-                      </td>
-                      <td>
-                        <strong>{dept.name}</strong>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <span
-                          className="badge neutral"
-                          style={{
-                            fontWeight: '700',
-                            fontSize: '0.8rem',
-                            padding: '3px 10px',
-                            minWidth: '28px',
-                            textAlign: 'center',
-                            display: 'inline-block'
-                          }}
-                        >
-                          {dept.studentCount ?? 0}
-                        </span>
-                      </td>
-                      <td>{dept.description || '—'}</td>
-                      <td>
-                        <span
-                          className={`status-pill ${
-                            dept.isActive ? 'status-active' : 'status-inactive'
-                          }`}
-                        >
-                          {dept.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="actions">
-                        {has('DEPARTMENT_UPDATE') && (
-                          <>
-                            <button
-                              className="link-button"
-                              type="button"
-                              onClick={() => {
-                                setEditingDepartment(dept);
-                                setModalOpen(true);
+                  filteredDepartments.map((dept) => {
+                    const hasStudents = (dept.studentCount || 0) > 0;
+                    const deptCoursesUrl = `#/courses?departmentId=${dept._id}`;
+                    const deptStudentsUrl = `#/users?tab=students&departmentId=${dept._id}`;
+                    return (
+                      <tr
+                        key={dept._id}
+                        onClick={(e) => {
+                          if (e.target.closest('button, input, select')) return;
+                          window.location.hash = deptCoursesUrl;
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          transition: 'background-color 0.15s ease'
+                        }}
+                        title={`Click to view courses in ${dept.name}`}
+                      >
+                        <td>
+                          <span className="badge badge-info">{dept.code}</span>
+                        </td>
+                        <td>
+                          <a
+                            href={deptCoursesUrl}
+                            style={{
+                              color: 'inherit',
+                              textDecoration: 'none',
+                              cursor: 'pointer'
+                            }}
+                            onMouseEnter={(e) => (e.target.style.textDecoration = 'underline')}
+                            onMouseLeave={(e) => (e.target.style.textDecoration = 'none')}
+                            title={`Click to view courses in ${dept.name}`}
+                          >
+                            <strong>{dept.name}</strong>
+                          </a>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          {hasStudents ? (
+                            <a
+                              href={deptStudentsUrl}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ textDecoration: 'none' }}
+                              title={`View ${dept.studentCount} students in ${dept.name}`}
+                            >
+                              <span
+                                className="badge neutral"
+                                style={{
+                                  fontWeight: '700',
+                                  fontSize: '0.8rem',
+                                  padding: '3px 10px',
+                                  minWidth: '28px',
+                                  textAlign: 'center',
+                                  display: 'inline-block',
+                                  cursor: 'pointer',
+                                  backgroundColor: '#e0f2fe',
+                                  color: '#0369a1'
+                                }}
+                              >
+                                {dept.studentCount}
+                              </span>
+                            </a>
+                          ) : (
+                            <span
+                              className="badge neutral"
+                              style={{
+                                fontWeight: '700',
+                                fontSize: '0.8rem',
+                                padding: '3px 10px',
+                                minWidth: '28px',
+                                textAlign: 'center',
+                                display: 'inline-block',
+                                cursor: 'default',
+                                backgroundColor: '#e0f2fe',
+                                color: '#0369a1'
                               }}
                             >
-                              Edit
-                            </button>
-                            <button
-                              className="link-button"
-                              style={{ color: dept.isActive ? 'var(--red, #e53e3e)' : 'var(--green, #38a169)' }}
-                              type="button"
-                              disabled={isProcessing}
-                              onClick={() => handleToggleStatus(dept)}
-                            >
-                              {dept.isActive ? 'Deactivate' : 'Activate'}
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                              0
+                            </span>
+                          )}
+                        </td>
+                        <td>{dept.description || '—'}</td>
+                        <td>
+                          <span
+                            className={`status-pill ${
+                              dept.isActive ? 'status-active' : 'status-inactive'
+                            }`}
+                          >
+                            {dept.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="actions">
+                          {has('DEPARTMENT_UPDATE') && (
+                            <>
+                              <button
+                                className="link-button"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingDepartment(dept);
+                                  setModalOpen(true);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="link-button"
+                                style={{ color: dept.isActive ? 'var(--red, #e53e3e)' : 'var(--green, #38a169)' }}
+                                type="button"
+                                disabled={isProcessing}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleStatus(dept);
+                                }}
+                              >
+                                {dept.isActive ? 'Deactivate' : 'Activate'}
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="6" className="empty">

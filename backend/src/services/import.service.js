@@ -12,6 +12,7 @@ import { AppError } from '../utils/app-error.js';
 import { hashPassword } from '../utils/password.js';
 import { isValid10DigitMobile } from '../validators/schemas.js';
 import { getNextCandidateCompanyId, executeWithCompanyIdRetry } from '../utils/company-id.js';
+import { getCoordinatorDepartment } from '../utils/department-scope.js';
 
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const CLEAR_SENTINEL_REGEX = /^\[?CLEAR\]?$/i;
@@ -678,7 +679,7 @@ export function normalizeJsonRows(rawRows, moduleConfig) {
  * Validates import rows with ZERO database writes.
  * Returns preview details, counts for create, update, skip, invalid, and duplicate.
  */
-export async function validateImportRows(type, inputSource, options = {}) {
+export async function validateImportRows(type, inputSource, options = {}, auth = null) {
   const { createNew = true, updateExisting = true } = options;
   const config = MODULE_CONFIGS[type];
   if (!config) throw new AppError(400, 'INVALID_IMPORT_TYPE', `Unknown import type: ${type}`);
@@ -750,9 +751,10 @@ export async function validateImportRows(type, inputSource, options = {}) {
   }
 
   // Pre-load reference collections for fast relational validation
-  const [activeDepartments, activeCourses] = await Promise.all([
+  const [activeDepartments, activeCourses, coordDept] = await Promise.all([
     Department.find({ isActive: true }).lean(),
-    Course.find({ isActive: true }).lean()
+    Course.find({ isActive: true }).lean(),
+    type === 'student' ? getCoordinatorDepartment(auth) : Promise.resolve(null)
   ]);
 
   const preview = [];
@@ -832,6 +834,14 @@ export async function validateImportRows(type, inputSource, options = {}) {
 
       if (existingStudent) {
         // Record exists -> UPDATE evaluation
+        if (coordDept) {
+          const matchesDeptId = existingStudent.departmentId && String(existingStudent.departmentId) === String(coordDept.departmentId);
+          const matchesDeptName = existingStudent.department && existingStudent.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase();
+          if (!matchesDeptId && !matchesDeptName) {
+            errors.push('You are not authorized to update students from another department.');
+          }
+        }
+
         if (!updateExisting) {
           action = 'SKIP';
           notes.push('Skipped: Record already exists and Update Existing Records is disabled.');
@@ -890,6 +900,8 @@ export async function validateImportRows(type, inputSource, options = {}) {
               );
               if (!matchedDept) {
                 errors.push(`Academic department '${targetDeptName}' does not exist or is inactive.`);
+              } else if (coordDept && String(matchedDept._id) !== String(coordDept.departmentId)) {
+                errors.push(`You cannot reassign student to another department ('${matchedDept.name}'). Your assigned department is '${coordDept.departmentName}'.`);
               }
             }
 
@@ -899,6 +911,8 @@ export async function validateImportRows(type, inputSource, options = {}) {
               );
               if (!matchedCourse) {
                 errors.push(`Course / Specialization '${targetBranchName}' does not exist or is inactive.`);
+              } else if (coordDept && String(matchedCourse.departmentId) !== String(coordDept.departmentId)) {
+                errors.push(`Course '${matchedCourse.name}' does not belong to your assigned department ('${coordDept.departmentName}').`);
               }
             }
 
@@ -951,14 +965,22 @@ export async function validateImportRows(type, inputSource, options = {}) {
             matchedDept = activeDepartments.find(
               (d) => d.name.toLowerCase() === departmentInput.toLowerCase() || d.code.toLowerCase() === departmentInput.toLowerCase()
             );
-            if (!matchedDept) errors.push(`Department '${departmentInput}' does not exist or is inactive.`);
+            if (!matchedDept) {
+              errors.push(`Department '${departmentInput}' does not exist or is inactive.`);
+            } else if (coordDept && String(matchedDept._id) !== String(coordDept.departmentId)) {
+              errors.push(`Placement Coordinators can only create students in their assigned department ('${coordDept.departmentName}').`);
+            }
           }
 
           if (activeCourses.length > 0 && branchInput) {
             matchedCourse = activeCourses.find(
               (c) => c.name.toLowerCase() === branchInput.toLowerCase() || c.code.toLowerCase() === branchInput.toLowerCase()
             );
-            if (!matchedCourse) errors.push(`Course / Specialization '${branchInput}' does not exist or is inactive.`);
+            if (!matchedCourse) {
+              errors.push(`Course / Specialization '${branchInput}' does not exist or is inactive.`);
+            } else if (coordDept && String(matchedCourse.departmentId) !== String(coordDept.departmentId)) {
+              errors.push(`Course '${matchedCourse.name}' does not belong to your assigned department ('${coordDept.departmentName}').`);
+            }
           }
 
           if (activeDepartments.length > 0 && activeCourses.length > 0 && matchedDept && matchedCourse && String(matchedCourse.departmentId) !== String(matchedDept._id)) {
@@ -1342,13 +1364,13 @@ export async function validateImportRows(type, inputSource, options = {}) {
  * Executes database writes after re-validation.
  * Employs transaction with fallback compensation to prevent orphaned records.
  */
-export async function confirmImport(type, inputSource, options = {}) {
+export async function confirmImport(type, inputSource, options = {}, auth = null) {
   const { createNew = true, updateExisting = true } = options;
   const config = MODULE_CONFIGS[type];
   if (!config) throw new AppError(400, 'INVALID_IMPORT_TYPE', `Unknown import type: ${type}`);
 
   // Revalidate to protect against stale preview and concurrent updates
-  const validation = await validateImportRows(type, inputSource, { createNew, updateExisting });
+  const validation = await validateImportRows(type, inputSource, { createNew, updateExisting }, auth);
   const validActionItems = validation.preview.filter(
     (item) => item.status === 'VALID' && (item.action === 'CREATE' || item.action === 'UPDATE')
   );
@@ -1737,10 +1759,15 @@ export async function exportDataToExcel(
     semester = '',
     minCgpa = '',
     backlogs = ''
-  } = {}
+  } = {},
+  auth = null
 ) {
   const config = MODULE_CONFIGS[type];
   if (!config) throw new AppError(400, 'INVALID_IMPORT_TYPE', `Unknown export type: ${type}`);
+
+  if (type === 'placement' && auth?.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
+    throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators cannot export Placement Cell data.');
+  }
 
   let rows = [];
 
@@ -1757,7 +1784,16 @@ export async function exportDataToExcel(
         { department: regex }
       ];
     }
-    if (filtered && department && department.trim()) {
+    const coordDept = await getCoordinatorDepartment(auth);
+    if (coordDept) {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { departmentId: coordDept.departmentId },
+          { department: new RegExp(`^${coordDept.departmentName.trim()}$`, 'i') }
+        ]
+      });
+    } else if (filtered && department && department.trim()) {
       if (mongoose.Types.ObjectId.isValid(department)) {
         query.departmentId = department;
       } else {

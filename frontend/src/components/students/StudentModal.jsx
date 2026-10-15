@@ -5,6 +5,7 @@ import { studentService } from '../../services/student.service.js';
 import { departmentService } from '../../services/department.service.js';
 import { courseService } from '../../services/course.service.js';
 import { isValidMobile, MOBILE_VALIDATION_MESSAGE } from '../../utils/validation.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 
 const SEMESTER_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const CURRENT_YEAR = new Date().getFullYear();
@@ -26,6 +27,10 @@ const INITIAL_FORM_STATE = {
 };
 
 export function StudentModal({ isOpen, student = null, onClose, onSuccess }) {
+  const { user: currentUser, role } = useAuth();
+  const isCoordinator = role?.id === 'ROLE_PLACEMENT_COORDINATOR' || currentUser?.roleId === 'ROLE_PLACEMENT_COORDINATOR';
+  const coordinatorDeptId = currentUser?.departmentId;
+
   const isEdit = Boolean(student?._id);
 
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
@@ -49,16 +54,40 @@ export function StudentModal({ isOpen, student = null, onClose, onSuccess }) {
     setDeptError('');
     try {
       const res = await departmentService.listDepartments({ isActive: true, limit: 100 });
-      const deptList = res.data?.items || res.items || [];
+      let deptList = res.data?.items || res.items || [];
+      if (isCoordinator && coordinatorDeptId) {
+        const found = deptList.some((d) => String(d._id) === String(coordinatorDeptId));
+        if (!found) {
+          deptList = [
+            ...deptList,
+            {
+              _id: coordinatorDeptId,
+              name: currentUser?.departmentName || 'Assigned Department',
+              code: currentUser?.departmentCode || ''
+            }
+          ];
+        }
+      }
       setDepartments(deptList);
       return deptList;
     } catch (err) {
+      if (isCoordinator && coordinatorDeptId) {
+        const fallbackList = [
+          {
+            _id: coordinatorDeptId,
+            name: currentUser?.departmentName || 'Assigned Department',
+            code: currentUser?.departmentCode || ''
+          }
+        ];
+        setDepartments(fallbackList);
+        return fallbackList;
+      }
       setDeptError(err.message || 'Failed to load active departments.');
       return [];
     } finally {
       setDeptLoading(false);
     }
-  }, []);
+  }, [isCoordinator, coordinatorDeptId, currentUser]);
 
   // Fetch courses filtered by department
   const fetchCoursesForDepartment = useCallback(async (deptId) => {
@@ -135,8 +164,16 @@ export function StudentModal({ isOpen, student = null, onClose, onSuccess }) {
           }
         }
       } else {
-        setFormData(INITIAL_FORM_STATE);
-        setCourses([]);
+        const initDeptId = isCoordinator && coordinatorDeptId ? coordinatorDeptId : '';
+        setFormData({
+          ...INITIAL_FORM_STATE,
+          departmentId: initDeptId
+        });
+        if (initDeptId) {
+          await fetchCoursesForDepartment(initDeptId);
+        } else {
+          setCourses([]);
+        }
       }
     }
 
@@ -145,10 +182,11 @@ export function StudentModal({ isOpen, student = null, onClose, onSuccess }) {
     return () => {
       isMounted = false;
     };
-  }, [isOpen, student, fetchDepartments, fetchCoursesForDepartment]);
+  }, [isOpen, student, fetchDepartments, fetchCoursesForDepartment, isCoordinator, coordinatorDeptId]);
 
   // Handle Department Change: resets course selection and cascades
   const handleDepartmentChange = async (e) => {
+    if (isCoordinator && coordinatorDeptId) return;
     const newDeptId = e.target.value;
     setFormData((prev) => ({
       ...prev,
@@ -512,24 +550,36 @@ export function StudentModal({ isOpen, student = null, onClose, onSuccess }) {
             <div className="field">
               <label htmlFor="st-dept">
                 Department <span style={{ color: 'var(--red, #e53e3e)' }}>*</span>
+                {isCoordinator && (
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', marginLeft: '6px', fontWeight: 'normal' }}>
+                    (Locked to assigned department)
+                  </span>
+                )}
               </label>
               <select
                 id="st-dept"
                 name="departmentId"
                 value={formData.departmentId}
                 onChange={handleDepartmentChange}
-                disabled={submitting || deptLoading}
+                disabled={submitting || deptLoading || (isCoordinator && Boolean(coordinatorDeptId))}
                 aria-invalid={Boolean(fieldErrors.departmentId)}
-                style={fieldErrors.departmentId ? { borderColor: 'var(--red, #e53e3e)' } : {}}
+                style={{
+                  ...(fieldErrors.departmentId ? { borderColor: 'var(--red, #e53e3e)' } : {}),
+                  ...(isCoordinator && Boolean(coordinatorDeptId) ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {})
+                }}
               >
-                <option value="">
-                  {deptLoading ? 'Loading departments…' : '— Select Academic Department —'}
-                </option>
-                {departments.map((d) => (
-                  <option key={d._id} value={d._id}>
-                    {d.name} {d.code ? `(${d.code})` : ''}
+                {!isCoordinator && (
+                  <option value="">
+                    {deptLoading ? 'Loading departments…' : '— Select Academic Department —'}
                   </option>
-                ))}
+                )}
+                {departments
+                  .filter((d) => !isCoordinator || !coordinatorDeptId || String(d._id) === String(coordinatorDeptId))
+                  .map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {d.name} {d.code ? `(${d.code})` : ''}
+                    </option>
+                  ))}
               </select>
               {deptError && (
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>

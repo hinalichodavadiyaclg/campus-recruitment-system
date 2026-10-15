@@ -2,7 +2,7 @@ import { Router } from 'express';
 import * as placementOfficerController from '../controllers/placement_officer.controller.js';
 import { PERMISSION_IDS } from '../utils/access-constants.js';
 import { authenticate } from '../middleware/authenticate.js';
-import { authorizePermissions, authorizeAnyPermission } from '../middleware/authorize.js';
+import { authorizeAnyPermission, authorizePermissions } from '../middleware/authorize.js';
 import { validate } from '../validators/request.validator.js';
 import {
   placementOfficerCreateSchema,
@@ -14,6 +14,7 @@ export const placementOfficerRouter = Router();
 
 placementOfficerRouter.use(authenticate);
 
+// Profile routes for the authenticated placement officer
 placementOfficerRouter.get(
   '/me',
   authorizeAnyPermission(PERMISSION_IDS.AUTH_READ_SELF, PERMISSION_IDS.USER_READ),
@@ -25,8 +26,33 @@ placementOfficerRouter.put(
   placementOfficerController.updateMyProfile
 );
 
-placementOfficerRouter.get('/', authorizePermissions(PERMISSION_IDS.USER_READ), placementOfficerController.listPlacementOfficers);
-placementOfficerRouter.post('/', authorizePermissions(PERMISSION_IDS.USER_CREATE), validate(placementOfficerCreateSchema), placementOfficerController.createPlacementOfficer);
-placementOfficerRouter.get('/:id', authorizePermissions(PERMISSION_IDS.USER_READ), validate(userIdParamsSchema), placementOfficerController.getPlacementOfficer);
-placementOfficerRouter.put('/:id', authorizePermissions(PERMISSION_IDS.USER_UPDATE), validate(placementOfficerUpdateSchema), placementOfficerController.updatePlacementOfficer);
-placementOfficerRouter.delete('/:id', authorizePermissions(PERMISSION_IDS.USER_DELETE), validate(userIdParamsSchema), placementOfficerController.deletePlacementOfficer);
+// Placement Cell management routes (restricted to authorized placement import/officer management)
+placementOfficerRouter.get(
+  '/',
+  authorizeAnyPermission(PERMISSION_IDS.PLACEMENT_USER_IMPORT, PERMISSION_IDS.USER_CREATE),
+  placementOfficerController.listPlacementOfficers
+);
+placementOfficerRouter.post(
+  '/',
+  authorizePermissions(PERMISSION_IDS.USER_CREATE),
+  validate(placementOfficerCreateSchema),
+  placementOfficerController.createPlacementOfficer
+);
+placementOfficerRouter.get(
+  '/:id',
+  authorizeAnyPermission(PERMISSION_IDS.PLACEMENT_USER_IMPORT, PERMISSION_IDS.USER_CREATE),
+  validate(userIdParamsSchema),
+  placementOfficerController.getPlacementOfficer
+);
+placementOfficerRouter.put(
+  '/:id',
+  authorizePermissions(PERMISSION_IDS.USER_UPDATE),
+  validate(placementOfficerUpdateSchema),
+  placementOfficerController.updatePlacementOfficer
+);
+placementOfficerRouter.delete(
+  '/:id',
+  authorizePermissions(PERMISSION_IDS.USER_DELETE),
+  validate(userIdParamsSchema),
+  placementOfficerController.deletePlacementOfficer
+);

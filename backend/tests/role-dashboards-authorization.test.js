@@ -18,7 +18,9 @@ const [
   { Company },
   { hashPassword },
   { createRawSessionToken, hashSessionToken },
-  { ROLE_IDS }
+  { ROLE_IDS },
+  { Department },
+  { PlacementOfficer }
 ] = await Promise.all([
   import('../src/app.js'),
   import('../src/config/database.js'),
@@ -29,7 +31,9 @@ const [
   import('../src/models/company.model.js'),
   import('../src/utils/password.js'),
   import('../src/utils/session-token.js'),
-  import('../src/utils/access-constants.js')
+  import('../src/utils/access-constants.js'),
+  import('../src/models/department.model.js'),
+  import('../src/models/placement_officer.model.js')
 ]);
 
 let mongo;
@@ -51,6 +55,29 @@ async function createAuthenticatedSession(roleId, userType = 'PLACEMENT', linked
     accountStatus: 'ACTIVE',
     ...extraUserData
   });
+
+  if (roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
+    let dept = await Department.findOne({ isActive: true });
+    if (!dept) {
+      dept = await Department.create({
+        name: 'Computer Science and Engineering',
+        code: 'CSE',
+        isActive: true
+      });
+    }
+    await PlacementOfficer.create({
+      userId: user._id,
+      employeeId: user.employeeId,
+      firstName: 'Test',
+      lastName: 'Coordinator',
+      email: user.email,
+      mobileNumber: '9876543210',
+      designation: 'Assistant Professor',
+      department: dept.name,
+      departmentId: dept._id,
+      role: ROLE_IDS.PLACEMENT_COORDINATOR
+    });
+  }
 
   const rawToken = createRawSessionToken();
   const sessionTokenHash = hashSessionToken(rawToken);
@@ -82,6 +109,7 @@ after(async () => {
 beforeEach(async () => {
   await Student.deleteMany({});
   await Company.deleteMany({});
+  await PlacementOfficer.deleteMany({});
   await User.deleteMany({ roleId: { $ne: ROLE_IDS.SUPER_ADMIN } });
   await UserSession.deleteMany({});
 });

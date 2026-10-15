@@ -3,23 +3,23 @@ import { sendSuccess } from '../utils/api-response.js';
 import { asyncHandler } from '../utils/async-handler.js';
 
 export const listStudents = asyncHandler(async (request, response) =>
-  sendSuccess(response, 200, await studentService.listStudents(response.locals.input?.query || request.query || {}))
+  sendSuccess(response, 200, await studentService.listStudents(response.locals.input?.query || request.query || {}, request.auth))
 );
 
 export const getStudent = asyncHandler(async (request, response) =>
-  sendSuccess(response, 200, await studentService.getStudentById(response.locals.input?.params?.id || request.params.id))
+  sendSuccess(response, 200, await studentService.getStudentById(response.locals.input?.params?.id || request.params.id, request.auth))
 );
 
 export const createStudent = asyncHandler(async (request, response) =>
-  sendSuccess(response, 201, await studentService.createStudent(response.locals.input?.body || request.body))
+  sendSuccess(response, 201, await studentService.createStudent(response.locals.input?.body || request.body, request.auth))
 );
 
 export const updateStudent = asyncHandler(async (request, response) =>
-  sendSuccess(response, 200, await studentService.updateStudent(response.locals.input?.params?.id || request.params.id, response.locals.input?.body || request.body))
+  sendSuccess(response, 200, await studentService.updateStudent(response.locals.input?.params?.id || request.params.id, response.locals.input?.body || request.body, request.auth))
 );
 
 export const deleteStudent = asyncHandler(async (request, response) =>
-  sendSuccess(response, 200, await studentService.deleteStudent(response.locals.input?.params?.id || request.params.id))
+  sendSuccess(response, 200, await studentService.deleteStudent(response.locals.input?.params?.id || request.params.id, request.auth))
 );
 
 export const getMyStudentProfile = asyncHandler(async (request, response) =>

@@ -38,7 +38,7 @@ export const updateUser = asyncHandler(async (_request, response) =>
 );
 
 export const deleteUser = asyncHandler(async (request, response) =>
-  sendSuccess(response, 200, await userService.deleteUser(response.locals.input.params.id, request.auth.userId))
+  sendSuccess(response, 200, await userService.deleteUser(response.locals.input.params.id, request.auth.userId, request.auth))
 );
 
 export const setStatus = asyncHandler(async (_request, response) =>

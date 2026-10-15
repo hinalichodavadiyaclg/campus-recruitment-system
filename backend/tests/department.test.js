@@ -17,7 +17,8 @@ const [
   { Department },
   { hashPassword },
   { createRawSessionToken, hashSessionToken },
-  { ROLE_IDS }
+  { ROLE_IDS },
+  { PlacementOfficer }
 ] = await Promise.all([
   import('../src/app.js'),
   import('../src/config/database.js'),
@@ -27,7 +28,8 @@ const [
   import('../src/models/department.model.js'),
   import('../src/utils/password.js'),
   import('../src/utils/session-token.js'),
-  import('../src/utils/access-constants.js')
+  import('../src/utils/access-constants.js'),
+  import('../src/models/placement_officer.model.js')
 ]);
 
 let mongo;
@@ -74,6 +76,7 @@ after(async () => {
 
 beforeEach(async () => {
   await Department.deleteMany({});
+  await PlacementOfficer.deleteMany({});
 });
 
 test('Department API Integration Tests', async (t) => {
@@ -186,10 +189,21 @@ test('Department API Integration Tests', async (t) => {
   });
 
   await t.test('Placement Coordinator with DEPARTMENT_READ can view but cannot create or update', async () => {
-    const coordSession = await createAuthenticatedSession(ROLE_IDS.PLACEMENT_COORDINATOR);
-
     // Seed a department directly
     const dept = await Department.create({ name: 'Civil Engineering', code: 'CIVIL', isActive: true });
+    const coordSession = await createAuthenticatedSession(ROLE_IDS.PLACEMENT_COORDINATOR);
+    await PlacementOfficer.create({
+      userId: coordSession.user._id,
+      employeeId: coordSession.user.employeeId,
+      firstName: 'Civil',
+      lastName: 'Coordinator',
+      email: coordSession.user.email,
+      mobileNumber: '9876543210',
+      designation: 'Assistant Professor',
+      department: dept.name,
+      departmentId: dept._id,
+      role: ROLE_IDS.PLACEMENT_COORDINATOR
+    });
 
     // Read allowed
     const readRes = await request(app)
