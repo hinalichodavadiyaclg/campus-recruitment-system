@@ -110,7 +110,7 @@ export function FilteredStudentRecordsPage() {
     if (isCoordinator && coordinatorDeptId) return;
     setDepartmentFilter(newDeptId);
     setCurrentPage(1);
-    if (newDeptId && shouldResetCourseSelection(courseFilter, newDeptId, coursesList)) {
+    if (!newDeptId || shouldResetCourseSelection(courseFilter, newDeptId, coursesList)) {
       setCourseFilter('');
     }
   };
@@ -352,18 +352,23 @@ export function FilteredStudentRecordsPage() {
                   setCourseFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                disabled={Boolean(departmentFilter && availableCourses.length === 0)}
+                disabled={!isCoordinator && !departmentFilter}
+                title={!isCoordinator && !departmentFilter ? 'Please select a department first' : 'Filter by course'}
                 style={{
                   width: '100%',
                   padding: '7px 8px',
                   borderRadius: '7px',
                   border: '1px solid #cbd5e1',
                   fontSize: '0.84rem',
-                  backgroundColor: '#ffffff'
+                  backgroundColor: (!isCoordinator && !departmentFilter) ? '#f1f5f9' : '#ffffff',
+                  cursor: (!isCoordinator && !departmentFilter) ? 'not-allowed' : 'default',
+                  opacity: (!isCoordinator && !departmentFilter) ? 0.75 : 1
                 }}
               >
                 <option value="">
-                  {departmentFilter && availableCourses.length === 0
+                  {!isCoordinator && !departmentFilter
+                    ? '— Select Department First —'
+                    : availableCourses.length === 0
                     ? 'No courses'
                     : 'All Courses'}
                 </option>

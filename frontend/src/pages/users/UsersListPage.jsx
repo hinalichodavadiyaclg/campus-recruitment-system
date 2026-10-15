@@ -257,7 +257,7 @@ export function UsersListPage() {
 
   const handleDepartmentFilterChange = (newDeptId) => {
     setStudentDepartmentFilter(newDeptId);
-    if (newDeptId && shouldResetCourseSelection(studentCourseFilter, newDeptId, coursesList)) {
+    if (!newDeptId || shouldResetCourseSelection(studentCourseFilter, newDeptId, coursesList)) {
       setStudentCourseFilter('');
     }
   };
@@ -662,10 +662,6 @@ export function UsersListPage() {
             onClick={() => {
               setActiveTab('students');
               setSearch('');
-              if (!isCoordinator) {
-                setStudentDepartmentFilter('');
-              }
-              setStudentCourseFilter('');
             }}
           >
             <GraduationCapIcon size={16} /> Students
@@ -747,8 +743,21 @@ export function UsersListPage() {
                   id="student-filter-course"
                   value={String(studentCourseFilter || '')}
                   onChange={(e) => setStudentCourseFilter(e.target.value)}
+                  disabled={!isCoordinator && !studentDepartmentFilter}
+                  title={!isCoordinator && !studentDepartmentFilter ? 'Please select a department first' : 'Filter by course'}
+                  style={{
+                    backgroundColor: (!isCoordinator && !studentDepartmentFilter) ? 'var(--bg-muted, #f1f5f9)' : undefined,
+                    cursor: (!isCoordinator && !studentDepartmentFilter) ? 'not-allowed' : 'default',
+                    opacity: (!isCoordinator && !studentDepartmentFilter) ? 0.75 : 1
+                  }}
                 >
-                  <option value="">All Courses</option>
+                  <option value="">
+                    {!isCoordinator && !studentDepartmentFilter
+                      ? '— Select Department First —'
+                      : availableCourses.length === 0
+                      ? 'No courses available'
+                      : 'All Courses'}
+                  </option>
                   {availableCourses.map((c) => (
                     <option key={c._id} value={String(c._id)}>
                       {c.name} {c.code ? `(${c.code})` : ''}

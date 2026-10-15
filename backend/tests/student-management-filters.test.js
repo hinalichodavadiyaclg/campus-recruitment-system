@@ -167,9 +167,13 @@ describe('Student Management - Department and Course Filtering', () => {
     const resetNeededForSame = shouldResetCourseSelection(currentCourseId, 'dept_cs', courses);
     assert.equal(resetNeededForSame, false, 'Should keep compatible course when staying in same department');
 
-    // When resetting to All Departments (''), it is compatible
+    // When resetting to All Departments (''), course must be reset because no course can be selected without a department
     const resetNeededForAll = shouldResetCourseSelection(currentCourseId, '', courses);
-    assert.equal(resetNeededForAll, false, 'Should not force reset when switching to All Departments');
+    assert.equal(resetNeededForAll, true, 'Should force reset course when switching to All Departments');
+
+    // Available courses when no department is selected should be empty
+    const noDeptCourses = getAvailableCourses(courses, '');
+    assert.equal(noDeptCourses.length, 0, 'No courses should be available when no department is selected');
 
     // Available courses for dept_mech should not include course_ai
     const mechCourses = getAvailableCourses(courses, 'dept_mech');
@@ -231,9 +235,9 @@ describe('Student Management - Department and Course Filtering', () => {
       ['STU-001', 'STU-002', 'STU-003', 'STU-004']
     );
 
-    // Available courses with no department filter should return all courses
-    const allCourses = getAvailableCourses(courses, '');
-    assert.equal(allCourses.length, 4);
+    // Available courses with no department filter should return empty array (select department first)
+    const available = getAvailableCourses(courses, '');
+    assert.equal(available.length, 0);
   });
 
   // Test 7: Semester filtering
