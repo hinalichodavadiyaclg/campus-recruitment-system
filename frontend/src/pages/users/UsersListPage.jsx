@@ -728,7 +728,7 @@ export function UsersListPage() {
                 >
                   <option value="">
                     {!isCoordinator && !studentDepartmentFilter
-                      ? '— Select Department First —'
+                      ? 'Select Department First'
                       : availableCourses.length === 0
                       ? 'No courses available'
                       : 'All Courses'}
