@@ -5,6 +5,7 @@ import { User } from '../models/user.model.js';
 import { UserSession } from '../models/user-session.model.js';
 import { AppError } from '../utils/app-error.js';
 import { hashPassword } from '../utils/password.js';
+import { getCoordinatorDepartment } from '../utils/department-scope.js';
 
 export function toSafeUser(user) {
   const object = typeof user.toObject === 'function' ? user.toObject() : user;
@@ -31,9 +32,33 @@ export function toSafeUser(user) {
   };
 }
 
-export async function getUserOrThrow(id) {
+export async function getUserOrThrow(id, auth = null) {
   const user = await User.findById(id);
   if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found.');
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept && String(user._id) !== String(auth.userId)) {
+    // Placement Coordinators cannot view administrative or placement officer accounts
+    if (
+      user.userType === 'PLACEMENT' ||
+      [ROLE_IDS.SUPER_ADMIN, ROLE_IDS.PLACEMENT_HEAD, ROLE_IDS.PLACEMENT_COORDINATOR].includes(user.roleId)
+    ) {
+      throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators are not authorized to view administrative or placement officer accounts.');
+    }
+
+    // If target user is a student, ensure they belong to coordinator's assigned department
+    if (user.userType === 'STUDENT') {
+      const student = await Student.findOne({ userId: user._id }).lean();
+      if (student) {
+        const matchesDeptId = student.departmentId && String(student.departmentId) === String(coordDept.departmentId);
+        const matchesDeptName = student.department && student.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase();
+        if (!matchesDeptId && !matchesDeptName) {
+          throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators can only view students from their assigned department.');
+        }
+      }
+    }
+  }
+
   return user;
 }
 
@@ -41,11 +66,48 @@ import { Company } from '../models/company.model.js';
 import { Student } from '../models/student.model.js';
 import { PlacementOfficer } from '../models/placement_officer.model.js';
 
-export async function listUsers({ page = 1, limit = 20, userType, accountStatus, roleId }) {
+export async function listUsers({ page = 1, limit = 20, userType, accountStatus, roleId }, auth = null) {
   const query = {};
   if (userType) query.userType = userType;
   if (accountStatus) query.accountStatus = accountStatus;
   if (roleId) query.roleId = roleId;
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    // Coordinators can NEVER view administrative, placement head, or coordinator accounts
+    if (userType === 'PLACEMENT' || (roleId && [ROLE_IDS.SUPER_ADMIN, ROLE_IDS.PLACEMENT_HEAD, ROLE_IDS.PLACEMENT_COORDINATOR].includes(roleId))) {
+      return { items: [], page, limit, total: 0 };
+    }
+
+    // Find student userIds belonging to coordinator's assigned department
+    const deptStudents = await Student.find({
+      $or: [
+        { departmentId: coordDept.departmentId },
+        { department: new RegExp(`^${coordDept.departmentName.trim()}$`, 'i') }
+      ]
+    }).select('userId').lean();
+    const deptStudentUserIds = deptStudents.map((s) => s.userId).filter(Boolean);
+
+    if (userType === 'STUDENT') {
+      query._id = { $in: deptStudentUserIds };
+    } else if (userType === 'COMPANY') {
+      query.userType = 'COMPANY';
+    } else {
+      // General list for coordinator: strictly their department's students and companies
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { _id: { $in: deptStudentUserIds }, userType: 'STUDENT' },
+          { userType: 'COMPANY' }
+        ]
+      });
+      query.$and.push({
+        userType: { $ne: 'PLACEMENT' },
+        roleId: { $nin: [ROLE_IDS.SUPER_ADMIN, ROLE_IDS.PLACEMENT_HEAD, ROLE_IDS.PLACEMENT_COORDINATOR] }
+      });
+    }
+  }
+
   const [users, total] = await Promise.all([
     User.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     User.countDocuments(query)
@@ -158,8 +220,28 @@ export async function createUser(input) {
   return safe;
 }
 
-export async function updateUser(id, input) {
-  const user = await getUserOrThrow(id);
+export async function updateUser(id, input, auth = null) {
+  const user = await getUserOrThrow(id, auth);
+
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
+    if (user.userType === 'PLACEMENT' || [ROLE_IDS.SUPER_ADMIN, ROLE_IDS.PLACEMENT_HEAD, ROLE_IDS.PLACEMENT_COORDINATOR].includes(user.roleId)) {
+      throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators are not authorized to update administrative or placement officer accounts.');
+    }
+    if (input.roleId && input.roleId !== user.roleId) {
+      throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators cannot change user roles.');
+    }
+    if (user.userType === 'STUDENT') {
+      const student = await Student.findOne({ userId: user._id }).lean();
+      if (student) {
+        const matchesDeptId = student.departmentId && String(student.departmentId) === String(coordDept.departmentId);
+        const matchesDeptName = student.department && student.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase();
+        if (!matchesDeptId && !matchesDeptName) {
+          throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators can only update students from their assigned department.');
+        }
+      }
+    }
+  }
 
   if (input.roleId && input.roleId !== user.roleId) {
     const role = await Role.findOne({ _id: input.roleId, isActive: true }).lean();
@@ -202,13 +284,24 @@ export async function deleteUser(id, actorId, auth = null) {
   if (actorId && String(id) === String(actorId)) {
     throw new AppError(400, 'CANNOT_DELETE_SELF', 'You cannot delete your own currently logged-in account.');
   }
-  const user = await getUserOrThrow(id);
+  const user = await getUserOrThrow(id, auth);
   await guardFinalActiveSuperAdmin(user);
 
   // Guard: Placement Coordinator cannot delete administrative or placement officer accounts
-  if (auth && (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR || auth.userType === 'PLACEMENT')) {
+  const coordDept = await getCoordinatorDepartment(auth);
+  if (coordDept) {
     if (user.userType === 'PLACEMENT' || [ROLE_IDS.SUPER_ADMIN, ROLE_IDS.PLACEMENT_HEAD, ROLE_IDS.PLACEMENT_COORDINATOR].includes(user.roleId)) {
       throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators are not authorized to delete administrative or placement officer accounts.');
+    }
+    if (user.userType === 'STUDENT') {
+      const student = await Student.findOne({ userId: user._id }).lean();
+      if (student) {
+        const matchesDeptId = student.departmentId && String(student.departmentId) === String(coordDept.departmentId);
+        const matchesDeptName = student.department && student.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase();
+        if (!matchesDeptId && !matchesDeptName) {
+          throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators can only delete students from their assigned department.');
+        }
+      }
     }
   }
 

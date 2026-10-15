@@ -48,7 +48,10 @@ export function UsersListPage() {
   // Active Tab: 'all' | 'students' | 'company' | 'placement'
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = initialParams.get('tab');
-    if (tabParam) return tabParam;
+    if (tabParam) {
+      if (isCoordinator && tabParam === 'placement') return 'all';
+      return tabParam;
+    }
     if (
       initialParams.get('courseId') ||
       initialParams.get('course') ||
@@ -103,7 +106,11 @@ export function UsersListPage() {
       const deptParam = params.get('departmentId') || params.get('department');
 
       if (tabParam) {
-        setActiveTab(tabParam);
+        if (isCoordinator && tabParam === 'placement') {
+          setActiveTab('all');
+        } else {
+          setActiveTab(tabParam);
+        }
       } else if (courseParam || deptParam) {
         setActiveTab('students');
       }
@@ -150,7 +157,7 @@ export function UsersListPage() {
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(null);
   const [tempPasswordNotice, setTempPasswordNotice] = useState(null);
 
-  const canAccessPlacementOfficers = has('PLACEMENT_USER_IMPORT') || has('USER_CREATE');
+  const canAccessPlacementOfficers = !isCoordinator && (has('PLACEMENT_USER_IMPORT') || has('USER_CREATE'));
 
   useEffect(() => {
     if (activeTab === 'placement' && !canAccessPlacementOfficers) {
@@ -170,7 +177,7 @@ export function UsersListPage() {
         deptsData,
         coursesData
       ] = await Promise.all([
-        userService.listUsers({ limit: 100 }),
+        userService.listUsers({ limit: 100 }).catch(() => ({ items: [] })),
         has('ROLE_READ') ? roleService.listRoles() : Promise.resolve([]),
         studentService.listStudents({ limit: 100 }).catch(() => ({ items: [] })),
         companyService.listCompanies({ limit: 100 }).catch(() => ({ items: [] })),
@@ -218,6 +225,11 @@ export function UsersListPage() {
   const filteredUsers = useMemo(() => {
     const q = search.toLowerCase();
     return users.filter((u) => {
+      // For coordinators, strictly show only student and company accounts
+      if (isCoordinator) {
+        if (u.userType !== 'STUDENT' && u.userType !== 'COMPANY') return false;
+        if (['ROLE_SUPER_ADMIN', 'ROLE_PLACEMENT_HEAD', 'ROLE_PLACEMENT_COORDINATOR'].includes(u.roleId)) return false;
+      }
       const matchesSearch =
         !q ||
         [u.email, u.universityId, u.employeeId, u.companyName, u.profileName]
@@ -230,7 +242,7 @@ export function UsersListPage() {
       const matchesStatus = !statusFilter || u.accountStatus === statusFilter;
       return matchesSearch && matchesType && matchesRole && matchesStatus;
     });
-  }, [users, search, typeFilter, roleFilter, statusFilter]);
+  }, [users, search, typeFilter, roleFilter, statusFilter, isCoordinator]);
 
   const availableCourses = useMemo(() => {
     if (isCoordinator) {
@@ -567,7 +579,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_CREATE') && activeTab === 'students' && (
+      {(has('USER_CREATE') || has('STUDENT_CREATE')) && activeTab === 'students' && (
         <button
           className="primary"
           type="button"
@@ -580,7 +592,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_CREATE') && activeTab === 'company' && (
+      {!isCoordinator && has('USER_CREATE') && activeTab === 'company' && (
         <button
           className="primary"
           type="button"
@@ -593,7 +605,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_CREATE') && activeTab === 'placement' && (
+      {canAccessPlacementOfficers && activeTab === 'placement' && (
         <button
           className="primary"
           type="button"
@@ -606,7 +618,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_CREATE') && activeTab === 'all' && (
+      {!isCoordinator && has('USER_CREATE') && activeTab === 'all' && (
         <button
           className="primary"
           id="btn-create-user"
@@ -650,7 +662,9 @@ export function UsersListPage() {
             onClick={() => {
               setActiveTab('students');
               setSearch('');
-              setStudentDepartmentFilter('');
+              if (!isCoordinator) {
+                setStudentDepartmentFilter('');
+              }
               setStudentCourseFilter('');
             }}
           >
@@ -1124,7 +1138,7 @@ export function UsersListPage() {
                 <option value="">All user types</option>
                 <option value="STUDENT">STUDENT</option>
                 <option value="COMPANY">COMPANY</option>
-                <option value="PLACEMENT">PLACEMENT</option>
+                {!isCoordinator && <option value="PLACEMENT">PLACEMENT</option>}
               </select>
               <select
                 id="user-role"
@@ -1132,11 +1146,13 @@ export function UsersListPage() {
                 onChange={(e) => setRoleFilter(e.target.value)}
               >
                 <option value="">All roles</option>
-                {roles.map((r) => (
-                  <option key={r._id} value={r._id}>
-                    {r.name}
-                  </option>
-                ))}
+                {roles
+                  .filter((r) => !isCoordinator || (r._id !== 'ROLE_SUPER_ADMIN' && r._id !== 'ROLE_PLACEMENT_HEAD' && r._id !== 'ROLE_PLACEMENT_COORDINATOR'))
+                  .map((r) => (
+                    <option key={r._id} value={r._id}>
+                      {r.name}
+                    </option>
+                  ))}
               </select>
               <select
                 id="user-status"

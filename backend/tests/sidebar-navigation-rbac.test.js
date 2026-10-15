@@ -16,6 +16,8 @@ const [
   { UserSession },
   { Role },
   { Company },
+  { Department },
+  { PlacementOfficer },
   { hashPassword },
   { createRawSessionToken, hashSessionToken },
   { ROLE_IDS, PERMISSION_IDS },
@@ -28,6 +30,8 @@ const [
   import('../src/models/user-session.model.js'),
   import('../src/models/role.model.js'),
   import('../src/models/company.model.js'),
+  import('../src/models/department.model.js'),
+  import('../src/models/placement_officer.model.js'),
   import('../src/utils/password.js'),
   import('../src/utils/session-token.js'),
   import('../src/utils/access-constants.js'),
@@ -65,6 +69,29 @@ async function createAuthenticatedSession(roleId, userType = 'PLACEMENT', linked
     companyId: userType === 'COMPANY' ? companyId : undefined,
     accountStatus: 'ACTIVE'
   });
+
+  if (roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
+    let dept = await Department.findOne({ code: 'CSE' });
+    if (!dept) {
+      dept = await Department.create({
+        name: 'Computer Science and Engineering',
+        code: 'CSE',
+        isActive: true
+      });
+    }
+    await PlacementOfficer.create({
+      userId: user._id,
+      employeeId: user.employeeId,
+      firstName: 'Coordinator',
+      lastName: 'User',
+      email: user.email,
+      mobileNumber: '9876543210',
+      designation: 'Department Coordinator',
+      role: 'ROLE_PLACEMENT_COORDINATOR',
+      departmentId: dept._id,
+      department: dept.name
+    });
+  }
 
   const rawToken = createRawSessionToken();
   const sessionTokenHash = hashSessionToken(rawToken);

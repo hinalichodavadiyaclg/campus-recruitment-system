@@ -20,6 +20,7 @@ const [
   { Department },
   { Course },
   { Role },
+  { Company },
   { hashPassword },
   { createRawSessionToken, hashSessionToken },
   { ROLE_IDS, PERMISSION_IDS }
@@ -34,6 +35,7 @@ const [
   import('../src/models/department.model.js'),
   import('../src/models/course.model.js'),
   import('../src/models/role.model.js'),
+  import('../src/models/company.model.js'),
   import('../src/utils/password.js'),
   import('../src/utils/session-token.js'),
   import('../src/utils/access-constants.js')
@@ -810,4 +812,194 @@ test('6.3 Placement Coordinator cannot delete other placement officers or admini
 
   assert.equal(res.status, 403);
   assert.equal(res.body.success, false);
+});
+
+test('6.4 Placement Coordinator cannot query administrative or placement officer accounts via GET /api/users', async () => {
+  const coordA = await createCoordinatorSession(deptA);
+  const admin = await createAuthenticatedSession(ROLE_IDS.SUPER_ADMIN, 'PLACEMENT');
+  const head = await createPlacementHeadSession();
+  const coordB = await createCoordinatorSession(deptB);
+
+  // 1. Explicitly requesting userType=PLACEMENT -> returns 0 items
+  const resPlacement = await request(app)
+    .get('/api/users?userType=PLACEMENT')
+    .set('Authorization', `Bearer ${coordA.token}`);
+  assert.equal(resPlacement.status, 200);
+  assert.equal(resPlacement.body.data.items.length, 0);
+  assert.equal(resPlacement.body.data.total, 0);
+
+  // 2. Explicitly requesting roleId=ROLE_SUPER_ADMIN -> returns 0 items
+  const resAdminRole = await request(app)
+    .get(`/api/users?roleId=${ROLE_IDS.SUPER_ADMIN}`)
+    .set('Authorization', `Bearer ${coordA.token}`);
+  assert.equal(resAdminRole.status, 200);
+  assert.equal(resAdminRole.body.data.items.length, 0);
+
+  // 3. General list -> none of the returned accounts should be PLACEMENT officers or Super Admin
+  const resAll = await request(app)
+    .get('/api/users')
+    .set('Authorization', `Bearer ${coordA.token}`);
+  assert.equal(resAll.status, 200);
+  const returnedUserTypes = resAll.body.data.items.map((u) => u.userType);
+  const returnedRoleIds = resAll.body.data.items.map((u) => u.roleId);
+  assert.ok(!returnedUserTypes.includes('PLACEMENT'), 'No PLACEMENT userType accounts should be exposed to coordinator');
+  assert.ok(!returnedRoleIds.includes(ROLE_IDS.SUPER_ADMIN), 'Super Admin account should not be exposed');
+  assert.ok(!returnedRoleIds.includes(ROLE_IDS.PLACEMENT_HEAD), 'Placement Head account should not be exposed');
+  assert.ok(!returnedRoleIds.includes(ROLE_IDS.PLACEMENT_COORDINATOR), 'Placement Coordinator accounts should not be exposed');
+});
+
+test('6.5 Placement Coordinator GET /api/users returns only students from their department and company accounts', async () => {
+  const coordA = await createCoordinatorSession(deptA);
+
+  const studentUserA = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+  await Student.create({
+    userId: studentUserA.user._id,
+    universityId: `U-A-${Date.now()}`,
+    firstName: 'AliceDeptA',
+    lastName: 'Shah',
+    email: studentUserA.user.email,
+    mobileNumber: '9123456780',
+    departmentId: deptA._id,
+    department: deptA.name,
+    courseId: courseA._id,
+    branch: courseA.name,
+    semester: 6,
+    cgpa: 8.5
+  });
+
+  const studentUserB = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+  await Student.create({
+    userId: studentUserB.user._id,
+    universityId: `U-B-${Date.now()}`,
+    firstName: 'BobDeptB',
+    lastName: 'Mehta',
+    email: studentUserB.user.email,
+    mobileNumber: '9123456781',
+    departmentId: deptB._id,
+    department: deptB.name,
+    courseId: courseB._id,
+    branch: courseB.name,
+    semester: 6,
+    cgpa: 7.9
+  });
+
+  const compDoc = await Company.create({
+    companyName: `Acme Corp ${Date.now()}`,
+    industryType: 'Tech',
+    email: `acme-${Date.now()}@acme.com`,
+    hrRecruiterName: 'John Recruiter',
+    yearEstablished: 2020
+  });
+  const companyUser = await createAuthenticatedSession(ROLE_IDS.COMPANY, 'COMPANY', { companyId: compDoc._id });
+
+  // Query users as Coordinator A
+  const res = await request(app)
+    .get('/api/users')
+    .set('Authorization', `Bearer ${coordA.token}`);
+
+  assert.equal(res.status, 200);
+  const userIds = res.body.data.items.map((u) => String(u._id));
+  assert.ok(userIds.includes(String(studentUserA.user._id)), 'Should include student from coordinator department');
+  assert.ok(!userIds.includes(String(studentUserB.user._id)), 'Should NOT include student from another department');
+  assert.ok(userIds.includes(String(companyUser.user._id)), 'Should include company user');
+});
+
+test('6.6 Placement Coordinator cannot read administrator, placement officer, or out-of-department student by ID', async () => {
+  const coordA = await createCoordinatorSession(deptA);
+  const admin = await createAuthenticatedSession(ROLE_IDS.SUPER_ADMIN, 'PLACEMENT');
+  const head = await createPlacementHeadSession();
+  const coordB = await createCoordinatorSession(deptB);
+
+  const studentUserB = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+  await Student.create({
+    userId: studentUserB.user._id,
+    universityId: `U-B-GET-${Date.now()}`,
+    firstName: 'BobDeptB',
+    lastName: 'Mehta',
+    email: studentUserB.user.email,
+    mobileNumber: '9123456782',
+    departmentId: deptB._id,
+    department: deptB.name,
+    courseId: courseB._id,
+    branch: courseB.name,
+    semester: 6,
+    cgpa: 7.9
+  });
+
+  // Coordinator attempts to inspect Admin account -> 403
+  const resAdmin = await request(app)
+    .get(`/api/users/${admin.user._id}`)
+    .set('Authorization', `Bearer ${coordA.token}`);
+  assert.equal(resAdmin.status, 403);
+
+  // Coordinator attempts to inspect Placement Head account -> 403
+  const resHead = await request(app)
+    .get(`/api/users/${head.user._id}`)
+    .set('Authorization', `Bearer ${coordA.token}`);
+  assert.equal(resHead.status, 403);
+
+  // Coordinator attempts to inspect Coordinator B account -> 403
+  const resCoordB = await request(app)
+    .get(`/api/users/${coordB.user._id}`)
+    .set('Authorization', `Bearer ${coordA.token}`);
+  assert.equal(resCoordB.status, 403);
+
+  // Coordinator attempts to inspect out-of-department student user -> 403
+  const resStudentB = await request(app)
+    .get(`/api/users/${studentUserB.user._id}`)
+    .set('Authorization', `Bearer ${coordA.token}`);
+  assert.equal(resStudentB.status, 403);
+});
+
+test('6.7 Placement Coordinator can read their own user account and own-department student user account by ID', async () => {
+  const coordA = await createCoordinatorSession(deptA);
+
+  const studentUserA = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+  await Student.create({
+    userId: studentUserA.user._id,
+    universityId: `U-A-GET-${Date.now()}`,
+    firstName: 'AliceDeptA',
+    lastName: 'Shah',
+    email: studentUserA.user.email,
+    mobileNumber: '9123456783',
+    departmentId: deptA._id,
+    department: deptA.name,
+    courseId: courseA._id,
+    branch: courseA.name,
+    semester: 6,
+    cgpa: 8.5
+  });
+
+  // Coordinator reads own user profile -> 200
+  const resSelf = await request(app)
+    .get(`/api/users/${coordA.user._id}`)
+    .set('Authorization', `Bearer ${coordA.token}`);
+  assert.equal(resSelf.status, 200);
+  assert.equal(resSelf.body.data._id, String(coordA.user._id));
+
+  // Coordinator reads student from their department -> 200
+  const resStudentA = await request(app)
+    .get(`/api/users/${studentUserA.user._id}`)
+    .set('Authorization', `Bearer ${coordA.token}`);
+  assert.equal(resStudentA.status, 200);
+  assert.equal(resStudentA.body.data._id, String(studentUserA.user._id));
+});
+
+test('6.8 Super Admin and Placement Head can list all user accounts across all departments and roles', async () => {
+  const admin = await createAuthenticatedSession(ROLE_IDS.SUPER_ADMIN, 'PLACEMENT');
+  const head = await createPlacementHeadSession();
+
+  const resAdmin = await request(app)
+    .get('/api/users')
+    .set('Authorization', `Bearer ${admin.token}`);
+  assert.equal(resAdmin.status, 200);
+  assert.ok(resAdmin.body.data.total > 0);
+  const adminRoleIds = resAdmin.body.data.items.map((u) => u.roleId);
+  assert.ok(adminRoleIds.includes(ROLE_IDS.SUPER_ADMIN));
+
+  const resHead = await request(app)
+    .get('/api/users')
+    .set('Authorization', `Bearer ${head.token}`);
+  assert.equal(resHead.status, 200);
+  assert.ok(resHead.body.data.total > 0);
 });
