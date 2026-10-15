@@ -15,6 +15,7 @@ import { companyService } from '../../services/company.service.js';
 import { placementOfficerService } from '../../services/placement_officer.service.js';
 import { departmentService } from '../../services/department.service.js';
 import { courseService } from '../../services/course.service.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { isValidMobile, MOBILE_VALIDATION_MESSAGE } from '../../utils/validation.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -70,7 +71,11 @@ export function CreateUserModal({
   onSuccess,
   defaultType = 'STUDENT'
 }) {
-  const [activeTab, setActiveTab] = useState(defaultType);
+  const { user: currentUser, role, has } = useAuth();
+  const isCoordinator = role?.id === 'ROLE_PLACEMENT_COORDINATOR' || currentUser?.roleId === 'ROLE_PLACEMENT_COORDINATOR';
+  const canAccessPlacementOfficers = !isCoordinator && (has('PLACEMENT_USER_IMPORT') || has('USER_CREATE'));
+
+  const [activeTab, setActiveTab] = useState(() => (isCoordinator && defaultType === 'PLACEMENT' ? 'STUDENT' : defaultType));
   const [roles, setRoles] = useState([]);
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [departments, setDepartments] = useState([]);
@@ -97,7 +102,8 @@ export function CreateUserModal({
     if (isOpen) {
       setFieldErrors({});
       setServerError('');
-      setActiveTab(defaultType);
+      const effectiveType = isCoordinator && defaultType === 'PLACEMENT' ? 'STUDENT' : defaultType;
+      setActiveTab(effectiveType);
       setEmail('');
       setPassword('');
       setStudentForm(INITIAL_STUDENT_FORM);
@@ -112,9 +118,9 @@ export function CreateUserModal({
       ]).then(([rolesData, deptsData, coursesData]) => {
         setRoles(rolesData || []);
         if (rolesData && rolesData.length > 0) {
-          if (defaultType === 'STUDENT') {
+          if (effectiveType === 'STUDENT') {
             setSelectedRoleId('ROLE_STUDENT');
-          } else if (defaultType === 'COMPANY') {
+          } else if (effectiveType === 'COMPANY') {
             setSelectedRoleId('ROLE_COMPANY');
           } else {
             setSelectedRoleId('');
@@ -125,11 +131,21 @@ export function CreateUserModal({
         const courseList = coursesData.items || coursesData || [];
         setDepartments(deptList);
         setCourses(courseList);
+
+        if (isCoordinator && currentUser?.departmentId) {
+          const matchedCoordinatorDept = deptList.find(d => String(d._id) === String(currentUser.departmentId));
+          setStudentForm(prev => ({
+            ...prev,
+            departmentId: String(currentUser.departmentId),
+            department: matchedCoordinatorDept?.name || currentUser.departmentName || ''
+          }));
+        }
       });
     }
-  }, [isOpen, defaultType]);
+  }, [isOpen, defaultType, isCoordinator, currentUser?.departmentId]);
 
   const handleTabChange = (type) => {
+    if (type === 'PLACEMENT' && !canAccessPlacementOfficers) return;
     setActiveTab(type);
     setFieldErrors({});
     setServerError('');
@@ -429,15 +445,17 @@ export function CreateUserModal({
           >
             <BuildingIcon size={14} /> Company
           </button>
-          <button
-            type="button"
-            id="tab-btn-placement"
-            className={activeTab === 'PLACEMENT' ? 'primary' : 'secondary'}
-            style={{ flex: 1, padding: '8px 12px', fontSize: '13px' }}
-            onClick={() => handleTabChange('PLACEMENT')}
-          >
-            <BriefcaseIcon size={14} /> Placement Officer
-          </button>
+          {canAccessPlacementOfficers && (
+            <button
+              type="button"
+              id="tab-btn-placement"
+              className={activeTab === 'PLACEMENT' ? 'primary' : 'secondary'}
+              style={{ flex: 1, padding: '8px 12px', fontSize: '13px' }}
+              onClick={() => handleTabChange('PLACEMENT')}
+            >
+              <BriefcaseIcon size={14} /> Placement Officer
+            </button>
+          )}
         </div>
       </div>
 
@@ -628,6 +646,7 @@ export function CreateUserModal({
                     id="st-dept-select"
                     value={studentForm.departmentId}
                     onChange={(e) => handleDepartmentChange(e.target.value)}
+                    disabled={isCoordinator}
                     aria-invalid={Boolean(fieldErrors.departmentId)}
                     style={fieldErrors.departmentId ? { borderColor: 'var(--red, #e53e3e)' } : {}}
                   >

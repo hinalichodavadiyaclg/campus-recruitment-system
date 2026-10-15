@@ -6,14 +6,14 @@
 
 /**
  * Returns courses that belong to the selected department.
- * If no department is selected (empty string/null), returns all courses.
+ * If no department is selected (empty string/null), returns an empty array.
  *
  * @param {Array} courses - Full list of course objects.
  * @param {string} selectedDepartmentId - The ID of the currently selected department.
- * @returns {Array} Courses belonging to the selected department or all courses if none selected.
+ * @returns {Array} Courses belonging to the selected department.
  */
 export function getAvailableCourses(courses = [], selectedDepartmentId = '') {
-  if (!selectedDepartmentId) return courses;
+  if (!selectedDepartmentId) return [];
   return courses.filter((c) => {
     const dId = c?.departmentId?._id ? String(c.departmentId._id) : (c?.departmentId ? String(c.departmentId) : '');
     return dId === String(selectedDepartmentId);
@@ -22,7 +22,7 @@ export function getAvailableCourses(courses = [], selectedDepartmentId = '') {
 
 /**
  * Checks whether the currently selected course should be reset when the department changes.
- * Returns true if the course does NOT belong to the new department.
+ * Returns true if no department is selected or if the course does NOT belong to the new department.
  *
  * @param {string} currentCourseId - The ID of the currently selected course.
  * @param {string} newDepartmentId - The new department ID being switched to.
@@ -30,7 +30,10 @@ export function getAvailableCourses(courses = [], selectedDepartmentId = '') {
  * @returns {boolean} True if the course is incompatible and should be reset.
  */
 export function shouldResetCourseSelection(currentCourseId, newDepartmentId, courses = []) {
-  if (!currentCourseId || !newDepartmentId || !Array.isArray(courses) || courses.length === 0) return false;
+  if (!currentCourseId) return false;
+  // If department is cleared or empty, course cannot remain selected
+  if (!newDepartmentId) return true;
+  if (!Array.isArray(courses) || courses.length === 0) return false;
   const course = courses.find((c) =>
     String(c?._id) === String(currentCourseId) ||
     String(c?.code || '').toLowerCase() === String(currentCourseId).toLowerCase() ||

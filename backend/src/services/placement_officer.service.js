@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
+import { Department } from '../models/department.model.js';
 import { PlacementOfficer } from '../models/placement_officer.model.js';
 import { User } from '../models/user.model.js';
 import { ROLE_IDS } from '../utils/access-constants.js';

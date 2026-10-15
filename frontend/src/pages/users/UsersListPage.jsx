@@ -48,7 +48,10 @@ export function UsersListPage() {
   // Active Tab: 'all' | 'students' | 'company' | 'placement'
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = initialParams.get('tab');
-    if (tabParam) return tabParam;
+    if (tabParam) {
+      if (isCoordinator && tabParam === 'placement') return 'all';
+      return tabParam;
+    }
     if (
       initialParams.get('courseId') ||
       initialParams.get('course') ||
@@ -79,14 +82,21 @@ export function UsersListPage() {
   const [coursesList, setCoursesList] = useState([]);
   const [studentDepartmentFilter, setStudentDepartmentFilter] = useState(() => {
     if (isCoordinator && coordinatorDeptId) return String(coordinatorDeptId);
-    return String(initialParams.get('departmentId') || initialParams.get('department') || '');
+    return '';
   });
-  const [studentCourseFilter, setStudentCourseFilter] = useState(() => {
-    return String(initialParams.get('courseId') || initialParams.get('course') || '');
-  });
+  const [studentCourseFilter, setStudentCourseFilter] = useState('');
   const [studentSemesterFilter, setStudentSemesterFilter] = useState('');
   const [studentMinCgpaFilter, setStudentMinCgpaFilter] = useState('');
   const [studentBacklogFilter, setStudentBacklogFilter] = useState('');
+
+  useEffect(() => {
+    if (!isCoordinator && (window.location.hash.includes('course') || window.location.hash.includes('department'))) {
+      setStudentDepartmentFilter('');
+      setStudentCourseFilter('');
+      const cleanHash = window.location.hash.split('?')[0];
+      window.history.replaceState(null, '', `${cleanHash}?tab=students`);
+    }
+  }, [isCoordinator]);
 
   useEffect(() => {
     if (isCoordinator && coordinatorDeptId && studentDepartmentFilter !== String(coordinatorDeptId)) {
@@ -94,31 +104,17 @@ export function UsersListPage() {
     }
   }, [isCoordinator, coordinatorDeptId, studentDepartmentFilter]);
 
-  // Synchronize on hash changes (e.g. redirected from Course or Department page)
+  // Synchronize on hash changes
   useEffect(() => {
     const applyHashParams = () => {
       const params = getHashQueryParams();
       const tabParam = params.get('tab');
-      const courseParam = params.get('courseId') || params.get('course');
-      const deptParam = params.get('departmentId') || params.get('department');
 
       if (tabParam) {
-        setActiveTab(tabParam);
-      } else if (courseParam || deptParam) {
-        setActiveTab('students');
-      }
-
-      if (courseParam) {
-        setStudentCourseFilter(String(courseParam));
-      } else {
-        setStudentCourseFilter('');
-      }
-
-      if (!isCoordinator) {
-        if (deptParam) {
-          setStudentDepartmentFilter(String(deptParam));
-        } else if (!courseParam) {
-          setStudentDepartmentFilter('');
+        if (isCoordinator && tabParam === 'placement') {
+          setActiveTab('all');
+        } else {
+          setActiveTab(tabParam);
         }
       }
     };
@@ -150,7 +146,7 @@ export function UsersListPage() {
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(null);
   const [tempPasswordNotice, setTempPasswordNotice] = useState(null);
 
-  const canAccessPlacementOfficers = has('PLACEMENT_USER_IMPORT') || has('USER_CREATE');
+  const canAccessPlacementOfficers = !isCoordinator && (has('PLACEMENT_USER_IMPORT') || has('USER_CREATE'));
 
   useEffect(() => {
     if (activeTab === 'placement' && !canAccessPlacementOfficers) {
@@ -170,7 +166,7 @@ export function UsersListPage() {
         deptsData,
         coursesData
       ] = await Promise.all([
-        userService.listUsers({ limit: 100 }),
+        userService.listUsers({ limit: 100 }).catch(() => ({ items: [] })),
         has('ROLE_READ') ? roleService.listRoles() : Promise.resolve([]),
         studentService.listStudents({ limit: 100 }).catch(() => ({ items: [] })),
         companyService.listCompanies({ limit: 100 }).catch(() => ({ items: [] })),
@@ -185,24 +181,11 @@ export function UsersListPage() {
       setRoles(rolesData || []);
       setStudents(studentsData.items || []);
       setCompanies(companiesData.items || []);
+      setOfficers(officersData.items || []);
       const resolvedDepts = deptsData.items || deptsData || [];
       const resolvedCourses = coursesData.items || coursesData || [];
       setDepartmentsList(resolvedDepts);
       setCoursesList(resolvedCourses);
-
-      // Auto-populate department filter when course was selected from URL without explicit department
-      if (!isCoordinator) {
-        const activeCourseParam = initialParams.get('courseId') || initialParams.get('course');
-        if (activeCourseParam) {
-          const matchedCourse = resolvedCourses.find(
-            (c) => String(c._id) === String(activeCourseParam) || String(c.code).toLowerCase() === String(activeCourseParam).toLowerCase()
-          );
-          if (matchedCourse?.departmentId) {
-            const deptId = matchedCourse.departmentId._id ? String(matchedCourse.departmentId._id) : String(matchedCourse.departmentId);
-            setStudentDepartmentFilter(deptId);
-          }
-        }
-      }
     } catch (err) {
       toast(err.message || 'Failed to load user management data');
     } finally {
@@ -217,6 +200,11 @@ export function UsersListPage() {
   const filteredUsers = useMemo(() => {
     const q = search.toLowerCase();
     return users.filter((u) => {
+      // For coordinators, strictly show only student and company accounts
+      if (isCoordinator) {
+        if (u.userType !== 'STUDENT' && u.userType !== 'COMPANY') return false;
+        if (['ROLE_SUPER_ADMIN', 'ROLE_PLACEMENT_HEAD', 'ROLE_PLACEMENT_COORDINATOR'].includes(u.roleId)) return false;
+      }
       const matchesSearch =
         !q ||
         [u.email, u.universityId, u.employeeId, u.companyName, u.profileName]
@@ -229,7 +217,7 @@ export function UsersListPage() {
       const matchesStatus = !statusFilter || u.accountStatus === statusFilter;
       return matchesSearch && matchesType && matchesRole && matchesStatus;
     });
-  }, [users, search, typeFilter, roleFilter, statusFilter]);
+  }, [users, search, typeFilter, roleFilter, statusFilter, isCoordinator]);
 
   const availableCourses = useMemo(() => {
     if (isCoordinator) {
@@ -244,7 +232,7 @@ export function UsersListPage() {
 
   const handleDepartmentFilterChange = (newDeptId) => {
     setStudentDepartmentFilter(newDeptId);
-    if (newDeptId && shouldResetCourseSelection(studentCourseFilter, newDeptId, coursesList)) {
+    if (!newDeptId || shouldResetCourseSelection(studentCourseFilter, newDeptId, coursesList)) {
       setStudentCourseFilter('');
     }
   };
@@ -293,8 +281,8 @@ export function UsersListPage() {
         const pDeptId = po.departmentId?._id
           ? String(po.departmentId._id)
           : po.departmentId
-          ? String(po.departmentId)
-          : '';
+            ? String(po.departmentId)
+            : '';
         if (pDeptId) {
           if (pDeptId !== String(officerDepartmentFilter)) return false;
         } else if (po.department) {
@@ -335,9 +323,9 @@ export function UsersListPage() {
   const formatDate = (value) =>
     value
       ? new Intl.DateTimeFormat(undefined, {
-          dateStyle: 'medium',
-          timeStyle: 'short'
-        }).format(new Date(value))
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      }).format(new Date(value))
       : '—';
 
   const formatRoleLabel = (role) => {
@@ -461,7 +449,7 @@ export function UsersListPage() {
               item.universityId === u.universityId ||
               item.email?.toLowerCase() === u.email?.toLowerCase()
           );
-        } catch (_) {}
+        } catch (_) { }
       }
       if (s) {
         setEditingStudent(s);
@@ -481,7 +469,7 @@ export function UsersListPage() {
       if (!c && u.companyId) {
         try {
           c = await companyService.getCompany(u.companyId);
-        } catch (_) {}
+        } catch (_) { }
       }
       if (c) {
         setEditingCompany(c);
@@ -566,7 +554,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_CREATE') && activeTab === 'students' && (
+      {(has('USER_CREATE') || has('STUDENT_CREATE')) && activeTab === 'students' && (
         <button
           className="primary"
           type="button"
@@ -579,7 +567,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_CREATE') && activeTab === 'company' && (
+      {!isCoordinator && has('USER_CREATE') && activeTab === 'company' && (
         <button
           className="primary"
           type="button"
@@ -592,7 +580,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_CREATE') && activeTab === 'placement' && (
+      {canAccessPlacementOfficers && activeTab === 'placement' && (
         <button
           className="primary"
           type="button"
@@ -605,7 +593,7 @@ export function UsersListPage() {
         </button>
       )}
 
-      {has('USER_CREATE') && activeTab === 'all' && (
+      {!isCoordinator && has('USER_CREATE') && activeTab === 'all' && (
         <button
           className="primary"
           id="btn-create-user"
@@ -649,8 +637,6 @@ export function UsersListPage() {
             onClick={() => {
               setActiveTab('students');
               setSearch('');
-              setStudentDepartmentFilter('');
-              setStudentCourseFilter('');
             }}
           >
             <GraduationCapIcon size={16} /> Students
@@ -732,8 +718,21 @@ export function UsersListPage() {
                   id="student-filter-course"
                   value={String(studentCourseFilter || '')}
                   onChange={(e) => setStudentCourseFilter(e.target.value)}
+                  disabled={!isCoordinator && !studentDepartmentFilter}
+                  title={!isCoordinator && !studentDepartmentFilter ? 'Please select a department first' : 'Filter by course'}
+                  style={{
+                    backgroundColor: (!isCoordinator && !studentDepartmentFilter) ? 'var(--bg-muted, #f1f5f9)' : undefined,
+                    cursor: (!isCoordinator && !studentDepartmentFilter) ? 'not-allowed' : 'default',
+                    opacity: (!isCoordinator && !studentDepartmentFilter) ? 0.75 : 1
+                  }}
                 >
-                  <option value="">All Courses</option>
+                  <option value="">
+                    {!isCoordinator && !studentDepartmentFilter
+                      ? 'Courses'
+                      : availableCourses.length === 0
+                        ? 'No courses available'
+                        : 'All Courses'}
+                  </option>
                   {availableCourses.map((c) => (
                     <option key={c._id} value={String(c._id)}>
                       {c.name} {c.code ? `(${c.code})` : ''}
@@ -796,11 +795,17 @@ export function UsersListPage() {
                     className="ghost"
                     onClick={() => {
                       setSearch('');
-                      setStudentDepartmentFilter('');
+                      if (!isCoordinator) {
+                        setStudentDepartmentFilter('');
+                      }
                       setStudentCourseFilter('');
                       setStudentSemesterFilter('');
                       setStudentMinCgpaFilter('');
                       setStudentBacklogFilter('');
+                      if (window.location.hash.includes('?')) {
+                        const cleanHash = window.location.hash.split('?')[0];
+                        window.history.replaceState(null, '', `${cleanHash}?tab=students`);
+                      }
                     }}
                     style={{ padding: '8px 12px', fontSize: '0.84rem' }}
                   >
@@ -1123,7 +1128,7 @@ export function UsersListPage() {
                 <option value="">All user types</option>
                 <option value="STUDENT">STUDENT</option>
                 <option value="COMPANY">COMPANY</option>
-                <option value="PLACEMENT">PLACEMENT</option>
+                {!isCoordinator && <option value="PLACEMENT">PLACEMENT</option>}
               </select>
               <select
                 id="user-role"
@@ -1131,11 +1136,13 @@ export function UsersListPage() {
                 onChange={(e) => setRoleFilter(e.target.value)}
               >
                 <option value="">All roles</option>
-                {roles.map((r) => (
-                  <option key={r._id} value={r._id}>
-                    {r.name}
-                  </option>
-                ))}
+                {roles
+                  .filter((r) => !isCoordinator || (r._id !== 'ROLE_SUPER_ADMIN' && r._id !== 'ROLE_PLACEMENT_HEAD' && r._id !== 'ROLE_PLACEMENT_COORDINATOR'))
+                  .map((r) => (
+                    <option key={r._id} value={r._id}>
+                      {r.name}
+                    </option>
+                  ))}
               </select>
               <select
                 id="user-status"
@@ -1346,24 +1353,22 @@ export function UsersListPage() {
       <ConfirmModal
         isOpen={Boolean(deleteAllConfirm)}
         onClose={() => setDeleteAllConfirm(null)}
-        title={`Delete All ${
-          deleteAllConfirm?.type === 'students'
-            ? 'Students'
-            : deleteAllConfirm?.type === 'company'
+        title={`Delete All ${deleteAllConfirm?.type === 'students'
+          ? 'Students'
+          : deleteAllConfirm?.type === 'company'
             ? 'Companies'
             : deleteAllConfirm?.type === 'placement'
-            ? 'Placement Officers'
-            : 'User Accounts'
-        }`}
-        message={`Are you sure you want to delete ALL matching ${
-          deleteAllConfirm?.type === 'students'
-            ? 'student profiles and linked accounts'
-            : deleteAllConfirm?.type === 'company'
+              ? 'Placement Officers'
+              : 'User Accounts'
+          }`}
+        message={`Are you sure you want to delete ALL matching ${deleteAllConfirm?.type === 'students'
+          ? 'student profiles and linked accounts'
+          : deleteAllConfirm?.type === 'company'
             ? 'company profiles and recruiter accounts'
             : deleteAllConfirm?.type === 'placement'
-            ? 'placement officer profiles (excluding your current account)'
-            : 'user accounts (excluding your active logged-in account)'
-        }? This action cannot be undone.`}
+              ? 'placement officer profiles (excluding your current account)'
+              : 'user accounts (excluding your active logged-in account)'
+          }? This action cannot be undone.`}
         confirmLabel="Delete All"
         danger={true}
         onConfirm={handleDeleteAll}

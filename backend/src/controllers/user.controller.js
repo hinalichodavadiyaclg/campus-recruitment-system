@@ -3,12 +3,12 @@ import * as userService from '../services/user.service.js';
 import { sendSuccess } from '../utils/api-response.js';
 import { asyncHandler } from '../utils/async-handler.js';
 
-export const listUsers = asyncHandler(async (_request, response) =>
-  sendSuccess(response, 200, await userService.listUsers(response.locals.input.query))
+export const listUsers = asyncHandler(async (request, response) =>
+  sendSuccess(response, 200, await userService.listUsers(response.locals.input.query, request.auth))
 );
 
-export const getUser = asyncHandler(async (_request, response) => {
-  const user = await userService.getUserOrThrow(response.locals.input.params.id);
+export const getUser = asyncHandler(async (request, response) => {
+  const user = await userService.getUserOrThrow(response.locals.input.params.id, request.auth);
   const safe = userService.toSafeUser(user);
   if (user.userType === 'COMPANY') {
     const { Company } = await import('../models/company.model.js');
@@ -33,8 +33,8 @@ export const createUser = asyncHandler(async (_request, response) =>
   sendSuccess(response, 201, await userService.createUser(response.locals.input.body))
 );
 
-export const updateUser = asyncHandler(async (_request, response) =>
-  sendSuccess(response, 200, await userService.updateUser(response.locals.input.params.id, response.locals.input.body))
+export const updateUser = asyncHandler(async (request, response) =>
+  sendSuccess(response, 200, await userService.updateUser(response.locals.input.params.id, response.locals.input.body, request.auth))
 );
 
 export const deleteUser = asyncHandler(async (request, response) =>

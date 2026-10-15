@@ -32,14 +32,19 @@ export function FilteredStudentRecordsPage() {
   const [search, setSearch] = useState(queryParams.get('search') || '');
   const [departmentFilter, setDepartmentFilter] = useState(() => {
     if (isCoordinator && coordinatorDeptId) return String(coordinatorDeptId);
-    return String(queryParams.get('department') || queryParams.get('departmentId') || '');
+    return '';
   });
-  const [courseFilter, setCourseFilter] = useState(() => {
-    return String(queryParams.get('course') || queryParams.get('courseId') || '');
-  });
+  const [courseFilter, setCourseFilter] = useState('');
   const [semesterFilter, setSemesterFilter] = useState(queryParams.get('semester') || '');
   const [minCgpaFilter, setMinCgpaFilter] = useState(queryParams.get('cgpa') || queryParams.get('minCgpa') || '');
   const [backlogFilter, setBacklogFilter] = useState(queryParams.get('backlogs') || '');
+
+  useEffect(() => {
+    if (!isCoordinator && (window.location.hash.includes('course') || window.location.hash.includes('department'))) {
+      const cleanHash = window.location.hash.split('?')[0];
+      window.history.replaceState(null, '', cleanHash);
+    }
+  }, [isCoordinator]);
 
   useEffect(() => {
     if (isCoordinator && coordinatorDeptId && departmentFilter !== String(coordinatorDeptId)) {
@@ -70,20 +75,6 @@ export function FilteredStudentRecordsPage() {
       setStudents(studentsData.items || []);
       setDepartmentsList(resolvedDepts);
       setCoursesList(resolvedCourses);
-
-      // Auto-populate department filter when course filter was provided without explicit department
-      if (!isCoordinator) {
-        const activeCourseParam = queryParams.get('course') || queryParams.get('courseId');
-        if (activeCourseParam) {
-          const matchedCourse = resolvedCourses.find(
-            (c) => String(c._id) === String(activeCourseParam) || String(c.code).toLowerCase() === String(activeCourseParam).toLowerCase()
-          );
-          if (matchedCourse?.departmentId) {
-            const deptId = matchedCourse.departmentId._id ? String(matchedCourse.departmentId._id) : String(matchedCourse.departmentId);
-            setDepartmentFilter(deptId);
-          }
-        }
-      }
     } catch (err) {
       toast(err.message || 'Failed to load student records.');
     } finally {
@@ -110,7 +101,7 @@ export function FilteredStudentRecordsPage() {
     if (isCoordinator && coordinatorDeptId) return;
     setDepartmentFilter(newDeptId);
     setCurrentPage(1);
-    if (newDeptId && shouldResetCourseSelection(courseFilter, newDeptId, coursesList)) {
+    if (!newDeptId || shouldResetCourseSelection(courseFilter, newDeptId, coursesList)) {
       setCourseFilter('');
     }
   };
@@ -352,18 +343,23 @@ export function FilteredStudentRecordsPage() {
                   setCourseFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                disabled={Boolean(departmentFilter && availableCourses.length === 0)}
+                disabled={!isCoordinator && !departmentFilter}
+                title={!isCoordinator && !departmentFilter ? 'Please select a department first' : 'Filter by course'}
                 style={{
                   width: '100%',
                   padding: '7px 8px',
                   borderRadius: '7px',
                   border: '1px solid #cbd5e1',
                   fontSize: '0.84rem',
-                  backgroundColor: '#ffffff'
+                  backgroundColor: (!isCoordinator && !departmentFilter) ? '#f1f5f9' : '#ffffff',
+                  cursor: (!isCoordinator && !departmentFilter) ? 'not-allowed' : 'default',
+                  opacity: (!isCoordinator && !departmentFilter) ? 0.75 : 1
                 }}
               >
                 <option value="">
-                  {departmentFilter && availableCourses.length === 0
+                  {!isCoordinator && !departmentFilter
+                    ? 'Courses'
+                    : availableCourses.length === 0
                     ? 'No courses'
                     : 'All Courses'}
                 </option>
@@ -480,6 +476,10 @@ export function FilteredStudentRecordsPage() {
                     setMinCgpaFilter('');
                     setBacklogFilter('');
                     setCurrentPage(1);
+                    if (window.location.hash.includes('?')) {
+                      const cleanHash = window.location.hash.split('?')[0];
+                      window.history.replaceState(null, '', cleanHash);
+                    }
                   }}
                   style={{
                     padding: '7px 12px',

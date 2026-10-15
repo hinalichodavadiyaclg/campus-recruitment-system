@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import './department.model.js';
 import { ROLE_IDS } from '../utils/access-constants.js';
 
 const { Schema, model } = mongoose;
