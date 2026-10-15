@@ -82,14 +82,21 @@ export function UsersListPage() {
   const [coursesList, setCoursesList] = useState([]);
   const [studentDepartmentFilter, setStudentDepartmentFilter] = useState(() => {
     if (isCoordinator && coordinatorDeptId) return String(coordinatorDeptId);
-    return String(initialParams.get('departmentId') || initialParams.get('department') || '');
+    return '';
   });
-  const [studentCourseFilter, setStudentCourseFilter] = useState(() => {
-    return String(initialParams.get('courseId') || initialParams.get('course') || '');
-  });
+  const [studentCourseFilter, setStudentCourseFilter] = useState('');
   const [studentSemesterFilter, setStudentSemesterFilter] = useState('');
   const [studentMinCgpaFilter, setStudentMinCgpaFilter] = useState('');
   const [studentBacklogFilter, setStudentBacklogFilter] = useState('');
+
+  useEffect(() => {
+    if (!isCoordinator && (window.location.hash.includes('course') || window.location.hash.includes('department'))) {
+      setStudentDepartmentFilter('');
+      setStudentCourseFilter('');
+      const cleanHash = window.location.hash.split('?')[0];
+      window.history.replaceState(null, '', `${cleanHash}?tab=students`);
+    }
+  }, [isCoordinator]);
 
   useEffect(() => {
     if (isCoordinator && coordinatorDeptId && studentDepartmentFilter !== String(coordinatorDeptId)) {
@@ -97,35 +104,17 @@ export function UsersListPage() {
     }
   }, [isCoordinator, coordinatorDeptId, studentDepartmentFilter]);
 
-  // Synchronize on hash changes (e.g. redirected from Course or Department page)
+  // Synchronize on hash changes
   useEffect(() => {
     const applyHashParams = () => {
       const params = getHashQueryParams();
       const tabParam = params.get('tab');
-      const courseParam = params.get('courseId') || params.get('course');
-      const deptParam = params.get('departmentId') || params.get('department');
 
       if (tabParam) {
         if (isCoordinator && tabParam === 'placement') {
           setActiveTab('all');
         } else {
           setActiveTab(tabParam);
-        }
-      } else if (courseParam || deptParam) {
-        setActiveTab('students');
-      }
-
-      if (courseParam) {
-        setStudentCourseFilter(String(courseParam));
-      } else {
-        setStudentCourseFilter('');
-      }
-
-      if (!isCoordinator) {
-        if (deptParam) {
-          setStudentDepartmentFilter(String(deptParam));
-        } else if (!courseParam) {
-          setStudentDepartmentFilter('');
         }
       }
     };
@@ -197,20 +186,6 @@ export function UsersListPage() {
       const resolvedCourses = coursesData.items || coursesData || [];
       setDepartmentsList(resolvedDepts);
       setCoursesList(resolvedCourses);
-
-      // Auto-populate department filter when course was selected from URL without explicit department
-      if (!isCoordinator) {
-        const activeCourseParam = initialParams.get('courseId') || initialParams.get('course');
-        if (activeCourseParam) {
-          const matchedCourse = resolvedCourses.find(
-            (c) => String(c._id) === String(activeCourseParam) || String(c.code).toLowerCase() === String(activeCourseParam).toLowerCase()
-          );
-          if (matchedCourse?.departmentId) {
-            const deptId = matchedCourse.departmentId._id ? String(matchedCourse.departmentId._id) : String(matchedCourse.departmentId);
-            setStudentDepartmentFilter(deptId);
-          }
-        }
-      }
     } catch (err) {
       toast(err.message || 'Failed to load user management data');
     } finally {
@@ -820,11 +795,17 @@ export function UsersListPage() {
                     className="ghost"
                     onClick={() => {
                       setSearch('');
-                      setStudentDepartmentFilter('');
+                      if (!isCoordinator) {
+                        setStudentDepartmentFilter('');
+                      }
                       setStudentCourseFilter('');
                       setStudentSemesterFilter('');
                       setStudentMinCgpaFilter('');
                       setStudentBacklogFilter('');
+                      if (window.location.hash.includes('?')) {
+                        const cleanHash = window.location.hash.split('?')[0];
+                        window.history.replaceState(null, '', `${cleanHash}?tab=students`);
+                      }
                     }}
                     style={{ padding: '8px 12px', fontSize: '0.84rem' }}
                   >

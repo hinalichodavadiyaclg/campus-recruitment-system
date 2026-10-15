@@ -32,14 +32,19 @@ export function FilteredStudentRecordsPage() {
   const [search, setSearch] = useState(queryParams.get('search') || '');
   const [departmentFilter, setDepartmentFilter] = useState(() => {
     if (isCoordinator && coordinatorDeptId) return String(coordinatorDeptId);
-    return String(queryParams.get('department') || queryParams.get('departmentId') || '');
+    return '';
   });
-  const [courseFilter, setCourseFilter] = useState(() => {
-    return String(queryParams.get('course') || queryParams.get('courseId') || '');
-  });
+  const [courseFilter, setCourseFilter] = useState('');
   const [semesterFilter, setSemesterFilter] = useState(queryParams.get('semester') || '');
   const [minCgpaFilter, setMinCgpaFilter] = useState(queryParams.get('cgpa') || queryParams.get('minCgpa') || '');
   const [backlogFilter, setBacklogFilter] = useState(queryParams.get('backlogs') || '');
+
+  useEffect(() => {
+    if (!isCoordinator && (window.location.hash.includes('course') || window.location.hash.includes('department'))) {
+      const cleanHash = window.location.hash.split('?')[0];
+      window.history.replaceState(null, '', cleanHash);
+    }
+  }, [isCoordinator]);
 
   useEffect(() => {
     if (isCoordinator && coordinatorDeptId && departmentFilter !== String(coordinatorDeptId)) {
@@ -70,20 +75,6 @@ export function FilteredStudentRecordsPage() {
       setStudents(studentsData.items || []);
       setDepartmentsList(resolvedDepts);
       setCoursesList(resolvedCourses);
-
-      // Auto-populate department filter when course filter was provided without explicit department
-      if (!isCoordinator) {
-        const activeCourseParam = queryParams.get('course') || queryParams.get('courseId');
-        if (activeCourseParam) {
-          const matchedCourse = resolvedCourses.find(
-            (c) => String(c._id) === String(activeCourseParam) || String(c.code).toLowerCase() === String(activeCourseParam).toLowerCase()
-          );
-          if (matchedCourse?.departmentId) {
-            const deptId = matchedCourse.departmentId._id ? String(matchedCourse.departmentId._id) : String(matchedCourse.departmentId);
-            setDepartmentFilter(deptId);
-          }
-        }
-      }
     } catch (err) {
       toast(err.message || 'Failed to load student records.');
     } finally {
@@ -485,6 +476,10 @@ export function FilteredStudentRecordsPage() {
                     setMinCgpaFilter('');
                     setBacklogFilter('');
                     setCurrentPage(1);
+                    if (window.location.hash.includes('?')) {
+                      const cleanHash = window.location.hash.split('?')[0];
+                      window.history.replaceState(null, '', cleanHash);
+                    }
                   }}
                   style={{
                     padding: '7px 12px',
