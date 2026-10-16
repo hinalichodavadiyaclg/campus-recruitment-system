@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { importService } from '../../services/import.service.js';
@@ -150,6 +150,12 @@ export function ExcelImportPage({ type: initialType = 'student' }) {
     company: '#/companies/filtered',
     placement: '#/placement-officers/filtered'
   };
+
+  const listPath = {
+    student: '#/users?tab=students',
+    company: '#/users?tab=company',
+    placement: '#/users?tab=placement'
+  }[type] || '#/users?tab=students';
 
   const sectionLabels = {
     student: 'Students',
