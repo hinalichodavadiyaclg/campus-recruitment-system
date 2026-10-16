@@ -74,7 +74,22 @@ const initialPermissions = [
   { _id: PERMISSION_IDS.COURSE_READ, name: 'View courses', module: 'Course Management', action: 'READ', description: 'Allows viewing academic courses.' },
   { _id: PERMISSION_IDS.COURSE_UPDATE, name: 'Update courses', module: 'Course Management', action: 'UPDATE', description: 'Allows updating course details and active status.' },
   { _id: PERMISSION_IDS.COURSE_DELETE, name: 'Delete courses', module: 'Course Management', action: 'DELETE', description: 'Allows managing course deactivation.' },
-  { _id: PERMISSION_IDS.COURSE_MANAGE, name: 'Full course management', module: 'Course Management', action: 'MANAGE', description: 'Allows full management of academic courses.' }
+  { _id: PERMISSION_IDS.COURSE_MANAGE, name: 'Full course management', module: 'Course Management', action: 'MANAGE', description: 'Allows full management of academic courses.' },
+
+  // Workshops & Training
+  { _id: PERMISSION_IDS.WORKSHOP_CREATE, name: 'Create workshops', module: 'Workshops & Training', action: 'CREATE', description: 'Allows creating new workshop drafts.' },
+  { _id: PERMISSION_IDS.WORKSHOP_READ, name: 'View workshops', module: 'Workshops & Training', action: 'READ', description: 'Allows viewing published workshops, public session schedules, and capacity status.' },
+  { _id: PERMISSION_IDS.WORKSHOP_UPDATE, name: 'Update workshops', module: 'Workshops & Training', action: 'UPDATE', description: 'Allows modifying workshop details, session schedules, trainers, and submitting drafts for review.' },
+  { _id: PERMISSION_IDS.WORKSHOP_DELETE, name: 'Delete workshops', module: 'Workshops & Training', action: 'DELETE', description: 'Allows deleting draft or rejected workshops.' },
+  { _id: PERMISSION_IDS.WORKSHOP_APPROVE, name: 'Approve or reject workshops', module: 'Workshops & Training', action: 'MANAGE', description: 'Allows approving or rejecting workshops submitted for administrative review.' },
+  { _id: PERMISSION_IDS.WORKSHOP_PUBLISH, name: 'Publish workshops', module: 'Workshops & Training', action: 'MANAGE', description: 'Allows publishing approved workshops to open them for student registration.' },
+  { _id: PERMISSION_IDS.WORKSHOP_CANCEL, name: 'Cancel workshops', module: 'Workshops & Training', action: 'MANAGE', description: 'Allows cancelling scheduled or active workshops.' },
+  { _id: PERMISSION_IDS.WORKSHOP_REGISTER, name: 'Register for workshops', module: 'Workshops & Training', action: 'CREATE', description: 'Allows eligible students to register for published workshops and cancel their own active bookings before start.' },
+  { _id: PERMISSION_IDS.WORKSHOP_ROSTER_READ, name: 'View workshop rosters', module: 'Workshops & Training', action: 'READ', description: 'Allows staff to view participant rosters, registration statuses, and enrollment lists.' },
+  { _id: PERMISSION_IDS.WORKSHOP_ATTENDANCE_MANAGE, name: 'Manage session attendance', module: 'Workshops & Training', action: 'MANAGE', description: 'Allows assigned trainers and authorized staff to mark session attendance and make auditable attendance corrections with reasons.' },
+  { _id: PERMISSION_IDS.WORKSHOP_CERTIFICATE_MANAGE, name: 'Manage workshop certificates', module: 'Workshops & Training', action: 'MANAGE', description: 'Allows authorized staff to review completion rosters, approve issuance, and generate official certificates.' },
+  { _id: PERMISSION_IDS.WORKSHOP_AUDIT_READ, name: 'View workshop audit logs', module: 'Workshops & Training', action: 'READ', description: 'Allows staff to view workshop lifecycle logs, rejection notes, and attendance correction audit trails.' },
+  { _id: PERMISSION_IDS.WORKSHOP_MANAGE, name: 'Full workshop management', module: 'Workshops & Training', action: 'MANAGE', description: 'Allows full administrative management of workshops across all departments.' }
 ];
 
 const initialRoles = [
@@ -86,7 +101,9 @@ const initialRoles = [
       PERMISSION_IDS.AUTH_READ_SELF,
       PERMISSION_IDS.STUDENT_PROFILE_READ,
       PERMISSION_IDS.STUDENT_PROFILE_UPDATE,
-      PERMISSION_IDS.STUDENT_PROFILE_PUBLIC_READ
+      PERMISSION_IDS.STUDENT_PROFILE_PUBLIC_READ,
+      PERMISSION_IDS.WORKSHOP_READ,
+      PERMISSION_IDS.WORKSHOP_REGISTER
     ]
   },
   {
@@ -114,7 +131,16 @@ const initialRoles = [
       PERMISSION_IDS.STUDENT_UPDATE,
       PERMISSION_IDS.STUDENT_PROFILE_PUBLIC_READ,
       PERMISSION_IDS.DEPARTMENT_READ,
-      PERMISSION_IDS.COURSE_READ
+      PERMISSION_IDS.COURSE_READ,
+      PERMISSION_IDS.WORKSHOP_READ,
+      PERMISSION_IDS.WORKSHOP_CREATE,
+      PERMISSION_IDS.WORKSHOP_UPDATE,
+      PERMISSION_IDS.WORKSHOP_DELETE,
+      PERMISSION_IDS.WORKSHOP_PUBLISH,
+      PERMISSION_IDS.WORKSHOP_CANCEL,
+      PERMISSION_IDS.WORKSHOP_ROSTER_READ,
+      PERMISSION_IDS.WORKSHOP_ATTENDANCE_MANAGE,
+      PERMISSION_IDS.WORKSHOP_AUDIT_READ
     ]
   },
   {
@@ -144,7 +170,19 @@ const initialRoles = [
       PERMISSION_IDS.COURSE_READ,
       PERMISSION_IDS.COURSE_UPDATE,
       PERMISSION_IDS.COURSE_DELETE,
-      PERMISSION_IDS.COURSE_MANAGE
+      PERMISSION_IDS.COURSE_MANAGE,
+      PERMISSION_IDS.WORKSHOP_READ,
+      PERMISSION_IDS.WORKSHOP_CREATE,
+      PERMISSION_IDS.WORKSHOP_UPDATE,
+      PERMISSION_IDS.WORKSHOP_DELETE,
+      PERMISSION_IDS.WORKSHOP_APPROVE,
+      PERMISSION_IDS.WORKSHOP_PUBLISH,
+      PERMISSION_IDS.WORKSHOP_CANCEL,
+      PERMISSION_IDS.WORKSHOP_ROSTER_READ,
+      PERMISSION_IDS.WORKSHOP_ATTENDANCE_MANAGE,
+      PERMISSION_IDS.WORKSHOP_CERTIFICATE_MANAGE,
+      PERMISSION_IDS.WORKSHOP_AUDIT_READ,
+      PERMISSION_IDS.WORKSHOP_MANAGE
     ]
   },
   {
