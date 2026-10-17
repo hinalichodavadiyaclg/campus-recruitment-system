@@ -65,13 +65,13 @@ test('Test Suite 1: Canonical Workshop Permission Constant Integrity', () => {
   const allIds = Object.values(PERMISSION_IDS);
   const uniqueIds = new Set(allIds);
   assert.equal(allIds.length, uniqueIds.size, 'PERMISSION_IDS must not contain duplicate values');
-  assert.equal(allIds.length, 57, 'Total canonical permissions in PERMISSION_IDS must equal 57 (44 baseline + 13 workshop)');
+  assert.equal(allIds.length, 66, 'Total canonical permissions in PERMISSION_IDS must equal 66 (44 baseline + 13 workshop + 9 job/app)');
 
   // Ensure ALL_PERMISSION_IDS includes all workshop permissions
   for (const permId of EXPECTED_WORKSHOP_PERMISSIONS) {
     assert.ok(ALL_PERMISSION_IDS.includes(permId), `ALL_PERMISSION_IDS must include ${permId}`);
   }
-  assert.equal(ALL_PERMISSION_IDS.length, 57, 'ALL_PERMISSION_IDS must contain exactly 57 unique permissions');
+  assert.equal(ALL_PERMISSION_IDS.length, 66, 'ALL_PERMISSION_IDS must contain exactly 66 unique permissions');
 });
 
 test('Test Suite 2: Permission Metadata Parity in seedInitialData', async () => {
@@ -167,7 +167,7 @@ test('Test Suite 4: Least-Privilege Role Authorization Matrix', async () => {
   for (const staffPerm of staffPermissions) {
     assert.equal(studentPerms.has(staffPerm), false, `Student must NOT hold staff permission: ${staffPerm}`);
   }
-  assert.equal(studentPerms.size, 6, 'ROLE_STUDENT must have exactly 6 total permissions (4 baseline + 2 workshop)');
+  assert.equal(studentPerms.size, 9, 'ROLE_STUDENT must have exactly 9 total permissions (4 baseline + 2 workshop + 3 job/app)');
 
   // 2. Company Role
   const companyPerms = roleMap.get(ROLE_IDS.COMPANY);
@@ -175,7 +175,7 @@ test('Test Suite 4: Least-Privilege Role Authorization Matrix', async () => {
   for (const permId of EXPECTED_WORKSHOP_PERMISSIONS) {
     assert.equal(companyPerms.has(permId), false, `Company recruiter must NOT hold workshop permission: ${permId}`);
   }
-  assert.equal(companyPerms.size, 3, 'ROLE_COMPANY must have exactly 3 baseline permissions');
+  assert.equal(companyPerms.size, 8, 'ROLE_COMPANY must have exactly 8 permissions (3 baseline + 5 job/app)');
 
   // 3. Placement Coordinator Role
   const coordinatorPerms = roleMap.get(ROLE_IDS.PLACEMENT_COORDINATOR);
@@ -204,7 +204,7 @@ test('Test Suite 4: Least-Privilege Role Authorization Matrix', async () => {
   for (const permId of prohibitedCoordinator) {
     assert.equal(coordinatorPerms.has(permId), false, `Coordinator must NOT hold privileged/student permission ${permId}`);
   }
-  assert.equal(coordinatorPerms.size, 20, 'ROLE_PLACEMENT_COORDINATOR must have exactly 20 permissions (11 baseline + 9 workshop)');
+  assert.equal(coordinatorPerms.size, 22, 'ROLE_PLACEMENT_COORDINATOR must have exactly 22 permissions (11 baseline + 9 workshop + 2 job/app)');
 
   // 4. Placement Head Role
   const headPerms = roleMap.get(ROLE_IDS.PLACEMENT_HEAD);
@@ -218,7 +218,7 @@ test('Test Suite 4: Least-Privilege Role Authorization Matrix', async () => {
   assert.ok(headPerms.has(PERMISSION_IDS.WORKSHOP_MANAGE), 'Placement Head must have WORKSHOP_MANAGE');
   // Placement Head must NOT have student self-registration
   assert.equal(headPerms.has(PERMISSION_IDS.WORKSHOP_REGISTER), false, 'Placement Head must NOT hold student self-registration WORKSHOP_REGISTER');
-  assert.equal(headPerms.size, 35, 'ROLE_PLACEMENT_HEAD must have exactly 35 permissions (23 baseline + 12 workshop)');
+  assert.equal(headPerms.size, 43, 'ROLE_PLACEMENT_HEAD must have exactly 43 permissions (23 baseline + 12 workshop + 8 job/app)');
 
   // 5. Super Admin Role
   const adminPerms = roleMap.get(ROLE_IDS.SUPER_ADMIN);
@@ -226,7 +226,7 @@ test('Test Suite 4: Least-Privilege Role Authorization Matrix', async () => {
   for (const permId of ALL_PERMISSION_IDS) {
     assert.ok(adminPerms.has(permId), `Super Admin must hold permission ${permId}`);
   }
-  assert.equal(adminPerms.size, 57, 'ROLE_SUPER_ADMIN must have all 57 canonical permissions');
+  assert.equal(adminPerms.size, 66, 'ROLE_SUPER_ADMIN must have all 66 canonical permissions');
 });
 
 test('Test Suite 5: Domain Boundary & Anti-Bypass Architectural Invariants', async () => {
@@ -265,7 +265,7 @@ test('Test Suite 6: Isolated In-Memory Seeder Idempotency & State Preservation',
   const totalPermissions = await Permission.countDocuments();
   const totalRoles = await Role.countDocuments();
 
-  assert.equal(totalPermissions, 57, 'Permission count must remain exactly 57 after repeated seeder runs');
+  assert.equal(totalPermissions, 66, 'Permission count must remain exactly 66 after repeated seeder runs');
   assert.equal(totalRoles, 5, 'Role count must remain exactly 5 after repeated seeder runs');
 
   // Verify that all 5 default roles exist and are active
