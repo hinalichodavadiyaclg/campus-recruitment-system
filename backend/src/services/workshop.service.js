@@ -213,6 +213,8 @@ export async function listWorkshops(query = {}, auth) {
       } else {
         mongoQuery._id = { $in: [] };
       }
+    } else {
+      mongoQuery.lifecycleStatus = { $ne: 'CANCELLED' };
     }
   } else if (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
     const coordDept = await getCoordinatorDepartment(auth);
@@ -244,7 +246,13 @@ export async function listWorkshops(query = {}, auth) {
     mongoQuery.approvalStatus = approvalStatus;
   }
   if (lifecycleStatus) {
-    mongoQuery.lifecycleStatus = lifecycleStatus;
+    if ((auth.roleId === ROLE_IDS.STUDENT || auth.userType === 'STUDENT') && !myRegistrationsOnly) {
+      if (lifecycleStatus !== 'CANCELLED') {
+        mongoQuery.lifecycleStatus = lifecycleStatus;
+      }
+    } else {
+      mongoQuery.lifecycleStatus = lifecycleStatus;
+    }
   }
   if (typeof isPublished === 'boolean' && auth.roleId !== ROLE_IDS.STUDENT) {
     mongoQuery.isPublished = isPublished;
@@ -591,6 +599,10 @@ export async function publishWorkshop(id, auth) {
 
   await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType);
 
+  if (workshop.lifecycleStatus === 'CANCELLED') {
+    throw new AppError(400, 'CANNOT_PUBLISH_CANCELLED', 'Cancelled workshops cannot be published.');
+  }
+
   if (workshop.approvalStatus !== 'APPROVED') {
     throw new AppError(400, 'WORKSHOP_NOT_APPROVED', 'Only approved workshops can be published.');
   }
@@ -601,7 +613,7 @@ export async function publishWorkshop(id, auth) {
 
   return executeWorkshopTransaction(async (session) => {
     const updated = await Workshop.findOneAndUpdate(
-      { _id: id, approvalStatus: 'APPROVED', isPublished: false },
+      { _id: id, approvalStatus: 'APPROVED', isPublished: false, lifecycleStatus: { $ne: 'CANCELLED' } },
       { $set: { isPublished: true } },
       { new: true, session }
     );
@@ -663,10 +675,10 @@ export async function cancelWorkshop(id, { reason }, auth) {
   }
 
   return executeWorkshopTransaction(async (session) => {
-    // 1. Update workshop lifecycle status
+    // 1. Update workshop lifecycle status and unpublish
     const updated = await Workshop.findOneAndUpdate(
       { _id: id, lifecycleStatus: { $ne: 'CANCELLED' } },
-      { $set: { lifecycleStatus: 'CANCELLED' } },
+      { $set: { lifecycleStatus: 'CANCELLED', isPublished: false } },
       { new: true, session }
     );
 
@@ -721,8 +733,8 @@ export async function cancelWorkshop(id, { reason }, auth) {
         entityId: updated.workshopId,
         changedBy: auth.userId,
         reason: reason.trim(),
-        oldValue: { lifecycleStatus: workshop.lifecycleStatus },
-        newValue: { lifecycleStatus: 'CANCELLED', cancelledActiveRegistrationsCount: activeRegistrations.length }
+        oldValue: { lifecycleStatus: workshop.lifecycleStatus, isPublished: workshop.isPublished },
+        newValue: { lifecycleStatus: 'CANCELLED', isPublished: false, cancelledActiveRegistrationsCount: activeRegistrations.length }
       },
       session
     );

@@ -19,7 +19,7 @@ let mongo;
 before(async () => {
   mongo = await MongoMemoryServer.create();
   process.env.MONGODB_URI = mongo.getUri();
-  await connectDatabase();
+  await connectDatabase(mongo.getUri());
 });
 
 after(async () => {

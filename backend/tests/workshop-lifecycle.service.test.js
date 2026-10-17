@@ -398,9 +398,20 @@ test('5. cancelWorkshop - Cascades cancellation to active registrations and clea
     adminAuth
   );
 
-  // Workshop lifecycleStatus is CANCELLED
+  // Workshop lifecycleStatus is CANCELLED and isPublished is false
   const cancelledWorkshop = await Workshop.findById(created._id);
   assert.equal(cancelledWorkshop.lifecycleStatus, 'CANCELLED');
+  assert.equal(cancelledWorkshop.isPublished, false);
+
+  // Attempting to republish cancelled workshop must be rejected
+  await assert.rejects(
+    async () => publishWorkshop(created._id, coordinatorAuth),
+    (err) => {
+      assert.equal(err.statusCode, 400);
+      assert.equal(err.code, 'CANNOT_PUBLISH_CANCELLED');
+      return true;
+    }
+  );
 
   // Both registrations must now be CANCELLED and activeRegistrationKey unset
   const activeCount = await WorkshopRegistration.countDocuments({
@@ -562,4 +573,31 @@ test('7. Scoped Reads & Listing - Access controls for Students and Coordinators'
   // Coordinator can view their draft workshop
   const coordView = await getWorkshopById(draftWs._id, coordinatorAuth);
   assert.equal(coordView.title, 'Secret Draft Workshop');
+
+  // Submit, approve, and publish the workshop
+  await submitWorkshopForApproval(draftWs._id, coordinatorAuth);
+  await approveWorkshop(draftWs._id, {}, adminAuth);
+  await publishWorkshop(draftWs._id, coordinatorAuth);
+
+  // Student can now view the published workshop
+  const studentListBeforeCancel = await listWorkshops({}, studentAuth);
+  assert.equal(studentListBeforeCancel.total, 1);
+  const studentView = await getWorkshopById(draftWs._id, studentAuth);
+  assert.equal(studentView.title, 'Secret Draft Workshop');
+
+  // Cancel the workshop
+  await cancelWorkshop(draftWs._id, { reason: 'Program cancelled by department.' }, adminAuth);
+
+  // Student listWorkshops MUST NOT include the cancelled workshop
+  const studentListAfterCancel = await listWorkshops({}, studentAuth);
+  assert.equal(studentListAfterCancel.total, 0);
+
+  // Student getWorkshopById on cancelled workshop throws 404
+  await assert.rejects(
+    async () => getWorkshopById(draftWs._id, studentAuth),
+    (err) => {
+      assert.equal(err.statusCode, 404);
+      return true;
+    }
+  );
 });

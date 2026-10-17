@@ -88,7 +88,8 @@ export const NAVIGATION_GROUPS = [
         id: 'nav-workshops',
         label: 'Training & Workshops',
         path: '/training-workshops',
-        icon: 'WorkshopsIcon'
+        icon: 'WorkshopsIcon',
+        permission: PERMISSION_IDS.WORKSHOP_READ
       }
     ]
   },

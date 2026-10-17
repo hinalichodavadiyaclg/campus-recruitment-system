@@ -137,6 +137,7 @@ test('1. calculateRegistrationAttendance - 75% boundary, EXCUSED excluded, missi
 test('2. submitSessionAttendance - Authorized internal assigned trainer records attendance', async () => {
   const trainerUserId = new mongoose.Types.ObjectId();
   const trainerSubId = new mongoose.Types.ObjectId();
+  const now = Date.now();
 
   const workshop = await Workshop.create({
     workshopId: 'WS-2026-0301',
@@ -150,9 +151,9 @@ test('2. submitSessionAttendance - Authorized internal assigned trainer records 
     isPublished: true,
     lifecycleStatus: 'ACTIVE',
     createdBy: new mongoose.Types.ObjectId(),
-    startAt: new Date(Date.now() - 3600000),
-    endAt: new Date(Date.now() + 3600000),
-    registrationDeadline: new Date(Date.now() - 7200000),
+    startAt: new Date(now - 3600000),
+    endAt: new Date(now + 7200000),
+    registrationDeadline: new Date(now - 7200000),
     maxParticipants: 30,
     trainers: [
       {
@@ -167,8 +168,8 @@ test('2. submitSessionAttendance - Authorized internal assigned trainer records 
         sessionId: 'SES-01',
         sessionNumber: 1,
         title: 'Session 1',
-        startAt: new Date(Date.now() - 3600000),
-        endAt: new Date(Date.now() + 3600000),
+        startAt: new Date(now - 3600000),
+        endAt: new Date(now + 3600000),
         trainerIds: [String(trainerSubId)],
         isAttendanceRequired: true
       }
@@ -227,8 +228,8 @@ test('2. submitSessionAttendance - Authorized internal assigned trainer records 
 test('3. submitSessionAttendance - Unassigned trainer & Coordinator bypass rejected with 403', async () => {
   const assignedTrainerUserId = new mongoose.Types.ObjectId();
   const assignedTrainerSubId = new mongoose.Types.ObjectId();
-
   const otherCoordinatorUserId = new mongoose.Types.ObjectId();
+  const now = Date.now();
 
   const workshop = await Workshop.create({
     workshopId: 'WS-2026-0302',
@@ -242,9 +243,9 @@ test('3. submitSessionAttendance - Unassigned trainer & Coordinator bypass rejec
     isPublished: true,
     lifecycleStatus: 'ACTIVE',
     createdBy: new mongoose.Types.ObjectId(),
-    startAt: new Date(Date.now() - 3600000),
-    endAt: new Date(Date.now() + 3600000),
-    registrationDeadline: new Date(Date.now() - 7200000),
+    startAt: new Date(now - 3600000),
+    endAt: new Date(now + 7200000),
+    registrationDeadline: new Date(now - 7200000),
     maxParticipants: 30,
     trainers: [
       {
@@ -259,8 +260,8 @@ test('3. submitSessionAttendance - Unassigned trainer & Coordinator bypass rejec
         sessionId: 'SES-01',
         sessionNumber: 1,
         title: 'Session 1',
-        startAt: new Date(Date.now() - 3600000),
-        endAt: new Date(Date.now() + 3600000),
+        startAt: new Date(now - 3600000),
+        endAt: new Date(now + 3600000),
         trainerIds: [String(assignedTrainerSubId)]
       }
     ]
@@ -302,6 +303,7 @@ test('3. submitSessionAttendance - Unassigned trainer & Coordinator bypass rejec
 test('4. submitSessionAttendance - Attendance correction requires mandatory reason (>= 5 chars)', async () => {
   const trainerUserId = new mongoose.Types.ObjectId();
   const trainerSubId = new mongoose.Types.ObjectId();
+  const now = Date.now();
 
   const workshop = await Workshop.create({
     workshopId: 'WS-2026-0303',
@@ -315,9 +317,9 @@ test('4. submitSessionAttendance - Attendance correction requires mandatory reas
     isPublished: true,
     lifecycleStatus: 'ACTIVE',
     createdBy: new mongoose.Types.ObjectId(),
-    startAt: new Date(Date.now() - 3600000),
-    endAt: new Date(Date.now() + 3600000),
-    registrationDeadline: new Date(Date.now() - 7200000),
+    startAt: new Date(now - 3600000),
+    endAt: new Date(now + 7200000),
+    registrationDeadline: new Date(now - 7200000),
     maxParticipants: 30,
     trainers: [
       {
@@ -332,8 +334,8 @@ test('4. submitSessionAttendance - Attendance correction requires mandatory reas
         sessionId: 'SES-01',
         sessionNumber: 1,
         title: 'Session 1',
-        startAt: new Date(Date.now() - 3600000),
-        endAt: new Date(Date.now() + 3600000),
+        startAt: new Date(now - 3600000),
+        endAt: new Date(now + 3600000),
         trainerIds: [String(trainerSubId)]
       }
     ]
@@ -420,6 +422,7 @@ test('4. submitSessionAttendance - Attendance correction requires mandatory reas
 test('5. getSessionAttendance - Returns paginated attendance records', async () => {
   const trainerUserId = new mongoose.Types.ObjectId();
   const trainerSubId = new mongoose.Types.ObjectId();
+  const now = Date.now();
 
   const workshop = await Workshop.create({
     workshopId: 'WS-2026-0304',
@@ -433,9 +436,9 @@ test('5. getSessionAttendance - Returns paginated attendance records', async () 
     isPublished: true,
     lifecycleStatus: 'ACTIVE',
     createdBy: new mongoose.Types.ObjectId(),
-    startAt: new Date(Date.now() - 3600000),
-    endAt: new Date(Date.now() + 3600000),
-    registrationDeadline: new Date(Date.now() - 7200000),
+    startAt: new Date(now - 3600000),
+    endAt: new Date(now + 7200000),
+    registrationDeadline: new Date(now - 7200000),
     maxParticipants: 30,
     trainers: [
       {
@@ -450,8 +453,8 @@ test('5. getSessionAttendance - Returns paginated attendance records', async () 
         sessionId: 'SES-01',
         sessionNumber: 1,
         title: 'Session 1',
-        startAt: new Date(Date.now() - 3600000),
-        endAt: new Date(Date.now() + 3600000),
+        startAt: new Date(now - 3600000),
+        endAt: new Date(now + 3600000),
         trainerIds: [String(trainerSubId)]
       }
     ]
