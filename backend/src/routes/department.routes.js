@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as departmentController from '../controllers/department.controller.js';
 import { authenticate } from '../middleware/authenticate.js';
-import { authorizePermissions } from '../middleware/authorize.js';
+import { authorizeAnyPermission, authorizePermissions } from '../middleware/authorize.js';
 import { PERMISSION_IDS } from '../utils/access-constants.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { validate } from '../validators/request.validator.js';
@@ -19,14 +19,14 @@ departmentRoutes.use(authenticate);
 
 departmentRoutes.get(
   '/',
-  authorizePermissions(PERMISSION_IDS.DEPARTMENT_READ),
+  authorizeAnyPermission(PERMISSION_IDS.DEPARTMENT_READ, PERMISSION_IDS.JOB_CREATE, PERMISSION_IDS.JOB_UPDATE),
   validate(departmentsListSchema),
   asyncHandler(departmentController.list)
 );
 
 departmentRoutes.get(
   '/:id',
-  authorizePermissions(PERMISSION_IDS.DEPARTMENT_READ),
+  authorizeAnyPermission(PERMISSION_IDS.DEPARTMENT_READ, PERMISSION_IDS.JOB_CREATE, PERMISSION_IDS.JOB_UPDATE),
   validate(userIdParamsSchema),
   asyncHandler(departmentController.getById)
 );

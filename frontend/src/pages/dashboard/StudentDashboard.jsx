@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { studentService } from '../../services/student.service.js';
+import { jobService } from '../../services/job.service.js';
+import { applicationService } from '../../services/application.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import {
   UserIcon,
@@ -45,26 +47,44 @@ export function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Real data collections (empty states when no records exist in the database)
-  const recentJobs = [];
+  // Real data collections loaded from backend (clean empty states when no records exist)
+  const [recentJobs, setRecentJobs] = useState([]);
+  const [jobPostingsCount, setJobPostingsCount] = useState(0);
+  const [applicationsCount, setApplicationsCount] = useState(0);
+  const [offersCount, setOffersCount] = useState(0);
   const upcomingInterviews = [];
   const announcements = [];
-  const jobPostingsCount = recentJobs.length;
-  const applicationsCount = 0;
   const interviewsCount = upcomingInterviews.length;
-  const offersCount = 0;
 
   useEffect(() => {
     let mounted = true;
     async function loadData() {
       try {
         setLoading(true);
-        const data = await studentService.getMyProfile();
+        const [profileRes, jobsRes, appsRes] = await Promise.allSettled([
+          studentService.getMyProfile(),
+          jobService.listJobs({ limit: 5 }),
+          applicationService.listApplications({ limit: 100 })
+        ]);
+
         if (mounted) {
-          setStudent(data);
+          if (profileRes.status === 'fulfilled') {
+            setStudent(profileRes.value);
+          }
+          if (jobsRes.status === 'fulfilled') {
+            const jList = jobsRes.value?.jobs || [];
+            setRecentJobs(jList);
+            setJobPostingsCount(jobsRes.value?.pagination?.total ?? jList.length);
+          }
+          if (appsRes.status === 'fulfilled') {
+            const aList = appsRes.value?.items || [];
+            setApplicationsCount(appsRes.value?.total ?? aList.length);
+            const offers = aList.filter((a) => a.status === 'SELECTED').length;
+            setOffersCount(offers);
+          }
         }
       } catch (_err) {
-        // Fallback gracefully to authenticated session details
+        // Fallback gracefully
       } finally {
         if (mounted) {
           setLoading(false);
@@ -357,10 +377,10 @@ export function StudentDashboard() {
                   <a key={job._id || job.id} href="#/jobs" className="student-list-row">
                     <div className="student-list-left">
                       <div className="student-company-avatar tn">
-                        {(job.companyName || 'CO').slice(0, 2).toUpperCase()}
+                        {((job.companyId?.companyName || job.companyName || 'CO')).slice(0, 2).toUpperCase()}
                       </div>
                       <div className="student-list-info">
-                        <span className="student-list-primary">{job.companyName}</span>
+                        <span className="student-list-primary">{job.companyId?.companyName || job.companyName || 'Company'}</span>
                         <span className="student-list-secondary">{job.title || job.role}</span>
                       </div>
                     </div>

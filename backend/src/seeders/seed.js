@@ -10,6 +10,8 @@ import { Company } from '../models/company.model.js';
 import { PlacementOfficer } from '../models/placement_officer.model.js';
 import { Department } from '../models/department.model.js';
 import { Course } from '../models/course.model.js';
+import { Job } from '../models/job.model.js';
+import { Application } from '../models/application.model.js';
 import { assertStrongPassword, hashPassword } from '../utils/password.js';
 import { migrateLegacyPermissions } from '../utils/permission-migration.js';
 
@@ -74,7 +76,20 @@ const initialPermissions = [
   { _id: PERMISSION_IDS.COURSE_READ, name: 'View courses', module: 'Course Management', action: 'READ', description: 'Allows viewing academic courses.' },
   { _id: PERMISSION_IDS.COURSE_UPDATE, name: 'Update courses', module: 'Course Management', action: 'UPDATE', description: 'Allows updating course details and active status.' },
   { _id: PERMISSION_IDS.COURSE_DELETE, name: 'Delete courses', module: 'Course Management', action: 'DELETE', description: 'Allows managing course deactivation.' },
-  { _id: PERMISSION_IDS.COURSE_MANAGE, name: 'Full course management', module: 'Course Management', action: 'MANAGE', description: 'Allows full management of academic courses.' }
+  { _id: PERMISSION_IDS.COURSE_MANAGE, name: 'Full course management', module: 'Course Management', action: 'MANAGE', description: 'Allows full management of academic courses.' },
+
+  // Job Management
+  { _id: PERMISSION_IDS.JOB_CREATE, name: 'Create job postings', module: 'Job Management', action: 'CREATE', description: 'Allows creating new job postings.' },
+  { _id: PERMISSION_IDS.JOB_READ, name: 'View job postings', module: 'Job Management', action: 'READ', description: 'Allows viewing published job postings and details.' },
+  { _id: PERMISSION_IDS.JOB_UPDATE, name: 'Update job postings', module: 'Job Management', action: 'UPDATE', description: 'Allows editing, pausing, closing, and reopening job postings.' },
+  { _id: PERMISSION_IDS.JOB_DELETE, name: 'Delete job postings', module: 'Job Management', action: 'DELETE', description: 'Allows deleting unapplied job postings.' },
+  { _id: PERMISSION_IDS.JOB_MANAGE, name: 'Full job management', module: 'Job Management', action: 'MANAGE', description: 'Allows Placement Cell oversight, suspension, and auditing across all job postings.' },
+
+  // Application Management
+  { _id: PERMISSION_IDS.APPLICATION_CREATE, name: 'Submit job applications', module: 'Application Management', action: 'CREATE', description: 'Allows eligible students to apply for jobs and withdraw applications.' },
+  { _id: PERMISSION_IDS.APPLICATION_READ, name: 'View job applications', module: 'Application Management', action: 'READ', description: 'Allows viewing job applications and applicant details.' },
+  { _id: PERMISSION_IDS.APPLICATION_UPDATE, name: 'Update application status', module: 'Application Management', action: 'UPDATE', description: 'Allows advancing applicant stages (shortlist, interview, selection, rejection).' },
+  { _id: PERMISSION_IDS.APPLICATION_MANAGE, name: 'Full application management', module: 'Application Management', action: 'MANAGE', description: 'Allows Placement Cell oversight, auditing, and override across all job applications.' }
 ];
 
 const initialRoles = [
@@ -86,7 +101,10 @@ const initialRoles = [
       PERMISSION_IDS.AUTH_READ_SELF,
       PERMISSION_IDS.STUDENT_PROFILE_READ,
       PERMISSION_IDS.STUDENT_PROFILE_UPDATE,
-      PERMISSION_IDS.STUDENT_PROFILE_PUBLIC_READ
+      PERMISSION_IDS.STUDENT_PROFILE_PUBLIC_READ,
+      PERMISSION_IDS.JOB_READ,
+      PERMISSION_IDS.APPLICATION_CREATE,
+      PERMISSION_IDS.APPLICATION_READ
     ]
   },
   {
@@ -96,7 +114,12 @@ const initialRoles = [
     permissionIds: [
       PERMISSION_IDS.AUTH_READ_SELF,
       PERMISSION_IDS.STUDENT_READ,
-      PERMISSION_IDS.STUDENT_PROFILE_PUBLIC_READ
+      PERMISSION_IDS.STUDENT_PROFILE_PUBLIC_READ,
+      PERMISSION_IDS.JOB_CREATE,
+      PERMISSION_IDS.JOB_READ,
+      PERMISSION_IDS.JOB_UPDATE,
+      PERMISSION_IDS.APPLICATION_READ,
+      PERMISSION_IDS.APPLICATION_UPDATE
     ]
   },
   {
@@ -114,7 +137,9 @@ const initialRoles = [
       PERMISSION_IDS.STUDENT_UPDATE,
       PERMISSION_IDS.STUDENT_PROFILE_PUBLIC_READ,
       PERMISSION_IDS.DEPARTMENT_READ,
-      PERMISSION_IDS.COURSE_READ
+      PERMISSION_IDS.COURSE_READ,
+      PERMISSION_IDS.JOB_READ,
+      PERMISSION_IDS.APPLICATION_READ
     ]
   },
   {
@@ -144,7 +169,15 @@ const initialRoles = [
       PERMISSION_IDS.COURSE_READ,
       PERMISSION_IDS.COURSE_UPDATE,
       PERMISSION_IDS.COURSE_DELETE,
-      PERMISSION_IDS.COURSE_MANAGE
+      PERMISSION_IDS.COURSE_MANAGE,
+      PERMISSION_IDS.JOB_CREATE,
+      PERMISSION_IDS.JOB_READ,
+      PERMISSION_IDS.JOB_UPDATE,
+      PERMISSION_IDS.JOB_DELETE,
+      PERMISSION_IDS.JOB_MANAGE,
+      PERMISSION_IDS.APPLICATION_READ,
+      PERMISSION_IDS.APPLICATION_UPDATE,
+      PERMISSION_IDS.APPLICATION_MANAGE
     ]
   },
   {
@@ -165,7 +198,9 @@ export async function seedInitialData() {
     Company.createIndexes(),
     PlacementOfficer.createIndexes(),
     Department.createIndexes(),
-    Course.createIndexes()
+    Course.createIndexes(),
+    Job.createIndexes(),
+    Application.createIndexes()
   ]);
 
   // Clean up any legacy non-canonical permissions

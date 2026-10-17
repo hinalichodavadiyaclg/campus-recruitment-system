@@ -64,13 +64,15 @@ export const NAVIGATION_GROUPS = [
         id: 'nav-job-postings',
         label: 'Job Postings',
         path: '/job-postings',
-        icon: 'BriefcaseIcon'
+        icon: 'BriefcaseIcon',
+        permission: PERMISSION_IDS.JOB_READ
       },
       {
         id: 'nav-applications',
         label: 'Applications',
         path: '/applications',
-        icon: 'DocumentIcon'
+        icon: 'DocumentIcon',
+        permission: PERMISSION_IDS.APPLICATION_READ
       },
       {
         id: 'nav-interviews',
