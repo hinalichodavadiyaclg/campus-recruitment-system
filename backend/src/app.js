@@ -17,6 +17,7 @@ import { placementOfficerRouter } from './routes/placement_officer.routes.js';
 import { importRouter } from './routes/import.routes.js';
 import { departmentRoutes } from './routes/department.routes.js';
 import { courseRoutes } from './routes/course.routes.js';
+import { workshopRouter } from './routes/workshop.routes.js';
 import { AppError } from './utils/app-error.js';
 
 export function createApp() {
@@ -74,6 +75,7 @@ export function createApp() {
   app.use('/api/imports', importRouter);
   app.use('/api/departments', departmentRoutes);
   app.use('/api/courses', courseRoutes);
+  app.use('/api/workshops', workshopRouter);
   app.use(notFoundHandler);
   app.use(errorHandler);
   return app;

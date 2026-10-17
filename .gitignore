@@ -31,3 +31,8 @@ backend/migrations/.ledger/
 backend/public/uploads/*
 !backend/public/uploads/.gitkeep
 
+# Database backups and snapshots
+backups/
+backend/src/backups/
+backend/backups/
+
