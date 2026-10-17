@@ -51,6 +51,11 @@ import { JobPostingsPage } from '../pages/jobs/JobPostingsPage.jsx';
 import { ApplicationsPage } from '../pages/applications/ApplicationsPage.jsx';
 import { NotFoundModulePage } from '../pages/common/NotFoundModulePage.jsx';
 
+// Training & Workshops
+import { WorkshopsPage } from '../pages/workshops/WorkshopsPage.jsx';
+import { WorkshopDetailsPage } from '../pages/workshops/WorkshopDetailsPage.jsx';
+import { PublicCertificateVerifyPage } from '../pages/workshops/PublicCertificateVerifyPage.jsx';
+
 const PUBLIC_ROUTES = [
   '/login',
   '/forgot-password',
@@ -58,6 +63,9 @@ const PUBLIC_ROUTES = [
   '/reset-password',
   '/reset-success'
 ];
+
+import { parseCertificateVerificationRoute } from './certificateRoutes.js';
+export { parseCertificateVerificationRoute };
 
 function getCurrentRoute() {
   const hash = window.location.hash.replace(/^#/, '');
@@ -83,12 +91,18 @@ export function AppRoutes() {
   const [pathname] = route.split('?');
   const parts = pathname.split('/').filter(Boolean);
   const isPublicProfileRoute = parts[0] === 'student-profile' || (parts[0] === 'students' && parts[2] === 'public');
-  const isPublic = PUBLIC_ROUTES.includes(pathname) || isPublicProfileRoute;
+  const verifyRouteInfo = parseCertificateVerificationRoute(pathname);
+  const isPublic = PUBLIC_ROUTES.includes(pathname) || isPublicProfileRoute || verifyRouteInfo.isVerifyRoute;
 
   // Render public shareable profile route immediately if requested
   if (isPublicProfileRoute) {
     const profileId = parts[0] === 'student-profile' ? parts[1] : parts[1];
     return <StudentPublicProfilePage studentId={profileId} />;
+  }
+
+  // Render public certificate verification route immediately if requested
+  if (verifyRouteInfo.isVerifyRoute) {
+    return <PublicCertificateVerifyPage initialCode={verifyRouteInfo.code} />;
   }
 
   // If user is not authenticated and trying to access private route
@@ -252,7 +266,14 @@ export function AppRoutes() {
   }
 
   if (parts[0] === 'training-workshops' || parts[0] === 'workshops' || parts[0] === 'training') {
-    return <NotFoundModulePage title="Training & Workshops" path="/training-workshops" />;
+    if (!has('WORKSHOP_READ')) {
+      window.location.hash = '#/dashboard';
+      return <DashboardPage />;
+    }
+    if (parts[1]) {
+      return <WorkshopDetailsPage workshopId={parts[1]} />;
+    }
+    return <WorkshopsPage />;
   }
 
   // Reports module

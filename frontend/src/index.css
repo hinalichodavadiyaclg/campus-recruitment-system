@@ -1019,6 +1019,56 @@ a { color: inherit; text-decoration: none; }
   background: #eaf0f6;
 }
 
+.badge.draft {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.badge.pending_approval, .badge.pending {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.badge.approved {
+  color: #0369a1;
+  background: #e0f2fe;
+}
+
+.badge.published, .badge.registered, .badge.present, .badge.issued {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.badge.completed {
+  color: #4338ca;
+  background: #e0e7ff;
+}
+
+.badge.cancelled, .badge.rejected, .badge.revoked, .badge.absent {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.badge.excused {
+  color: #d97706;
+  background: #fef3c7;
+}
+
+.badge.mode-online {
+  color: #0284c7;
+  background: #e0f2fe;
+}
+
+.badge.mode-offline {
+  color: #059669;
+  background: #d1fae5;
+}
+
+.badge.mode-hybrid {
+  color: #7c3aed;
+  background: #ede9fe;
+}
+
 .empty {
   padding: 38px;
   color: var(--muted);

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { after, before, beforeEach } from 'node:test';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import request from 'supertest';
 
 process.env.NODE_ENV = 'test';
@@ -64,14 +65,20 @@ async function createAuthenticatedSession(roleId, userType = 'PLACEMENT') {
   return { token: rawToken, user };
 }
 
+let mongo;
+
 before(async () => {
-  await connectDatabase('mongodb://127.0.0.1:27017/campus_recruitment_test');
+  mongo = await MongoMemoryServer.create();
+  await connectDatabase(mongo.getUri());
   await seedInitialData();
   app = createApp();
 });
 
 after(async () => {
   await disconnectDatabase();
+  if (mongo) {
+    await mongo.stop();
+  }
 });
 
 beforeEach(async () => {
