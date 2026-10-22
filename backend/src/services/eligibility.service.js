@@ -26,11 +26,11 @@ export async function verifyNaandiTraining(student, customAdapter = null) {
     const naandiCert = student.certificates.find((c) => {
       const org = (c.issuingOrganization || '').toLowerCase().trim();
       const name = (c.name || '').toLowerCase().trim();
-      const isNaandi = org.includes('naandi') || name.includes('naandi');
+      const isNaandi = Boolean(c.isNaandiTraining) || org.includes('naandi') || name.includes('naandi');
       const hasAuthoritativeCredential = Boolean(
         c.credentialId && (c.credentialId.startsWith('NAANDI-') || c.credentialId.startsWith('VVWU-NAANDI-'))
       );
-      const isVerified = Boolean(c.isVerified || c.verifiedByPlacement || c.authoritativeVerified || hasAuthoritativeCredential);
+      const isVerified = Boolean(c.isVerified || c.verifiedByPlacement || c.authoritativeVerified || hasAuthoritativeCredential || c.isNaandiTraining);
       return isNaandi && isVerified;
     });
 
@@ -45,8 +45,7 @@ export async function verifyNaandiTraining(student, customAdapter = null) {
 
   return {
     isCompleted: false,
-    reason:
-      'Mandatory Naandi Training completion could not be verified by an authoritative source. Please ensure your Naandi certificate or training record has been verified by the Placement Cell.'
+    reason: 'Verified Naandi Training certificate is required for this application.'
   };
 }
 
@@ -60,7 +59,7 @@ export async function verifyNaandiTraining(student, customAdapter = null) {
  *   details: string
  * }
  */
-export async function evaluateEligibility({ job, student, trainingAdapter = null }) {
+export async function evaluateEligibility({ job, student, resume = null, trainingAdapter = null }) {
   const checks = {};
   const failureReasons = [];
 
@@ -86,14 +85,16 @@ export async function evaluateEligibility({ job, student, trainingAdapter = null
     failureReasons.push('Job application deadline has passed.');
   }
 
-  // 2. Resume Requirement
-  const hasResume = Boolean(student?.resume?.url && student.resume.url.trim());
+  // 2. Resume Requirement (Profile resume or job-specific resume)
+  const effectiveResume = resume || student?.resume;
+  const hasResume = Boolean(effectiveResume?.url && effectiveResume.url.trim());
   checks.resume = {
     passed: hasResume,
-    fileName: student?.resume?.fileName || null
+    fileName: effectiveResume?.fileName || null,
+    source: effectiveResume?.source || (resume ? 'JOB_SPECIFIC' : 'PROFILE')
   };
   if (!hasResume) {
-    failureReasons.push('A resume must be uploaded to your profile before applying for jobs.');
+    failureReasons.push('A valid resume must be selected or uploaded before submitting an application.');
   }
 
   // 3. Academic & Skill Criteria
@@ -173,20 +174,45 @@ export async function evaluateEligibility({ job, student, trainingAdapter = null
       }
     }
 
-    // Required Skills Check
-    if (Array.isArray(criteria.requiredSkills) && criteria.requiredSkills.length > 0) {
+    // Required Skills Evaluation (Informational by default — does not block submission)
+    const requiredSkills = Array.isArray(criteria.requiredSkills) ? criteria.requiredSkills : [];
+    const preferredSkills = Array.isArray(criteria.preferredSkills) ? criteria.preferredSkills : [];
+
+    if (requiredSkills.length > 0 || preferredSkills.length > 0) {
       const studentSkillSet = new Set((student.skills || []).map((s) => s.toLowerCase().trim()));
-      const missingSkills = criteria.requiredSkills.filter(
+      const matchedSkills = requiredSkills.filter((skill) =>
+        studentSkillSet.has(skill.toLowerCase().trim())
+      );
+      const unmatchedSkills = requiredSkills.filter(
         (skill) => !studentSkillSet.has(skill.toLowerCase().trim())
       );
-      const skillsPassed = missingSkills.length === 0;
+      const matchPercentage = requiredSkills.length > 0
+        ? Math.round((matchedSkills.length / requiredSkills.length) * 100)
+        : 100;
+
+      const matchedPreferred = preferredSkills.filter((s) =>
+        studentSkillSet.has(s.toLowerCase().trim())
+      );
+      const unmatchedPreferred = preferredSkills.filter(
+        (s) => !studentSkillSet.has(s.toLowerCase().trim())
+      );
+
       checks.skills = {
-        passed: skillsPassed,
-        missingSkills
+        passed: true,
+        isInformational: true,
+        requiredSkills,
+        matchedSkills,
+        unmatchedSkills,
+        missingSkills: unmatchedSkills, // For backward compatibility with existing readers
+        matchPercentage,
+        preferredSkills,
+        matchedPreferredSkills: matchedPreferred,
+        unmatchedPreferredSkills: unmatchedPreferred,
+        label: unmatchedSkills.length > 0
+          ? `Not listed on your profile: ${unmatchedSkills.join(', ')}`
+          : 'All job skills listed on profile'
       };
-      if (!skillsPassed) {
-        failureReasons.push(`Missing required skills: ${missingSkills.join(', ')}.`);
-      }
+      // Note: Missing profile skills are informational and do not block eligibility.
     }
   }
 
@@ -211,7 +237,7 @@ export async function evaluateEligibility({ job, student, trainingAdapter = null
     failureReasons,
     checks,
     details: isEligible
-      ? 'All academic, skill, and training criteria successfully verified.'
+      ? 'All academic, resume, and training criteria successfully verified.'
       : failureReasons.join(' ')
   };
 }

@@ -1,9 +1,17 @@
 import { Job } from '../models/job.model.js';
 import { Company } from '../models/company.model.js';
+import { Application } from '../models/application.model.js';
+import { Student } from '../models/student.model.js';
 import { ROLE_IDS } from '../utils/access-constants.js';
 import { AppError } from '../utils/app-error.js';
 import { executeWithJobIdRetry, getNextCandidateJobId } from '../utils/job-id.js';
+import { getCoordinatorDepartment } from '../utils/department-scope.js';
 import { findCompanyByUserId } from './company.service.js';
+import {
+  dispatchJobPublishedNotifications,
+  dispatchJobReopenedNotifications,
+  dispatchJobStatusChangedNotifications
+} from './notification.service.js';
 
 export async function createJob({ auth, body }) {
   let companyId;
@@ -57,6 +65,12 @@ export async function createJob({ auth, body }) {
     return await job.save();
   });
 
+  if (createdJob.status === 'OPEN') {
+    dispatchJobPublishedNotifications(createdJob).catch(err => {
+      console.error('Failed to dispatch job published notifications:', err.message);
+    });
+  }
+
   return await Job.findById(createdJob._id)
     .populate('companyId', 'companyName companyId officeAddress website industryType')
     .populate('eligibilityCriteria.allowedDepartmentIds', 'name code')
@@ -82,12 +96,30 @@ export async function listJobs({ auth, query = {} }) {
     if (query.status) {
       mongoQuery.status = query.status;
     }
+  } else if (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
+    // Placement coordinator is scoped to jobs relevant to their assigned department
+    try {
+      const coordDept = await getCoordinatorDepartment(auth);
+      if (coordDept?.departmentId) {
+        mongoQuery.$and = mongoQuery.$and || [];
+        mongoQuery.$and.push({
+          $or: [
+            { eligibilityMode: 'ALL_STUDENTS' },
+            { 'eligibilityCriteria.allowedDepartmentIds': { $size: 0 } },
+            { 'eligibilityCriteria.allowedDepartmentIds': coordDept.departmentId }
+          ]
+        });
+      }
+    } catch {
+      // Gracefully handle coordinator without department assignment
+    }
+    if (query.companyId) mongoQuery.companyId = query.companyId;
+    if (query.status) mongoQuery.status = query.status;
   } else if (
     auth.roleId === ROLE_IDS.PLACEMENT_HEAD ||
-    auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR ||
     auth.roleId === ROLE_IDS.SUPER_ADMIN
   ) {
-    // Placement cell & Super Admin can view all jobs and filter
+    // Placement Head & Super Admin oversee institution-wide jobs
     if (query.companyId) mongoQuery.companyId = query.companyId;
     if (query.status) mongoQuery.status = query.status;
   } else {
@@ -101,17 +133,34 @@ export async function listJobs({ auth, query = {} }) {
     mongoQuery.workMode = query.workMode;
   }
   if (query.departmentId) {
-    mongoQuery['eligibilityCriteria.allowedDepartmentIds'] = query.departmentId;
+    mongoQuery.$and = mongoQuery.$and || [];
+    mongoQuery.$and.push({
+      $or: [
+        { eligibilityMode: 'ALL_STUDENTS' },
+        { 'eligibilityCriteria.allowedDepartmentIds': { $size: 0 } },
+        { 'eligibilityCriteria.allowedDepartmentIds': query.departmentId }
+      ]
+    });
   }
   if (query.courseId) {
-    mongoQuery['eligibilityCriteria.allowedCourseIds'] = query.courseId;
+    mongoQuery.$and = mongoQuery.$and || [];
+    mongoQuery.$and.push({
+      $or: [
+        { eligibilityMode: 'ALL_STUDENTS' },
+        { 'eligibilityCriteria.allowedCourseIds': { $size: 0 } },
+        { 'eligibilityCriteria.allowedCourseIds': query.courseId }
+      ]
+    });
   }
   if (query.search && query.search.trim()) {
     const regex = new RegExp(query.search.trim(), 'i');
-    mongoQuery.$or = [{ title: regex }, { jobId: regex }, { category: regex }];
+    mongoQuery.$and = mongoQuery.$and || [];
+    mongoQuery.$and.push({
+      $or: [{ title: regex }, { jobId: regex }, { category: regex }]
+    });
   }
 
-  const [items, total] = await Promise.all([
+  const [rawItems, total] = await Promise.all([
     Job.find(mongoQuery)
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -122,7 +171,60 @@ export async function listJobs({ auth, query = {} }) {
     Job.countDocuments(mongoQuery)
   ]);
 
-  return { items, page, limit, total };
+  // Authoritatively compute application counts for each returned job within permitted scope
+  const jobIds = rawItems.map((j) => j._id);
+  let countMap = new Map();
+
+  if (jobIds.length > 0 && auth.roleId !== ROLE_IDS.STUDENT && auth.userType !== 'STUDENT') {
+    const appMatch = { jobId: { $in: jobIds } };
+
+    if (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
+      // Coordinator sees count of applications only from students within their department scope
+      try {
+        const coordDept = await getCoordinatorDepartment(auth);
+        if (coordDept?.departmentId) {
+          const scopedStudentIds = await Student.find({
+            $or: [
+              { departmentId: coordDept.departmentId },
+              { department: new RegExp(`^${coordDept.departmentName.trim()}$`, 'i') }
+            ]
+          }).distinct('_id');
+          appMatch.studentId = { $in: scopedStudentIds };
+        }
+      } catch {
+        // Coordinator without profile
+      }
+    }
+
+    const appCounts = await Application.aggregate([
+      { $match: appMatch },
+      { $group: { _id: '$jobId', count: { $sum: 1 } } }
+    ]);
+    countMap = new Map(appCounts.map((c) => [String(c._id), c.count]));
+  }
+
+  const items = rawItems.map((doc) => {
+    const item = doc.toObject ? doc.toObject() : { ...doc };
+    item.applicationsCount = countMap.get(String(doc._id)) || 0;
+    return item;
+  });
+
+  const totalPages = Math.ceil(total / limit) || 1;
+
+  return {
+    items,
+    jobs: items,
+    page,
+    limit,
+    total,
+    totalPages,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages
+    }
+  };
 }
 
 export async function getJobById({ auth, id }) {
@@ -188,6 +290,7 @@ export async function updateJob({ auth, id, body }) {
   const allowedFields = [
     'title',
     'description',
+    'responsibilities',
     'jobType',
     'category',
     'workMode',
@@ -273,6 +376,7 @@ export async function updateJobStatus({ auth, id, status, note }) {
     job.closedAt = new Date();
   }
 
+  const previousStatus = job.status;
   job.status = status;
   job.history.push({
     action: 'STATUS_CHANGED',
@@ -282,6 +386,16 @@ export async function updateJobStatus({ auth, id, status, note }) {
   });
 
   await job.save();
+
+  if (status === 'OPEN' && previousStatus !== 'OPEN') {
+    dispatchJobPublishedNotifications(job).catch(err => {
+      console.error('Failed to dispatch job published notifications:', err.message);
+    });
+  } else {
+    dispatchJobStatusChangedNotifications({ job, previousStatus, newStatus: status }).catch(err => {
+      console.error('Failed to dispatch job status changed notifications:', err.message);
+    });
+  }
 
   return await Job.findById(job._id)
     .populate('companyId', 'companyName companyId officeAddress website industryType')
@@ -337,6 +451,10 @@ export async function reopenJob({ auth, id, newDeadline, vacancies, note }) {
 
   await job.save();
 
+  dispatchJobReopenedNotifications(job).catch(err => {
+    console.error('Failed to dispatch job reopened notifications:', err.message);
+  });
+
   return await Job.findById(job._id)
     .populate('companyId', 'companyName companyId officeAddress website industryType')
     .populate('eligibilityCriteria.allowedDepartmentIds', 'name code')
@@ -381,6 +499,10 @@ export async function suspendJob({ auth, id, isSuspended, suspensionReason }) {
   }
 
   await job.save();
+
+  dispatchJobStatusChangedNotifications({ job, isSuspended, suspensionReason }).catch(err => {
+    console.error('Failed to dispatch job suspend/restore notifications:', err.message);
+  });
 
   return await Job.findById(job._id)
     .populate('companyId', 'companyName companyId officeAddress website industryType')

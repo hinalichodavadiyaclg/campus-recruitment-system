@@ -384,7 +384,7 @@ test('Application Management Backend Integration Tests', async (t) => {
     assert.equal(resBacklogs.status, 400);
     assert.match(resBacklogs.body.error?.message || '', /backlog/i);
 
-    // Student missing required skill 'Python'
+    // Student missing required skill 'Python' and 'Django' (Informational: does not block application)
     const skillsEnv = await setupStudentEnvironment({ skills: ['JavaScript', 'HTML'] });
     const { job: jobReqSkills } = await setupCompanyJob({ requiredSkills: ['Python', 'Django'] });
 
@@ -392,8 +392,10 @@ test('Application Management Backend Integration Tests', async (t) => {
       .post('/api/applications')
       .set('Authorization', `Bearer ${skillsEnv.studentSession.token}`)
       .send({ jobId: String(jobReqSkills._id) });
-    assert.equal(resSkills.status, 400);
-    assert.match(resSkills.body.error?.message || '', /skills/i);
+    assert.equal(resSkills.status, 201);
+    assert.equal(resSkills.body.data.eligibilitySnapshot.checks.skills.passed, true);
+    assert.deepEqual(resSkills.body.data.eligibilitySnapshot.checks.skills.unmatchedSkills, ['Python', 'Django']);
+    assert.match(resSkills.body.data.eligibilitySnapshot.checks.skills.label, /Not listed on your profile/i);
   });
 
   await t.test('4. Mandatory Naandi Training Boundary Enforcement', async () => {
@@ -620,5 +622,134 @@ test('Application Management Backend Integration Tests', async (t) => {
     assert.equal(finalApp2.statusHistory[1].previousStatus, 'APPLIED');
     assert.equal(finalApp2.statusHistory[1].newStatus, 'WITHDRAWN');
     assert.equal(finalApp2.statusHistory[1].note, 'Relocating to another city');
+  });
+
+  await t.test('8. Job-Specific Resume Upload, File Validation, and Profile Resume Immutability', async () => {
+    const { studentDoc, studentSession } = await setupStudentEnvironment();
+    const originalProfileResumeUrl = studentDoc.resume.url;
+    const originalProfileResumeFile = studentDoc.resume.fileName;
+
+    const { job, recruiterSession } = await setupCompanyJob();
+
+    // 1. Reject invalid file type (non-PDF)
+    const invalidTypeRes = await request(app)
+      .post('/api/applications/upload-resume')
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .attach('file', Buffer.from('plain text content'), {
+        filename: 'resume.txt',
+        contentType: 'text/plain'
+      });
+    assert.equal(invalidTypeRes.status, 400);
+    assert.equal(invalidTypeRes.body.error?.code, 'INVALID_FILE_TYPE');
+
+    // 2. Reject oversized file (> 5MB)
+    const largeBuffer = Buffer.alloc(5 * 1024 * 1024 + 1024, 'a');
+    const oversizedRes = await request(app)
+      .post('/api/applications/upload-resume')
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .attach('file', largeBuffer, {
+        filename: 'huge_resume.pdf',
+        contentType: 'application/pdf'
+      });
+    assert.equal(oversizedRes.status, 400);
+    assert.match(oversizedRes.body.error?.message || '', /5MB|exceeds/i);
+
+    // 3. Successfully upload valid PDF
+    const validPdfBuffer = Buffer.from('%PDF-1.4 test resume content');
+    const uploadRes = await request(app)
+      .post('/api/applications/upload-resume')
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .attach('file', validPdfBuffer, {
+        filename: 'Tailored_ML_Resume.pdf',
+        contentType: 'application/pdf'
+      });
+    assert.equal(uploadRes.status, 201);
+    assert.ok(uploadRes.body.data?.url);
+    assert.equal(uploadRes.body.data.fileName, 'Tailored_ML_Resume.pdf');
+    assert.equal(uploadRes.body.data.source, 'JOB_SPECIFIC');
+
+    const customResumeData = uploadRes.body.data;
+
+    // 4. Submit application using customResume
+    const applyRes = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .send({
+        jobId: String(job._id),
+        customResume: customResumeData
+      });
+
+    assert.equal(applyRes.status, 201);
+    assert.equal(applyRes.body.data.resumeSnapshot.url, customResumeData.url);
+    assert.equal(applyRes.body.data.resumeSnapshot.fileName, 'Tailored_ML_Resume.pdf');
+    assert.equal(applyRes.body.data.resumeSnapshot.source, 'JOB_SPECIFIC');
+    const createdAppId = applyRes.body.data._id;
+
+    // 5. Ensure student's profile resume was NOT overwritten
+    const studentInDb = await Student.findById(studentDoc._id);
+    assert.equal(studentInDb.resume.url, originalProfileResumeUrl);
+    assert.equal(studentInDb.resume.fileName, originalProfileResumeFile);
+
+    // 6. Mutate student's profile resume and verify the snapshot remains unchanged
+    studentInDb.resume.url = '/uploads/resumes/completely_new_profile_resume.pdf';
+    studentInDb.resume.fileName = 'Completely_New_Profile_Resume.pdf';
+    await studentInDb.save();
+
+    const applicationAfterProfileUpdate = await Application.findById(createdAppId);
+    assert.equal(applicationAfterProfileUpdate.resumeSnapshot.url, customResumeData.url);
+    assert.equal(applicationAfterProfileUpdate.resumeSnapshot.fileName, 'Tailored_ML_Resume.pdf');
+    assert.equal(applicationAfterProfileUpdate.resumeSnapshot.source, 'JOB_SPECIFIC');
+
+    // 7. Student with NO profile resume applying with customResume succeeds
+    const noResumeStudentEnv = await setupStudentEnvironment({ withResume: false });
+    const { job: job2 } = await setupCompanyJob();
+
+    const applyNoProfileResumeSuccess = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${noResumeStudentEnv.studentSession.token}`)
+      .send({
+        jobId: String(job2._id),
+        customResume: customResumeData
+      });
+    assert.equal(applyNoProfileResumeSuccess.status, 201);
+    assert.equal(applyNoProfileResumeSuccess.body.data.resumeSnapshot.source, 'JOB_SPECIFIC');
+
+    // 8. Student with NO profile resume and NO customResume is blocked
+    const { job: job3 } = await setupCompanyJob();
+    const applyNoResumeFail = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${noResumeStudentEnv.studentSession.token}`)
+      .send({
+        jobId: String(job3._id)
+      });
+    assert.equal(applyNoResumeFail.status, 400);
+    assert.match(applyNoResumeFail.body.error?.message || '', /resume/i);
+
+    // 9. Authorization checks on resume download / access route
+    // Student who applied can access
+    const candidateResumeRes = await request(app)
+      .get(`/api/applications/${createdAppId}/resume`)
+      .set('Authorization', `Bearer ${studentSession.token}`);
+    assert.ok([200, 302].includes(candidateResumeRes.status));
+
+    // Recruiter who owns the job can access
+    const recruiterResumeRes = await request(app)
+      .get(`/api/applications/${createdAppId}/resume`)
+      .set('Authorization', `Bearer ${recruiterSession.token}`);
+    assert.ok([200, 302].includes(recruiterResumeRes.status));
+
+    // Another student cannot access (403)
+    const otherStudentEnv = await setupStudentEnvironment();
+    const badStudentResumeRes = await request(app)
+      .get(`/api/applications/${createdAppId}/resume`)
+      .set('Authorization', `Bearer ${otherStudentEnv.studentSession.token}`);
+    assert.equal(badStudentResumeRes.status, 403);
+
+    // Another company cannot access (403)
+    const { recruiterSession: otherRecruiter } = await setupCompanyJob();
+    const badCompanyResumeRes = await request(app)
+      .get(`/api/applications/${createdAppId}/resume`)
+      .set('Authorization', `Bearer ${otherRecruiter.token}`);
+    assert.equal(badCompanyResumeRes.status, 403);
   });
 });

@@ -9,6 +9,11 @@ import { getCoordinatorDepartment } from '../utils/department-scope.js';
 import { findStudentByUserId } from './student.service.js';
 import { findCompanyByUserId } from './company.service.js';
 import { evaluateEligibility } from './eligibility.service.js';
+import {
+  dispatchApplicationReceivedNotification,
+  dispatchApplicationStatusChangedNotification,
+  dispatchApplicationWithdrawnNotification
+} from './notification.service.js';
 
 const ALLOWED_STATUS_TRANSITIONS = {
   APPLIED: ['UNDER_REVIEW', 'SHORTLISTED', 'REJECTED'],
@@ -45,10 +50,32 @@ export async function submitApplication({ auth, body }) {
     );
   }
 
+  // Determine active resume: custom job-specific resume or student profile resume
+  let selectedResume = null;
+  if (body.customResume && body.customResume.url && body.customResume.url.trim()) {
+    selectedResume = {
+      url: body.customResume.url.trim(),
+      fileName: body.customResume.fileName || 'Job_Specific_Resume.pdf',
+      fileSize: body.customResume.fileSize,
+      source: 'JOB_SPECIFIC'
+    };
+  } else if (student.resume?.url && student.resume.url.trim()) {
+    selectedResume = {
+      url: student.resume.url.trim(),
+      fileName: student.resume.fileName || 'Candidate_Resume.pdf',
+      fileSize: student.resume.fileSize,
+      source: 'PROFILE'
+    };
+  }
+
   // Server-side eligibility evaluation
-  const evaluation = await evaluateEligibility({ job, student });
+  const evaluation = await evaluateEligibility({ job, student, resume: selectedResume });
   if (!evaluation.isEligible) {
     throw new AppError(400, 'INELIGIBLE_FOR_JOB', evaluation.ineligibleReason, evaluation);
+  }
+
+  if (!selectedResume || !selectedResume.url) {
+    throw new AppError(400, 'RESUME_REQUIRED', 'A valid resume must be selected or uploaded before submitting an application.');
   }
 
   // Capture immutable job terms snapshot
@@ -65,11 +92,12 @@ export async function submitApplication({ auth, body }) {
     recruitmentRound
   };
 
-  // Capture immutable resume snapshot from student profile
+  // Capture immutable resume snapshot (does not overwrite student profile resume)
   const resumeSnapshot = {
-    url: student.resume.url,
-    fileName: student.resume.fileName,
-    fileSize: student.resume.fileSize,
+    url: selectedResume.url,
+    fileName: selectedResume.fileName,
+    fileSize: selectedResume.fileSize,
+    source: selectedResume.source || 'PROFILE',
     submittedAt: new Date()
   };
 
@@ -104,6 +132,10 @@ export async function submitApplication({ auth, body }) {
       ]
     });
     return await application.save();
+  });
+
+  dispatchApplicationReceivedNotification({ application: createdApp, job, student }).catch(err => {
+    console.error('Failed to dispatch application received notification:', err.message);
   });
 
   return await Application.findById(createdApp._id)
@@ -264,6 +296,11 @@ export async function updateApplicationStatus({ auth, id, status, note, reviewer
 
   await application.save();
 
+  const jobTitle = application.jobSnapshot?.title;
+  dispatchApplicationStatusChangedNotification({ application, previousStatus, newStatus: status, jobTitle }).catch(err => {
+    console.error('Failed to dispatch application status change notification:', err.message);
+  });
+
   return await Application.findById(application._id)
     .populate('jobId', 'jobId title jobType workMode location deadline status')
     .populate('companyId', 'companyName companyId officeAddress website industryType')
@@ -310,8 +347,29 @@ export async function withdrawApplication({ auth, id, reason }) {
 
   await application.save();
 
+  Job.findById(application.jobId).lean().then(job => {
+    if (job) {
+      dispatchApplicationWithdrawnNotification({ application, job, student }).catch(err => {
+        console.error('Failed to dispatch application withdrawn notification:', err.message);
+      });
+    }
+  }).catch(err => {
+    console.error('Failed to look up job for application withdrawn notification:', err.message);
+  });
+
   return await Application.findById(application._id)
     .populate('jobId', 'jobId title jobType workMode location deadline status')
     .populate('companyId', 'companyName companyId officeAddress website industryType')
     .populate('studentId', 'firstName lastName universityId email mobileNumber branch department cgpa');
+}
+
+export async function getApplicationResumeFile({ auth, id }) {
+  const application = await getApplicationById({ auth, id });
+  if (!application.resumeSnapshot?.url) {
+    throw new AppError(404, 'RESUME_NOT_FOUND', 'No resume snapshot recorded for this application.');
+  }
+  return {
+    url: application.resumeSnapshot.url,
+    fileName: application.resumeSnapshot.fileName || 'Resume.pdf'
+  };
 }

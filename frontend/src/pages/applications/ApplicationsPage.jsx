@@ -36,11 +36,39 @@ export function ApplicationsPage() {
   const isPlacementHead = role?.id === 'ROLE_PLACEMENT_HEAD' || user?.roleId === 'ROLE_PLACEMENT_HEAD';
   const isSuperAdmin = role?.id === 'ROLE_SUPER_ADMIN' || user?.roleId === 'ROLE_SUPER_ADMIN';
 
+  // Helper to extract jobId from location hash (e.g. #/applications?jobId=xyz)
+  const getInitialJobId = () => {
+    try {
+      const hash = window.location.hash || '';
+      const qIndex = hash.indexOf('?');
+      if (qIndex !== -1) {
+        const searchParams = new URLSearchParams(hash.slice(qIndex));
+        return searchParams.get('jobId') || '';
+      }
+    } catch {
+      // fallback
+    }
+    return '';
+  };
+
   // Filters
-  const [selectedJobId, setSelectedJobId] = useState('');
+  const [selectedJobId, setSelectedJobId] = useState(getInitialJobId);
   const [selectedStatus, setSelectedStatus] = useState('');
   const [page, setPage] = useState(1);
   const limit = 15;
+
+  // Sync selectedJobId if route hash updates
+  useEffect(() => {
+    const handleHashChange = () => {
+      const nextJobId = getInitialJobId();
+      if (nextJobId !== selectedJobId) {
+        setSelectedJobId(nextJobId);
+        setPage(1);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [selectedJobId]);
 
   // Data
   const [applications, setApplications] = useState([]);
@@ -62,7 +90,7 @@ export function ApplicationsPage() {
     async function loadJobs() {
       try {
         const res = await jobService.listJobs({ limit: 100 });
-        if (mounted) setAvailableJobs(res?.jobs || []);
+        if (mounted) setAvailableJobs(res?.jobs || res?.items || []);
       } catch (err) {
         console.error('Failed to load filter jobs:', err);
       }

@@ -71,6 +71,10 @@ const jobSchema = new Schema(
       trim: true,
       minlength: 10
     },
+    responsibilities: {
+      type: Schema.Types.Mixed,
+      default: []
+    },
     jobType: {
       type: String,
       enum: ['FULL_TIME', 'PART_TIME', 'INTERNSHIP', 'CONTRACT'],

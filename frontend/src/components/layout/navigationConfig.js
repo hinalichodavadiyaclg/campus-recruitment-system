@@ -150,6 +150,12 @@ export const NAVIGATION_GROUPS = [
     label: 'OTHER',
     items: [
       {
+        id: 'nav-notifications',
+        label: 'Notifications',
+        path: '/notifications',
+        icon: 'BellIcon'
+      },
+      {
         id: 'nav-settings',
         label: 'Settings',
         path: '/settings',

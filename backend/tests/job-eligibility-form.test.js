@@ -327,6 +327,69 @@ describe('Job Eligibility Selection & Form Refactoring Verification', () => {
         'Failure reason must cite Naandi training'
       );
     });
+
+    it('allows student from any passing year when allowedPassingYears is an empty array (Any Passing Year mode)', async () => {
+      const jobAnyPassingYear = {
+        status: 'OPEN',
+        isSuspended: false,
+        deadline: new Date(Date.now() + 86400000 * 7).toISOString(),
+        eligibilityMode: 'RESTRICTED',
+        eligibilityCriteria: {
+          allowedDepartmentIds: [],
+          allowedCourseIds: [],
+          allowedPassingYears: [], // Empty array = Any Passing Year (no year cutoff)
+          minCgpa: 6.0,
+          requiresNaandiTraining: false
+        }
+      };
+
+      const result = await evaluateEligibility({ job: jobAnyPassingYear, student: studentCs });
+      assert.ok(result.isEligible, 'Student with passing year 2026 must be eligible under Any Passing Year mode');
+      assert.equal(result.checks.passingYear, undefined, 'No passing-year failure check should be imposed');
+    });
+
+    it('restricts eligibility to selected passing years and rejects students from unselected years', async () => {
+      // Student has passingYear: 2026
+      const jobRestrictedYear = {
+        status: 'OPEN',
+        isSuspended: false,
+        deadline: new Date(Date.now() + 86400000 * 7).toISOString(),
+        eligibilityMode: 'RESTRICTED',
+        eligibilityCriteria: {
+          allowedDepartmentIds: [],
+          allowedCourseIds: [],
+          allowedPassingYears: [2027, 2028], // Only 2027 and 2028 eligible
+          minCgpa: 6.0,
+          requiresNaandiTraining: false
+        }
+      };
+
+      const result = await evaluateEligibility({ job: jobRestrictedYear, student: studentCs });
+      assert.ok(!result.isEligible, 'Student with passing year 2026 must be blocked from 2027/2028 job');
+      assert.ok(
+        result.ineligibleReason.includes('passing year'),
+        `Failure reason must cite passing year: ${result.ineligibleReason}`
+      );
+
+      // When passing year matches
+      const jobMatchingYear = {
+        status: 'OPEN',
+        isSuspended: false,
+        deadline: new Date(Date.now() + 86400000 * 7).toISOString(),
+        eligibilityMode: 'RESTRICTED',
+        eligibilityCriteria: {
+          allowedDepartmentIds: [],
+          allowedCourseIds: [],
+          allowedPassingYears: [2025, 2026], // 2026 is included
+          minCgpa: 6.0,
+          requiresNaandiTraining: false
+        }
+      };
+
+      const matchingResult = await evaluateEligibility({ job: jobMatchingYear, student: studentCs });
+      assert.ok(matchingResult.isEligible, 'Student with passing year 2026 must pass when 2026 is in allowedPassingYears');
+      assert.ok(matchingResult.checks.passingYear?.passed, 'Passing year check must be marked passed');
+    });
   });
 
   describe('3. Course to Department Filtering Relations', () => {
@@ -341,6 +404,102 @@ describe('Job Eligibility Selection & Form Refactoring Verification', () => {
       const dcmCourseCodes = dcmCourses.map((c) => c.code);
       assert.ok(dcmCourseCodes.includes('BCOM'));
       assert.ok(!dcmCourseCodes.includes('BT-CSE'));
+    });
+  });
+
+  describe('4. Job Responsibilities Validation & Backward Compatibility', () => {
+    it('accepts repeatable array of responsibility strings', () => {
+      const payload = {
+        body: {
+          title: 'Full Stack Developer',
+          description: 'Design and develop scalable applications across modern frameworks.',
+          responsibilities: [
+            'Architect scalable backend REST services',
+            'Develop responsive React user interfaces',
+            'Participate in daily agile standups and code reviews'
+          ],
+          jobType: 'FULL_TIME',
+          workMode: 'REMOTE',
+          vacancies: 2,
+          deadline: new Date(Date.now() + 86400000 * 14).toISOString(),
+          status: 'OPEN'
+        },
+        params: {},
+        query: {}
+      };
+
+      const result = jobCreateSchema.safeParse(payload);
+      assert.ok(result.success, 'Schema should accept array of responsibility strings');
+      assert.equal(result.data.body.responsibilities.length, 3);
+      assert.equal(result.data.body.responsibilities[0], 'Architect scalable backend REST services');
+    });
+
+    it('preserves backward compatibility with legacy single-string responsibilities', () => {
+      const payload = {
+        body: {
+          title: 'Legacy Responsibilities Job',
+          description: 'Overview of the software engineer role and requirements.',
+          responsibilities: 'Lead core platform development, mentor junior developers, and optimize queries.',
+          jobType: 'FULL_TIME',
+          workMode: 'REMOTE',
+          vacancies: 1,
+          deadline: new Date(Date.now() + 86400000 * 14).toISOString(),
+          status: 'DRAFT'
+        },
+        params: {},
+        query: {}
+      };
+
+      const result = jobCreateSchema.safeParse(payload);
+      assert.ok(result.success, 'Schema should accept legacy string responsibilities');
+      assert.equal(typeof result.data.body.responsibilities, 'string');
+    });
+
+    it('rejects empty responsibility entries in array', () => {
+      const payload = {
+        body: {
+          title: 'Software Developer',
+          description: 'Overview of the software engineer role and requirements.',
+          responsibilities: [''], // Empty string is invalid
+          jobType: 'FULL_TIME',
+          workMode: 'REMOTE',
+          vacancies: 1,
+          deadline: new Date(Date.now() + 86400000 * 14).toISOString(),
+          status: 'DRAFT'
+        },
+        params: {},
+        query: {}
+      };
+
+      const result = jobCreateSchema.safeParse(payload);
+      assert.ok(!result.success, 'Schema must reject empty responsibility items');
+    });
+
+    it('stores and retrieves array of responsibilities in MongoDB without type coercion corruption', async () => {
+      const testJob = await Job.create({
+        jobId: 'JOB-RESP-001',
+        companyId: testCompany._id,
+        title: 'Backend Systems Engineer',
+        description: 'Build enterprise distributed systems and cloud microservices.',
+        responsibilities: [
+          'Design scalable MongoDB aggregation pipelines',
+          'Optimize Node.js event loop throughput',
+          'Deploy CI/CD containerized microservices'
+        ],
+        jobType: 'FULL_TIME',
+        workMode: 'REMOTE',
+        vacancies: 2,
+        deadline: new Date(Date.now() + 86400000 * 14),
+        status: 'OPEN',
+        createdBy: studentCs.userId
+      });
+
+      const retrieved = await Job.findById(testJob._id).lean();
+      assert.ok(Array.isArray(retrieved.responsibilities), 'Retrieved responsibilities must be an array');
+      assert.equal(retrieved.responsibilities.length, 3);
+      assert.equal(retrieved.responsibilities[0], 'Design scalable MongoDB aggregation pipelines');
+      assert.equal(retrieved.responsibilities[1], 'Optimize Node.js event loop throughput');
+      assert.equal(retrieved.responsibilities[2], 'Deploy CI/CD containerized microservices');
     });
   });
 });

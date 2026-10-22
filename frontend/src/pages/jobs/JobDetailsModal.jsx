@@ -236,13 +236,34 @@ export function JobDetailsModal({
           </div>
         )}
 
-        {/* Job Description */}
+        {/* Job Description (Role Overview, Purpose & Team Context) */}
         <section className="job-details-section">
-          <h3 className="section-heading">About The Role</h3>
+          <h3 className="section-heading">Job Description & Role Overview</h3>
           <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.65, color: 'var(--ink)', fontSize: '0.92rem' }}>
             {job.description}
           </div>
         </section>
+
+        {/* Job Responsibilities (Day-to-day duties & deliverables) */}
+        {((Array.isArray(job.responsibilities) && job.responsibilities.length > 0) || (typeof job.responsibilities === 'string' && job.responsibilities.trim())) && (
+          <section className="job-details-section" style={{ marginTop: '20px' }}>
+            <h3 className="section-heading">Job Responsibilities & Deliverables</h3>
+            <ul className="job-responsibilities-bullets">
+              {Array.isArray(job.responsibilities)
+                ? job.responsibilities.map((resp, i) => (
+                    <li key={i}>{resp}</li>
+                  ))
+                : job.responsibilities
+                    .split('\n')
+                    .map((r) => r.trim())
+                    .filter(Boolean)
+                    .map((resp, i) => (
+                      <li key={i}>{resp.replace(/^[-*•]\s*/, '')}</li>
+                    ))
+              }
+            </ul>
+          </section>
+        )}
 
         {/* Eligibility Criteria Breakdown */}
         <section className="job-details-section" style={{ marginTop: '24px' }}>
@@ -266,16 +287,20 @@ export function JobDetailsModal({
                 {requiresNaandi ? 'Yes (Verified Certificate Required)' : 'Not Required'}
               </strong>
             </div>
-            {passingYears.length > 0 && (
-              <div className="criteria-card full-width">
-                <span className="criteria-label">Allowed Passing Years</span>
+            <div className="criteria-card full-width">
+              <span className="criteria-label">Allowed Passing Years</span>
+              {passingYears.length > 0 ? (
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
                   {passingYears.map((yr) => (
                     <span key={yr} className="badge neutral">{yr}</span>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <span style={{ fontSize: '0.88rem', color: 'var(--navy)', fontWeight: 600, marginTop: '2px', display: 'block' }}>
+                  Any Passing Year (All batches eligible)
+                </span>
+              )}
+            </div>
             {allowedDepts.length > 0 && (
               <div className="criteria-card full-width">
                 <span className="criteria-label">Eligible Departments</span>

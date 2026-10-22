@@ -573,6 +573,12 @@ export const jobCreateSchema = z.object({
       companyId: objectId.optional(),
       title: z.string().trim().min(2, 'Job title must be at least 2 characters.').max(150, 'Job title cannot exceed 150 characters.'),
       description: z.string().trim().min(10, 'Job description must be at least 10 characters.'),
+      responsibilities: z
+        .union([
+          z.array(z.string().trim().min(1, 'Responsibility cannot be empty.')),
+          z.string().trim()
+        ])
+        .optional(),
       jobType: jobTypeEnum,
       category: z.string().trim().max(100).optional(),
       workMode: workModeEnum,
@@ -615,6 +621,12 @@ export const jobUpdateSchema = z.object({
     .object({
       title: z.string().trim().min(2).max(150).optional(),
       description: z.string().trim().min(10).optional(),
+      responsibilities: z
+        .union([
+          z.array(z.string().trim().min(1, 'Responsibility cannot be empty.')),
+          z.string().trim()
+        ])
+        .optional(),
       jobType: jobTypeEnum.optional(),
       category: z.string().trim().max(100).optional(),
       workMode: workModeEnum.optional(),
@@ -688,7 +700,16 @@ export const jobListQuerySchema = z.object({
 export const applicationCreateSchema = z.object({
   body: z
     .object({
-      jobId: objectId
+      jobId: objectId,
+      customResume: z
+        .object({
+          url: z.string().trim().min(1, 'Resume URL is required.'),
+          fileName: z.string().trim().min(1, 'Resume filename is required.').max(255),
+          fileSize: z.coerce.number().int().min(1).optional(),
+          source: z.enum(['PROFILE', 'JOB_SPECIFIC']).optional().default('JOB_SPECIFIC')
+        })
+        .nullable()
+        .optional()
     })
     .strict(),
   params: emptyParams,

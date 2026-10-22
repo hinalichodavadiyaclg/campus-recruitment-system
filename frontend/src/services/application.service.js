@@ -3,12 +3,24 @@ import { apiRequest } from './api.js';
 export const applicationService = {
   /**
    * Submit an application for an open job (Student only)
-   * @param {string} jobId - The MongoDB _id of the target Job
+   * @param {string|Object} payload - Either jobId string or { jobId, customResume }
    */
-  submitApplication: (jobId) =>
-    apiRequest('/api/applications', {
+  submitApplication: (payload) => {
+    const body = typeof payload === 'string' ? { jobId: payload } : payload;
+    return apiRequest('/api/applications', {
       method: 'POST',
-      body: JSON.stringify({ jobId })
+      body: JSON.stringify(body)
+    });
+  },
+
+  /**
+   * Upload a job-specific resume PDF (Student only)
+   * @param {FormData} formData - Multipart form containing 'file'
+   */
+  uploadResume: (formData) =>
+    apiRequest('/api/applications/upload-resume', {
+      method: 'POST',
+      body: formData
     }),
 
   /**

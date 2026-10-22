@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal } from '../../components/common/Modal.jsx';
 import { Badge } from '../../components/common/Badge.jsx';
+import { getAssetUrl } from '../../services/api.js';
 import {
   DocumentIcon,
   BuildingIcon,
@@ -120,16 +121,27 @@ export function ApplicationDetailsModal({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <div>
-            <strong style={{ fontSize: '0.88rem', display: 'block' }}>
-              {resumeSnap.fileName || 'Candidate_Resume.pdf'}
-            </strong>
-            <span style={{ fontSize: '0.76rem', color: 'var(--muted)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: '0.88rem' }}>
+                {resumeSnap.fileName || 'Candidate_Resume.pdf'}
+              </strong>
+              {resumeSnap.source === 'JOB_SPECIFIC' ? (
+                <span className="badge teal" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
+                  Job-Specific Resume
+                </span>
+              ) : (
+                <span className="badge neutral" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
+                  Profile Resume
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: '0.76rem', color: 'var(--muted)', display: 'block', marginTop: '2px' }}>
               Submitted on {formatDateTime(resumeSnap.submittedAt || application.createdAt)}
             </span>
           </div>
           {resumeSnap.url ? (
             <a
-              href={resumeSnap.url}
+              href={getAssetUrl(resumeSnap.url)}
               target="_blank"
               rel="noopener noreferrer"
               className="primary"

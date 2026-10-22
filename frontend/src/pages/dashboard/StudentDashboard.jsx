@@ -72,9 +72,9 @@ export function StudentDashboard() {
             setStudent(profileRes.value);
           }
           if (jobsRes.status === 'fulfilled') {
-            const jList = jobsRes.value?.jobs || [];
+            const jList = jobsRes.value?.jobs || jobsRes.value?.items || [];
             setRecentJobs(jList);
-            setJobPostingsCount(jobsRes.value?.pagination?.total ?? jList.length);
+            setJobPostingsCount(jobsRes.value?.total ?? jobsRes.value?.pagination?.total ?? jList.length);
           }
           if (appsRes.status === 'fulfilled') {
             const aList = appsRes.value?.items || [];

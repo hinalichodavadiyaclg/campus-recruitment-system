@@ -1,6 +1,13 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as applicationService from '../services/application.service.js';
 import { sendSuccess } from '../utils/api-response.js';
 import { asyncHandler } from '../utils/async-handler.js';
+import { AppError } from '../utils/app-error.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const submit = asyncHandler(async (request, response) =>
   sendSuccess(
@@ -12,6 +19,19 @@ export const submit = asyncHandler(async (request, response) =>
     })
   )
 );
+
+export const uploadJobResume = asyncHandler(async (request, response) => {
+  if (!request.file) {
+    throw new AppError(400, 'FILE_REQUIRED', 'Please select a valid PDF resume file to upload.');
+  }
+  const fileUrl = `/uploads/resumes/${request.file.filename}`;
+  sendSuccess(response, 201, {
+    url: fileUrl,
+    fileName: request.file.originalname,
+    fileSize: request.file.size,
+    source: 'JOB_SPECIFIC'
+  });
+});
 
 export const list = asyncHandler(async (request, response) =>
   sendSuccess(
@@ -34,6 +54,20 @@ export const getById = asyncHandler(async (request, response) =>
     })
   )
 );
+
+export const getResume = asyncHandler(async (request, response) => {
+  const resumeInfo = await applicationService.getApplicationResumeFile({
+    auth: request.auth,
+    id: response.locals.input?.params?.id || request.params.id
+  });
+  const filePath = path.join(__dirname, '..', '..', 'public', resumeInfo.url.replace(/^\//, ''));
+  if (fs.existsSync(filePath)) {
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader('Content-Disposition', `inline; filename="${resumeInfo.fileName}"`);
+    return response.sendFile(filePath);
+  }
+  return response.redirect(resumeInfo.url);
+});
 
 export const updateStatus = asyncHandler(async (request, response) =>
   sendSuccess(

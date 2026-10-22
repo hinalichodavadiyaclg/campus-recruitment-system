@@ -16,6 +16,18 @@ export function errorHandler(error, _request, response, _next) {
       }
     });
   }
+  if (error?.name === 'MulterError') {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return response.status(400).json({
+        success: false,
+        error: { code: 'FILE_TOO_LARGE', message: 'File size exceeds maximum allowed limit (5MB).' }
+      });
+    }
+    return response.status(400).json({
+      success: false,
+      error: { code: 'UPLOAD_ERROR', message: error.message }
+    });
+  }
   if (error?.name === 'ValidationError') {
     return response.status(400).json({
       success: false,

@@ -18,6 +18,11 @@ const resumeSnapshotSchema = new Schema(
     url: { type: String, required: true },
     fileName: { type: String, required: true },
     fileSize: { type: Number },
+    source: {
+      type: String,
+      enum: ['PROFILE', 'JOB_SPECIFIC'],
+      default: 'PROFILE'
+    },
     submittedAt: { type: Date, default: Date.now }
   },
   { _id: false }
