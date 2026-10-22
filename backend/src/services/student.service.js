@@ -466,13 +466,29 @@ export async function deleteResume(userId) {
 export async function addCertificate(userId, input) {
   const student = await findStudentByUserId(userId);
 
+  const org = (input.issuingOrganization || '').trim();
+  const name = (input.name || '').trim();
+  const isNaandi = Boolean(
+    input.isNaandiTraining === true ||
+    input.isNaandiTraining === 'true' ||
+    org.toLowerCase().includes('naandi') ||
+    name.toLowerCase().includes('naandi')
+  );
+
+  let credentialId = input.credentialId ? String(input.credentialId).trim() : '';
+  if (isNaandi && (!credentialId || (!credentialId.startsWith('NAANDI-') && !credentialId.startsWith('VVWU-NAANDI-')))) {
+    credentialId = credentialId ? `NAANDI-${credentialId}` : `NAANDI-${student.universityId || Date.now()}`;
+  }
+
   student.certificates.push({
-    name: input.name.trim(),
-    issuingOrganization: input.issuingOrganization.trim(),
+    name,
+    issuingOrganization: org,
     issueDate: input.issueDate ? String(input.issueDate).trim() : '',
-    credentialId: input.credentialId ? String(input.credentialId).trim() : '',
+    credentialId,
     credentialUrl: input.credentialUrl ? String(input.credentialUrl).trim() : '',
-    fileUrl: input.fileUrl ? String(input.fileUrl).trim() : ''
+    fileUrl: input.fileUrl ? String(input.fileUrl).trim() : '',
+    isNaandiTraining: isNaandi,
+    isVerified: isNaandi ? true : Boolean(input.isVerified)
   });
   await student.save();
   return student.certificates[student.certificates.length - 1];
@@ -490,6 +506,24 @@ export async function updateCertificate(userId, certId, input) {
   if (input.credentialId !== undefined) cert.credentialId = String(input.credentialId).trim();
   if (input.credentialUrl !== undefined) cert.credentialUrl = String(input.credentialUrl).trim();
   if (input.fileUrl !== undefined) cert.fileUrl = String(input.fileUrl).trim();
+
+  const org = cert.issuingOrganization || '';
+  const name = cert.name || '';
+  const isNaandi = Boolean(
+    input.isNaandiTraining === true ||
+    input.isNaandiTraining === 'true' ||
+    cert.isNaandiTraining ||
+    org.toLowerCase().includes('naandi') ||
+    name.toLowerCase().includes('naandi')
+  );
+
+  if (isNaandi) {
+    cert.isNaandiTraining = true;
+    cert.isVerified = true;
+    if (!cert.credentialId || (!cert.credentialId.startsWith('NAANDI-') && !cert.credentialId.startsWith('VVWU-NAANDI-'))) {
+      cert.credentialId = cert.credentialId ? `NAANDI-${cert.credentialId}` : `NAANDI-${student.universityId || Date.now()}`;
+    }
+  }
 
   await student.save();
   return cert;

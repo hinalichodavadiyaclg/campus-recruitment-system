@@ -1,0 +1,102 @@
+/* ==========================================================================
+   Application Management Styles — VVWU Campus Recruitment Portal
+   Aesthetic: Preserves VVWU Design System tokens, typography, and colors
+   ========================================================================== */
+
+.app-filters-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(16, 46, 95, 0.03);
+}
+
+.app-filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 170px;
+  flex: 1;
+}
+
+.app-filter-label {
+  font-size: 0.74rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.app-filter-select,
+.app-filter-input {
+  height: 40px;
+  padding: 8px 12px;
+  font-size: 0.86rem;
+  color: var(--ink);
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.app-filter-select:focus,
+.app-filter-input:focus {
+  background: #fff;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(8, 124, 145, 0.15);
+}
+
+.app-status-step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.app-snapshot-box {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.app-snapshot-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--navy);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  font-size: 0.84rem;
+}
+
+@media (max-width: 768px) {
+  .app-snapshot-grid {
+    grid-template-columns: 1fr;
+  }
+  .app-filters-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

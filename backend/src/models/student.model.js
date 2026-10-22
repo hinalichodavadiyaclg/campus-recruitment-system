@@ -9,7 +9,9 @@ const certificateSchema = new Schema(
     issueDate: { type: String, trim: true },
     credentialId: { type: String, trim: true },
     credentialUrl: { type: String, trim: true },
-    fileUrl: { type: String, trim: true }
+    fileUrl: { type: String, trim: true },
+    isNaandiTraining: { type: Boolean, default: false },
+    isVerified: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

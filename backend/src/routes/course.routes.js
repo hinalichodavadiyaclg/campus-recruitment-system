@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as courseController from '../controllers/course.controller.js';
 import { authenticate } from '../middleware/authenticate.js';
-import { authorizePermissions } from '../middleware/authorize.js';
+import { authorizeAnyPermission, authorizePermissions } from '../middleware/authorize.js';
 import { PERMISSION_IDS } from '../utils/access-constants.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { validate } from '../validators/request.validator.js';
@@ -19,14 +19,14 @@ courseRoutes.use(authenticate);
 
 courseRoutes.get(
   '/',
-  authorizePermissions(PERMISSION_IDS.COURSE_READ),
+  authorizeAnyPermission(PERMISSION_IDS.COURSE_READ, PERMISSION_IDS.JOB_CREATE, PERMISSION_IDS.JOB_UPDATE),
   validate(coursesListSchema),
   asyncHandler(courseController.list)
 );
 
 courseRoutes.get(
   '/:id',
-  authorizePermissions(PERMISSION_IDS.COURSE_READ),
+  authorizeAnyPermission(PERMISSION_IDS.COURSE_READ, PERMISSION_IDS.JOB_CREATE, PERMISSION_IDS.JOB_UPDATE),
   validate(userIdParamsSchema),
   asyncHandler(courseController.getById)
 );

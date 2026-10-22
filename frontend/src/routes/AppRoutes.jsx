@@ -47,6 +47,9 @@ import { PermissionDetailsPage } from '../pages/permissions/PermissionDetailsPag
 // Sessions & Imports
 import { SessionsListPage } from '../pages/sessions/SessionsListPage.jsx';
 import { ExcelImportPage } from '../pages/imports/ExcelImportPage.jsx';
+import { JobPostingsPage } from '../pages/jobs/JobPostingsPage.jsx';
+import { ApplicationsPage } from '../pages/applications/ApplicationsPage.jsx';
+import { NotificationsPage } from '../pages/notifications/NotificationsPage.jsx';
 import { NotFoundModulePage } from '../pages/common/NotFoundModulePage.jsx';
 
 // Training & Workshops
@@ -246,13 +249,17 @@ export function AppRoutes() {
     return has('SESSION_READ') ? <SessionsListPage /> : <NotFoundModulePage title="Login Activity" path="/sessions" />;
   }
 
-  // Recruitment modules (No data yet -> render clean Not found empty state)
+  // Recruitment modules
   if (parts[0] === 'job-postings' || parts[0] === 'jobs') {
-    return <NotFoundModulePage title="Job Postings" path="/job-postings" />;
+    return has('JOB_READ') ? (
+      <JobPostingsPage initialJobId={parts[1]} />
+    ) : (
+      <NotFoundModulePage title="Job Postings" path="/job-postings" />
+    );
   }
 
   if (parts[0] === 'applications') {
-    return <NotFoundModulePage title="Applications" path="/applications" />;
+    return has('APPLICATION_READ') ? <ApplicationsPage /> : <NotFoundModulePage title="Applications" path="/applications" />;
   }
 
   if (parts[0] === 'interviews') {
@@ -282,6 +289,11 @@ export function AppRoutes() {
   // System settings module
   if (parts[0] === 'settings') {
     return <SettingsPage />;
+  }
+
+  // Notifications center
+  if (parts[0] === 'notifications') {
+    return <NotificationsPage />;
   }
 
   // Fallback: render Not found if route is unrecognized

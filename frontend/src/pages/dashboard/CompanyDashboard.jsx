@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { companyService } from '../../services/company.service.js';
+import { jobService } from '../../services/job.service.js';
+import { applicationService } from '../../services/application.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import {
   BuildingIcon,
@@ -21,24 +23,42 @@ export function CompanyDashboard() {
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Real data collections (empty states when no records exist in the database)
-  const recentJobs = [];
-  const recentApplications = [];
+  // Real data collections loaded from backend (clean empty states when no records exist)
+  const [recentJobs, setRecentJobs] = useState([]);
+  const [recentApplications, setRecentApplications] = useState([]);
+  const [jobPostingsCount, setJobPostingsCount] = useState(0);
+  const [applicationsCount, setApplicationsCount] = useState(0);
+  const [placementsCount, setPlacementsCount] = useState(0);
   const upcomingInterviews = [];
-
-  const jobPostingsCount = recentJobs.length;
-  const applicationsCount = recentApplications.length;
   const interviewsCount = upcomingInterviews.length;
-  const placementsCount = 0;
 
   useEffect(() => {
     let mounted = true;
     async function loadData() {
       try {
         setLoading(true);
-        const data = await companyService.getMyProfile();
+        const [profileRes, jobsRes, appsRes] = await Promise.allSettled([
+          companyService.getMyProfile(),
+          jobService.listJobs({ limit: 5 }),
+          applicationService.listApplications({ limit: 100 })
+        ]);
+
         if (mounted) {
-          setCompany(data);
+          if (profileRes.status === 'fulfilled') {
+            setCompany(profileRes.value);
+          }
+          if (jobsRes.status === 'fulfilled') {
+            const jList = jobsRes.value?.jobs || jobsRes.value?.items || [];
+            setRecentJobs(jList);
+            setJobPostingsCount(jobsRes.value?.total ?? jobsRes.value?.pagination?.total ?? jList.length);
+          }
+          if (appsRes.status === 'fulfilled') {
+            const aList = appsRes.value?.items || [];
+            setRecentApplications(aList.slice(0, 5));
+            setApplicationsCount(appsRes.value?.total ?? aList.length);
+            const placed = aList.filter((a) => a.status === 'SELECTED').length;
+            setPlacementsCount(placed);
+          }
         }
       } catch (_err) {
         // Fallback gracefully to authenticated session details
@@ -356,25 +376,29 @@ export function CompanyDashboard() {
             </div>
             <div className="company-card-list">
               {recentApplications.length > 0 ? (
-                recentApplications.map((app) => (
-                  <a key={app._id || app.id} href="#/applications" className="company-list-row">
-                    <div className="company-list-left">
-                      <div className="company-avatar-circle">
-                        {(app.candidateName || 'AP').slice(0, 2).toUpperCase()}
+                recentApplications.map((app) => {
+                  const candName = `${app.studentId?.firstName || ''} ${app.studentId?.lastName || ''}`.trim() || app.candidateName || 'Candidate';
+                  const jobTitle = app.jobSnapshot?.title || app.jobId?.title || app.roleTitle || 'Applicant';
+                  return (
+                    <a key={app._id || app.id} href="#/applications" className="company-list-row">
+                      <div className="company-list-left">
+                        <div className="company-avatar-circle">
+                          {candName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="company-list-info">
+                          <span className="company-list-primary">{candName}</span>
+                          <span className="company-list-secondary">{jobTitle}</span>
+                        </div>
                       </div>
-                      <div className="company-list-info">
-                        <span className="company-list-primary">{app.candidateName}</span>
-                        <span className="company-list-secondary">{app.roleTitle || 'Applicant'}</span>
+                      <div className="company-list-right">
+                        <span className={`company-pill-badge ${app.status?.toLowerCase() || 'new'}`}>{app.status || 'New'}</span>
+                        <div className="company-chevron-arrow">
+                          <ChevronRightIcon size={16} />
+                        </div>
                       </div>
-                    </div>
-                    <div className="company-list-right">
-                      <span className="company-pill-badge new">New</span>
-                      <div className="company-chevron-arrow">
-                        <ChevronRightIcon size={16} />
-                      </div>
-                    </div>
-                  </a>
-                ))
+                    </a>
+                  );
+                })
               ) : (
                 <div className="company-empty-state">
                   <div className="company-empty-icon">

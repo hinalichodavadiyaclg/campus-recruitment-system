@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { ConfirmModal } from '../common/ConfirmModal.jsx';
+import { NotificationDropdown } from '../notifications/NotificationDropdown.jsx';
 
 export function VvwuLogo({ size = 42 }) {
   return (
@@ -99,7 +100,8 @@ const NAV_ICONS = {
   KeyIcon,
   ImportIcon,
   ChartIcon,
-  SettingsIcon
+  SettingsIcon,
+  BellIcon
 };
 
 export function PortalLayout({
@@ -238,15 +240,7 @@ export function PortalLayout({
           </div>
 
           <div className="topbar-actions">
-            <button
-              className="topbar-icon-btn"
-              type="button"
-              aria-label="Notifications"
-              title="Notifications"
-            >
-              <BellIcon size={19} color="#475569" />
-              <span className="topbar-badge">3</span>
-            </button>
+            <NotificationDropdown />
 
             <div className="topbar-user-dropdown" style={{ position: 'relative' }}>
               <button

@@ -37,9 +37,24 @@ export function StudentMyProfilePage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
+  const getInitialTab = () => {
+    try {
+      const hash = window.location.hash || '';
+      const qIndex = hash.indexOf('?');
+      if (qIndex !== -1) {
+        const params = new URLSearchParams(hash.slice(qIndex + 1));
+        const tab = params.get('tab');
+        if (['overview', 'resume', 'projects', 'internships', 'certificates', 'achievements'].includes(tab)) {
+          return tab;
+        }
+      }
+    } catch (_) {}
+    return 'overview';
+  };
+
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(getInitialTab);
 
   const photoInputRef = useRef(null);
   const bioTextareaRef = useRef(null);
@@ -54,7 +69,15 @@ export function StudentMyProfilePage() {
   // Form states for modals
   const [certModalOpen, setCertModalOpen] = useState(false);
   const [editingCert, setEditingCert] = useState(null);
-  const [certForm, setCertForm] = useState({ name: '', issuingOrganization: '', issueDate: '', credentialId: '', credentialUrl: '', fileUrl: '' });
+  const [certForm, setCertForm] = useState({
+    name: '',
+    issuingOrganization: '',
+    issueDate: '',
+    credentialId: '',
+    credentialUrl: '',
+    fileUrl: '',
+    isNaandiTraining: false
+  });
 
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
@@ -192,8 +215,66 @@ export function StudentMyProfilePage() {
     }
   };
 
+  const naandiCert = student?.certificates?.find((c) => {
+    const org = (c.issuingOrganization || '').toLowerCase().trim();
+    const name = (c.name || '').toLowerCase().trim();
+    return c.isNaandiTraining || org.includes('naandi') || name.includes('naandi');
+  });
+
+  const handleOpenNaandiModal = (existing = null) => {
+    if (existing) {
+      setEditingCert(existing);
+      setCertForm({
+        name: existing.name || 'Naandi Employability Skill Training',
+        issuingOrganization: existing.issuingOrganization || 'Naandi Foundation',
+        issueDate: existing.issueDate || '',
+        credentialId: existing.credentialId || '',
+        credentialUrl: existing.credentialUrl || '',
+        fileUrl: existing.fileUrl || '',
+        isNaandiTraining: true
+      });
+    } else {
+      setEditingCert(null);
+      setCertForm({
+        name: 'Naandi Employability Skill Training',
+        issuingOrganization: 'Naandi Foundation',
+        issueDate: '',
+        credentialId: '',
+        credentialUrl: '',
+        fileUrl: '',
+        isNaandiTraining: true
+      });
+    }
+    setCertFile(null);
+    setCertErrors({});
+    setCertModalOpen(true);
+  };
+
   useEffect(() => {
     loadProfile();
+  }, []);
+
+  useEffect(() => {
+    const checkHashAction = () => {
+      try {
+        const hash = window.location.hash || '';
+        const qIndex = hash.indexOf('?');
+        if (qIndex !== -1) {
+          const params = new URLSearchParams(hash.slice(qIndex + 1));
+          const tab = params.get('tab');
+          if (['overview', 'resume', 'projects', 'internships', 'certificates', 'achievements'].includes(tab)) {
+            setActiveTab(tab);
+          }
+          if (params.get('action') === 'upload-naandi') {
+            setActiveTab('certificates');
+            handleOpenNaandiModal();
+          }
+        }
+      } catch (_) {}
+    };
+    checkHashAction();
+    window.addEventListener('hashchange', checkHashAction);
+    return () => window.removeEventListener('hashchange', checkHashAction);
   }, []);
 
   const handleSaveBio = async (e) => {
@@ -306,6 +387,7 @@ export function StudentMyProfilePage() {
         payload.append('issueDate', certForm.issueDate || '');
         payload.append('credentialId', certForm.credentialId || '');
         payload.append('credentialUrl', certForm.credentialUrl || '');
+        payload.append('isNaandiTraining', certForm.isNaandiTraining ? 'true' : 'false');
         payload.append('file', certFile);
       } else {
         payload = { ...certForm };
@@ -788,6 +870,43 @@ export function StudentMyProfilePage() {
                           <span className="metric-tile-value">{student.passingYear || 'N/A'}</span>
                         </div>
                       </div>
+
+                      {/* Naandi Training Status */}
+                      <div className="metric-tile" style={{ gridColumn: 'span 2' }}>
+                        <div className="metric-icon-box" style={{ background: naandiCert ? '#dcfce7' : '#fef3c7', color: naandiCert ? '#16a34a' : '#d97706' }}>
+                          <AwardIcon size={18} color={naandiCert ? '#16a34a' : '#d97706'} />
+                        </div>
+                        <div className="metric-tile-content" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                          <div>
+                            <span className="metric-tile-label">Mandatory Naandi Training</span>
+                            <span className="metric-tile-value" style={{ color: naandiCert ? '#16a34a' : '#d97706', fontSize: '0.88rem' }}>
+                              {naandiCert ? 'Verified for Placements ✓' : 'Certificate Not Uploaded'}
+                            </span>
+                          </div>
+                          {!naandiCert ? (
+                            <button
+                              type="button"
+                              className="link-button"
+                              style={{ color: 'var(--teal)', fontWeight: 600, fontSize: '0.82rem', textDecoration: 'underline' }}
+                              onClick={() => {
+                                setActiveTab('certificates');
+                                handleOpenNaandiModal();
+                              }}
+                            >
+                              Upload Certificate →
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="link-button"
+                              style={{ color: 'var(--teal)', fontWeight: 600, fontSize: '0.82rem' }}
+                              onClick={() => setActiveTab('certificates')}
+                            >
+                              View in Certificates →
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </article>
 
@@ -1143,21 +1262,170 @@ export function StudentMyProfilePage() {
           {/* TAB 5: CERTIFICATES */}
           {activeTab === 'certificates' && (
             <article className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
                 <h3 style={{ margin: 0 }}>Certificates & Credentials</h3>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => {
-                    setEditingCert(null);
-                    setCertForm({ name: '', issuingOrganization: '', issueDate: '', credentialId: '', credentialUrl: '', fileUrl: '' });
-                    setCertFile(null);
-                    setCertModalOpen(true);
-                  }}
-                >
-                  + Add Certificate
-                </button>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="button"
+                    style={{
+                      background: '#0d9488',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontWeight: 600,
+                      fontSize: '0.84rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 14px',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => handleOpenNaandiModal(naandiCert || null)}
+                  >
+                    <AwardIcon size={16} color="#ffffff" />
+                    {naandiCert ? 'Edit Naandi Certificate' : '+ Upload Naandi Certificate'}
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => {
+                      setEditingCert(null);
+                      setCertForm({ name: '', issuingOrganization: '', issueDate: '', credentialId: '', credentialUrl: '', fileUrl: '', isNaandiTraining: false });
+                      setCertFile(null);
+                      setCertModalOpen(true);
+                    }}
+                  >
+                    + Add Other Certificate
+                  </button>
+                </div>
               </div>
+
+              {/* Dedicated Naandi Training Status Card */}
+              {naandiCert ? (
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '10px',
+                  padding: '16px 18px',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '12px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '50%',
+                      background: '#dcfce7',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <AwardIcon size={22} color="#15803d" />
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <strong style={{ fontSize: '0.96rem', color: '#14532d' }}>
+                          Naandi Training Certificate
+                        </strong>
+                        <span style={{
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          color: '#15803d',
+                          background: '#dcfce7',
+                          padding: '2px 8px',
+                          borderRadius: '12px'
+                        }}>
+                          Verified for Placements ✓
+                        </span>
+                      </div>
+                      <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#166534' }}>
+                        {naandiCert.name} &bull; Issued by {naandiCert.issuingOrganization || 'Naandi Foundation'}
+                        {naandiCert.credentialId ? ` &bull; ID: ${naandiCert.credentialId}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {naandiCert.fileUrl && (
+                      <button
+                        type="button"
+                        className="button ghost"
+                        style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+                        onClick={() => setPreviewCert(naandiCert)}
+                      >
+                        View Certificate ↗
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="button"
+                      style={{ fontSize: '0.8rem', padding: '6px 12px', background: '#ffffff', border: '1px solid #86efac', color: '#15803d', cursor: 'pointer' }}
+                      onClick={() => handleOpenNaandiModal(naandiCert)}
+                    >
+                      Edit / Replace
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  background: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  borderRadius: '10px',
+                  padding: '16px 18px',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '12px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <div style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '50%',
+                      background: '#fef3c7',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      marginTop: '2px'
+                    }}>
+                      <AwardIcon size={22} color="#b45309" />
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: '0.96rem', color: '#78350f', display: 'block', marginBottom: '2px' }}>
+                        Mandatory Naandi Training Certificate Missing
+                      </strong>
+                      <p style={{ margin: 0, fontSize: '0.82rem', color: '#92400e', lineHeight: 1.4 }}>
+                        Completion of the Naandi Employability &amp; Soft Skills workshop is mandatory for campus placement applications.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="button"
+                    style={{
+                      background: '#d97706',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontWeight: 600,
+                      fontSize: '0.84rem',
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => handleOpenNaandiModal()}
+                  >
+                    + Upload Naandi Certificate
+                  </button>
+                </div>
+              )}
 
               {student.certificates?.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1313,7 +1581,15 @@ export function StudentMyProfilePage() {
       <Modal
         isOpen={certModalOpen}
         onClose={() => setCertModalOpen(false)}
-        title={editingCert ? 'Edit Certificate' : 'Add Certificate'}
+        title={
+          certForm.isNaandiTraining
+            ? editingCert
+              ? 'Edit Naandi Training Certificate'
+              : 'Upload Naandi Training Certificate'
+            : editingCert
+            ? 'Edit Certificate'
+            : 'Add Certificate'
+        }
         maxWidth="540px"
       >
         <form
@@ -1321,6 +1597,28 @@ export function StudentMyProfilePage() {
           noValidate
           style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}
         >
+          {certForm.isNaandiTraining && (
+            <div style={{
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: '8px',
+              padding: '12px 14px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+              fontSize: '0.84rem',
+              color: '#166534'
+            }}>
+              <AwardIcon size={20} color="#15803d" style={{ marginTop: '2px', flexShrink: 0 }} />
+              <div>
+                <strong style={{ display: 'block', color: '#14532d', marginBottom: '2px' }}>
+                  Institutional Naandi Training Verification
+                </strong>
+                Uploading your official completion certificate fulfills the mandatory Naandi Training eligibility requirement for campus placements.
+              </div>
+            </div>
+          )}
+
           <div className="field">
             <label>Certificate Name *</label>
             <input
@@ -1329,7 +1627,7 @@ export function StudentMyProfilePage() {
                 setCertForm({ ...certForm, name: e.target.value });
                 if (certErrors.name) setCertErrors((prev) => ({ ...prev, name: '' }));
               }}
-              placeholder="e.g. AWS Certified Solutions Architect"
+              placeholder={certForm.isNaandiTraining ? "e.g. Naandi Employability Skill Training" : "e.g. AWS Certified Solutions Architect"}
               style={certErrors.name ? { borderColor: 'var(--red, #e53e3e)' } : {}}
               aria-invalid={Boolean(certErrors.name)}
             />
@@ -1348,7 +1646,7 @@ export function StudentMyProfilePage() {
                 setCertForm({ ...certForm, issuingOrganization: e.target.value });
                 if (certErrors.issuingOrganization) setCertErrors((prev) => ({ ...prev, issuingOrganization: '' }));
               }}
-              placeholder="e.g. Amazon Web Services"
+              placeholder={certForm.isNaandiTraining ? "Naandi Foundation" : "e.g. Amazon Web Services"}
               style={certErrors.issuingOrganization ? { borderColor: 'var(--red, #e53e3e)' } : {}}
               aria-invalid={Boolean(certErrors.issuingOrganization)}
             />
@@ -1371,7 +1669,7 @@ export function StudentMyProfilePage() {
           <div className="field">
             <label>Credential ID</label>
             <input
-              placeholder="e.g. AWS-123456"
+              placeholder={certForm.isNaandiTraining ? "e.g. NAANDI-2025-001 (or leave blank to auto-generate)" : "e.g. AWS-123456"}
               value={certForm.credentialId}
               onChange={(e) => setCertForm({ ...certForm, credentialId: e.target.value })}
             />
@@ -1387,7 +1685,7 @@ export function StudentMyProfilePage() {
           </div>
 
           <div className="field">
-            <label>Certificate Image / Document File</label>
+            <label>{certForm.isNaandiTraining ? 'Certificate Document / Image File (PDF or Image) *' : 'Certificate Image / Document File'}</label>
             <input
               type="file"
               accept="image/*,.pdf"
@@ -1403,10 +1701,32 @@ export function StudentMyProfilePage() {
             </small>
           </div>
 
+          {!editingCert && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.86rem' }}>
+              <input
+                type="checkbox"
+                id="isNaandiTrainingCheck"
+                checked={certForm.isNaandiTraining}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setCertForm((prev) => ({
+                    ...prev,
+                    isNaandiTraining: checked,
+                    name: checked && !prev.name ? 'Naandi Employability Skill Training' : prev.name,
+                    issuingOrganization: checked && !prev.issuingOrganization ? 'Naandi Foundation' : prev.issuingOrganization
+                  }));
+                }}
+              />
+              <label htmlFor="isNaandiTrainingCheck" style={{ cursor: 'pointer', fontWeight: 600, color: '#166534' }}>
+                🎓 This is a mandatory Naandi Training Certificate
+              </label>
+            </div>
+          )}
+
           <div className="modal-actions" style={{ marginTop: '8px' }}>
             <button className="ghost" type="button" onClick={() => setCertModalOpen(false)}>Cancel</button>
             <button className="primary" type="submit" disabled={uploadingCert}>
-              {uploadingCert ? 'Saving…' : 'Save Certificate'}
+              {uploadingCert ? 'Saving…' : (certForm.isNaandiTraining ? 'Save Naandi Certificate' : 'Save Certificate')}
             </button>
           </div>
         </form>
