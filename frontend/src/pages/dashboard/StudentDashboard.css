@@ -304,7 +304,7 @@
 .student-metric-icon-box {
   width: 46px;
   height: 46px;
-  border-radius: 12px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -348,6 +348,9 @@
   font-size: 0.82rem;
   font-weight: 500;
   color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .student-chevron-arrow {
