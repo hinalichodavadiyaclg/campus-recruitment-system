@@ -29,18 +29,20 @@ export function CompanyDashboard() {
   const [jobPostingsCount, setJobPostingsCount] = useState(0);
   const [applicationsCount, setApplicationsCount] = useState(0);
   const [placementsCount, setPlacementsCount] = useState(0);
-  const upcomingInterviews = [];
-  const interviewsCount = upcomingInterviews.length;
+  const [upcomingInterviews, setUpcomingInterviews] = useState([]);
+  const [interviewsCount, setInterviewsCount] = useState(0);
 
   useEffect(() => {
     let mounted = true;
     async function loadData() {
       try {
         setLoading(true);
-        const [profileRes, jobsRes, appsRes] = await Promise.allSettled([
+        const [profileRes, jobsRes, appsRes, placedRes, interviewRes] = await Promise.allSettled([
           companyService.getMyProfile(),
           jobService.listJobs({ limit: 5 }),
-          applicationService.listApplications({ limit: 100 })
+          applicationService.listApplications({ limit: 50 }),
+          applicationService.listApplications({ status: 'SELECTED', limit: 1 }),
+          applicationService.listApplications({ status: 'INTERVIEW', limit: 10 })
         ]);
 
         if (mounted) {
@@ -56,8 +58,21 @@ export function CompanyDashboard() {
             const aList = appsRes.value?.items || [];
             setRecentApplications(aList.slice(0, 5));
             setApplicationsCount(appsRes.value?.total ?? aList.length);
-            const placed = aList.filter((a) => a.status === 'SELECTED').length;
+          }
+          if (placedRes.status === 'fulfilled') {
+            setPlacementsCount(placedRes.value?.total ?? 0);
+          } else if (appsRes.status === 'fulfilled') {
+            const placed = (appsRes.value?.items || []).filter((a) => a.status === 'SELECTED').length;
             setPlacementsCount(placed);
+          }
+          if (interviewRes.status === 'fulfilled') {
+            const intList = interviewRes.value?.items || [];
+            setUpcomingInterviews(intList);
+            setInterviewsCount(interviewRes.value?.total ?? intList.length);
+          } else if (appsRes.status === 'fulfilled') {
+            const intList = (appsRes.value?.items || []).filter((a) => a.status === 'INTERVIEW');
+            setUpcomingInterviews(intList);
+            setInterviewsCount(intList.length);
           }
         }
       } catch (_err) {
@@ -285,15 +300,15 @@ export function CompanyDashboard() {
             </div>
           </a>
 
-          {/* Card 3: Scheduled Interviews */}
-          <a href="#/interviews" className="company-metric-card">
+          {/* Card 3: Interviews */}
+          <a href="#/interviews" className="company-metric-card" title="Scheduled Interviews">
             <div className="company-metric-left">
               <div className="company-metric-icon-box green">
                 <CalendarIcon size={22} color="#16a34a" />
               </div>
               <div className="company-metric-details">
                 <span className="company-metric-value">{interviewsCount}</span>
-                <span className="company-metric-label">Scheduled Interviews</span>
+                <span className="company-metric-label">Interviews</span>
               </div>
             </div>
             <div className="company-chevron-arrow">
@@ -346,7 +361,7 @@ export function CompanyDashboard() {
                       </div>
                     </div>
                     <div className="company-list-right">
-                      <span className="company-pill-badge active">Active</span>
+                      <span className={`company-pill-badge ${job.status?.toLowerCase() || 'active'}`}>{job.status || 'Active'}</span>
                       <div className="company-chevron-arrow">
                         <ChevronRightIcon size={16} />
                       </div>
@@ -418,32 +433,39 @@ export function CompanyDashboard() {
           <div className="company-section-col">
             <div className="company-section-header">
               <h3 className="company-section-title">Upcoming Interviews</h3>
-              <a href="#/interviews" className="company-view-all-link">
+              <a href="#/applications" className="company-view-all-link">
                 <span>View All</span>
                 <span aria-hidden="true">→</span>
               </a>
             </div>
             <div className="company-card-list">
               {upcomingInterviews.length > 0 ? (
-                upcomingInterviews.map((interview) => (
-                  <a key={interview._id || interview.id} href="#/interviews" className="company-list-row">
-                    <div className="company-list-left">
-                      <div className="company-avatar-circle">
-                        {(interview.candidateName || 'IN').slice(0, 2).toUpperCase()}
+                upcomingInterviews.map((interview) => {
+                  const candName =
+                    `${interview.studentId?.firstName || ''} ${interview.studentId?.lastName || ''}`.trim() ||
+                    interview.candidateName ||
+                    'Candidate';
+                  const roleTitle = interview.jobSnapshot?.title || interview.jobId?.title || interview.roleTitle || 'Applicant';
+                  return (
+                    <a key={interview._id || interview.id} href="#/applications" className="company-list-row">
+                      <div className="company-list-left">
+                        <div className="company-avatar-circle">
+                          {candName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="company-list-info">
+                          <span className="company-list-primary">{candName}</span>
+                          <span className="company-list-secondary">{roleTitle} • Round {interview.recruitmentRound || 1}</span>
+                        </div>
                       </div>
-                      <div className="company-list-info">
-                        <span className="company-list-primary">{interview.candidateName}</span>
-                        <span className="company-list-secondary">{interview.roleTitle}</span>
+                      <div className="company-list-right">
+                        <span className="company-pill-badge online">Interview</span>
+                        <div className="company-chevron-arrow">
+                          <ChevronRightIcon size={16} />
+                        </div>
                       </div>
-                    </div>
-                    <div className="company-list-right">
-                      <span className="company-pill-badge online">Online</span>
-                      <div className="company-chevron-arrow">
-                        <ChevronRightIcon size={16} />
-                      </div>
-                    </div>
-                  </a>
-                ))
+                    </a>
+                  );
+                })
               ) : (
                 <div className="company-empty-state">
                   <div className="company-empty-icon">
@@ -481,7 +503,7 @@ export function CompanyDashboard() {
               </a>
 
               {/* Action 3: Manage Interviews */}
-              <a href="#/interviews" className="company-action-card manage-interviews">
+              <a href="#/applications?status=INTERVIEW" className="company-action-card manage-interviews">
                 <div className="company-action-top">
                   <CalendarIcon size={22} color="#16a34a" />
                   <ChevronRightIcon size={16} />
@@ -490,7 +512,7 @@ export function CompanyDashboard() {
               </a>
 
               {/* Action 4: View Placements */}
-              <a href="#/placements" className="company-action-card view-placements">
+              <a href="#/applications?status=SELECTED" className="company-action-card view-placements">
                 <div className="company-action-top">
                   <UsersIcon size={22} color="#d97706" />
                   <ChevronRightIcon size={16} />

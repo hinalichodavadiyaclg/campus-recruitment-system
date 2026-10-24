@@ -3,6 +3,8 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { studentService } from '../../services/student.service.js';
 import { jobService } from '../../services/job.service.js';
 import { applicationService } from '../../services/application.service.js';
+import { notificationService } from '../../services/notification.service.js';
+import { formatTimeAgo } from '../../utils/time-helpers.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import {
   UserIcon,
@@ -31,6 +33,7 @@ function calculateProfileCompletion(student) {
     { label: 'Technical & Domain Skills', complete: Boolean(Array.isArray(student.skills) && student.skills.length > 0) },
     { label: 'Bio & Career Objective', complete: Boolean(student.bio || student.careerObjective) },
     { label: 'LinkedIn or Portfolio Link', complete: Boolean(student.linkedinUrl || student.portfolioUrl || student.githubUrl) },
+    { label: 'Naandi Training Certificate', complete: Boolean(student.naandiCertificate?.url || student.certificates?.some(c => c.name?.toLowerCase().includes('naandi') || c.type === 'NAANDI')) },
     { label: 'Projects / Internships / Certifications', complete: Boolean((student.projects?.length || 0) + (student.internships?.length || 0) + (student.certificates?.length || 0) > 0) }
   ];
 
@@ -52,19 +55,22 @@ export function StudentDashboard() {
   const [jobPostingsCount, setJobPostingsCount] = useState(0);
   const [applicationsCount, setApplicationsCount] = useState(0);
   const [offersCount, setOffersCount] = useState(0);
-  const upcomingInterviews = [];
-  const announcements = [];
-  const interviewsCount = upcomingInterviews.length;
+  const [upcomingInterviews, setUpcomingInterviews] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [interviewsCount, setInterviewsCount] = useState(0);
 
   useEffect(() => {
     let mounted = true;
     async function loadData() {
       try {
         setLoading(true);
-        const [profileRes, jobsRes, appsRes] = await Promise.allSettled([
+        const [profileRes, jobsRes, appsRes, placedRes, interviewRes, notifRes] = await Promise.allSettled([
           studentService.getMyProfile(),
           jobService.listJobs({ limit: 5 }),
-          applicationService.listApplications({ limit: 100 })
+          applicationService.listApplications({ limit: 50 }),
+          applicationService.listApplications({ status: 'SELECTED', limit: 1 }),
+          applicationService.listApplications({ status: 'INTERVIEW', limit: 10 }),
+          notificationService.getNotifications({ limit: 5 })
         ]);
 
         if (mounted) {
@@ -79,8 +85,32 @@ export function StudentDashboard() {
           if (appsRes.status === 'fulfilled') {
             const aList = appsRes.value?.items || [];
             setApplicationsCount(appsRes.value?.total ?? aList.length);
-            const offers = aList.filter((a) => a.status === 'SELECTED').length;
+          }
+          if (placedRes.status === 'fulfilled') {
+            setOffersCount(placedRes.value?.total ?? 0);
+          } else if (appsRes.status === 'fulfilled') {
+            const offers = (appsRes.value?.items || []).filter((a) => a.status === 'SELECTED').length;
             setOffersCount(offers);
+          }
+          if (interviewRes.status === 'fulfilled') {
+            const intList = interviewRes.value?.items || [];
+            setUpcomingInterviews(intList);
+            setInterviewsCount(interviewRes.value?.total ?? intList.length);
+          } else if (appsRes.status === 'fulfilled') {
+            const intList = (appsRes.value?.items || []).filter((a) => a.status === 'INTERVIEW');
+            setUpcomingInterviews(intList);
+            setInterviewsCount(intList.length);
+          }
+          if (notifRes.status === 'fulfilled') {
+            const notifs = notifRes.value?.items || notifRes.value?.data || [];
+            setAnnouncements(
+              notifs.map((n) => ({
+                id: n._id || n.id,
+                title: n.title || 'Campus Notification',
+                message: n.message || '',
+                date: n.createdAt ? formatTimeAgo(n.createdAt) : 'Recently'
+              }))
+            );
           }
         }
       } catch (_err) {
@@ -295,15 +325,15 @@ export function StudentDashboard() {
 
         {/* 3. FOUR METRICS CARDS ROW */}
         <div className="student-metrics-grid">
-          {/* Card 1: Job Postings */}
-          <a href="#/jobs" className="student-metric-card">
+          {/* Card 1: Opportunities */}
+          <a href="#/jobs" className="student-metric-card" title="Available Job Opportunities">
             <div className="student-metric-left">
               <div className="student-metric-icon-box blue">
                 <BriefcaseIcon size={22} color="#0284c7" />
               </div>
               <div className="student-metric-details">
                 <span className="student-metric-value">{jobPostingsCount}</span>
-                <span className="student-metric-label">Job Postings</span>
+                <span className="student-metric-label">Opportunities</span>
               </div>
             </div>
             <div className="student-chevron-arrow">
@@ -312,7 +342,7 @@ export function StudentDashboard() {
           </a>
 
           {/* Card 2: Applications */}
-          <a href="#/applications" className="student-metric-card">
+          <a href="#/applications" className="student-metric-card" title="Submitted Applications">
             <div className="student-metric-left">
               <div className="student-metric-icon-box purple">
                 <DocumentIcon size={22} color="#9333ea" />
@@ -328,7 +358,7 @@ export function StudentDashboard() {
           </a>
 
           {/* Card 3: Interviews */}
-          <a href="#/interviews" className="student-metric-card">
+          <a href="#/interviews" className="student-metric-card" title="Scheduled Interviews">
             <div className="student-metric-left">
               <div className="student-metric-icon-box green">
                 <CalendarIcon size={22} color="#16a34a" />
@@ -344,7 +374,7 @@ export function StudentDashboard() {
           </a>
 
           {/* Card 4: Offers */}
-          <a href="#/placements" className="student-metric-card">
+          <a href="#/placements" className="student-metric-card" title="Received Job Offers">
             <div className="student-metric-left">
               <div className="student-metric-icon-box orange">
                 <TrophyIcon size={22} color="#d97706" />
@@ -360,12 +390,12 @@ export function StudentDashboard() {
           </a>
         </div>
 
-        {/* 4. MIDDLE TWO-COLUMN GRID: Recent Job Postings & Upcoming Interviews */}
+        {/* 4. MIDDLE TWO-COLUMN GRID: Recent Opportunities & Upcoming Interviews */}
         <div className="student-two-col-grid">
-          {/* Column 1: Recent Job Postings */}
+          {/* Column 1: Recent Opportunities */}
           <div className="student-section-col">
             <div className="student-section-header">
-              <h3 className="student-section-title">Recent Job Postings</h3>
+              <h3 className="student-section-title">Recent Opportunities</h3>
               <a href="#/jobs" className="student-view-all-link">
                 <span>View All</span>
                 <span aria-hidden="true">→</span>
@@ -385,7 +415,7 @@ export function StudentDashboard() {
                       </div>
                     </div>
                     <div className="student-list-right">
-                      <span className="student-pill-badge open">Open</span>
+                      <span className={`student-pill-badge ${job.status?.toLowerCase() || 'open'}`}>{job.status || 'Open'}</span>
                       <div className="student-chevron-arrow">
                         <ChevronRightIcon size={16} />
                       </div>
@@ -398,7 +428,7 @@ export function StudentDashboard() {
                     <BriefcaseIcon size={20} />
                   </div>
                   <p className="student-empty-title">No data found</p>
-                  <p className="student-empty-desc">No active job postings are available at this time.</p>
+                  <p className="student-empty-desc">No active job opportunities are available at this time.</p>
                 </div>
               )}
             </div>
@@ -408,32 +438,36 @@ export function StudentDashboard() {
           <div className="student-section-col">
             <div className="student-section-header">
               <h3 className="student-section-title">Upcoming Interviews</h3>
-              <a href="#/interviews" className="student-view-all-link">
+              <a href="#/applications" className="student-view-all-link">
                 <span>View All</span>
                 <span aria-hidden="true">→</span>
               </a>
             </div>
             <div className="student-card-list">
               {upcomingInterviews.length > 0 ? (
-                upcomingInterviews.map((interview) => (
-                  <a key={interview._id || interview.id} href="#/interviews" className="student-list-row">
-                    <div className="student-list-left">
-                      <div className="student-company-avatar tn">
-                        {(interview.companyName || 'CO').slice(0, 2).toUpperCase()}
+                upcomingInterviews.map((interview) => {
+                  const compName = interview.companyId?.companyName || interview.jobSnapshot?.companyName || 'Company';
+                  const roleTitle = interview.jobSnapshot?.title || interview.jobId?.title || 'Recruitment Interview';
+                  return (
+                    <a key={interview._id || interview.id} href="#/applications" className="student-list-row">
+                      <div className="student-list-left">
+                        <div className="student-company-avatar tn">
+                          {compName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="student-list-info">
+                          <span className="student-list-primary">{compName}</span>
+                          <span className="student-list-secondary">{roleTitle} • Round {interview.recruitmentRound || 1}</span>
+                        </div>
                       </div>
-                      <div className="student-list-info">
-                        <span className="student-list-primary">{interview.companyName}</span>
-                        <span className="student-list-secondary">{interview.role || 'Interview'}</span>
+                      <div className="student-list-right">
+                        <span className="student-pill-badge online">Interview</span>
+                        <div className="student-chevron-arrow">
+                          <ChevronRightIcon size={16} />
+                        </div>
                       </div>
-                    </div>
-                    <div className="student-list-right">
-                      <span className="student-pill-badge online">Scheduled</span>
-                      <div className="student-chevron-arrow">
-                        <ChevronRightIcon size={16} />
-                      </div>
-                    </div>
-                  </a>
-                ))
+                    </a>
+                  );
+                })
               ) : (
                 <div className="student-empty-state">
                   <div className="student-empty-icon">
@@ -453,7 +487,7 @@ export function StudentDashboard() {
           <div className="student-section-col">
             <div className="student-section-header">
               <h3 className="student-section-title">Announcements</h3>
-              <a href="#/announcements" className="student-view-all-link">
+              <a href="#/notifications" className="student-view-all-link">
                 <span>View All</span>
                 <span aria-hidden="true">→</span>
               </a>
@@ -461,14 +495,16 @@ export function StudentDashboard() {
             <div className="student-card-list">
               {announcements.length > 0 ? (
                 announcements.map((item) => (
-                  <a key={item._id || item.id} href="#/announcements" className="student-list-row">
+                  <a key={item.id} href="#/notifications" className="student-list-row">
                     <div className="student-list-left">
                       <div className="student-announcement-icon-box">
                         <MegaphoneIcon size={20} color="#2563eb" />
                       </div>
                       <div className="student-list-info">
                         <span className="student-list-primary">{item.title}</span>
-                        <span className="student-list-secondary">{item.date}</span>
+                        <span className="student-list-secondary">
+                          {item.message ? `${item.message.slice(0, 48)}... • ` : ''}{item.date}
+                        </span>
                       </div>
                     </div>
                     <div className="student-chevron-arrow">
@@ -482,7 +518,7 @@ export function StudentDashboard() {
                     <MegaphoneIcon size={20} />
                   </div>
                   <p className="student-empty-title">No data found</p>
-                  <p className="student-empty-desc">No campus announcements have been posted yet.</p>
+                  <p className="student-empty-desc">No campus announcements or notifications have been posted yet.</p>
                 </div>
               )}
             </div>
