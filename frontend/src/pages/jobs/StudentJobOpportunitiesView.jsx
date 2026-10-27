@@ -523,25 +523,12 @@ export function StudentJobOpportunitiesView() {
                   );
                   const salaryText = formatSalary(job.compensation);
 
-                  // Required skills
-                  const reqSkills = Array.isArray(job.eligibilityCriteria?.requiredSkills)
-                    ? job.eligibilityCriteria.requiredSkills.filter(Boolean)
-                    : [];
-                  const visibleSkills = reqSkills.slice(0, 3);
-                  const extraSkillsCount = reqSkills.length > 3 ? reqSkills.length - 3 : 0;
-
-                  // Concise eligibility summary
+                  // Concise eligibility summary for tooltip
                   let eligibilitySummaryText = '';
-                  let eligibilityStatusClass = 'neutral';
-                  let eligibilityIcon = <GraduationCapIcon size={13} />;
 
                   if (appliedApp) {
-                    eligibilityStatusClass = 'applied';
-                    eligibilityIcon = <CheckCircleIcon size={13} />;
                     eligibilitySummaryText = 'Application submitted';
                   } else if (job.eligibility && job.eligibility.isEligible === false) {
-                    eligibilityStatusClass = 'ineligible';
-                    eligibilityIcon = <AlertCircleIcon size={13} />;
                     const checks = job.eligibility.checks || {};
                     if (checks.naandiTraining === false || checks.naandiTraining?.passed === false) {
                       eligibilitySummaryText = 'Naandi Training completion required';
@@ -558,20 +545,6 @@ export function StudentJobOpportunitiesView() {
                     } else {
                       eligibilitySummaryText = job.eligibility.ineligibleReason || 'Criteria requirements not met';
                     }
-                  } else if (job.eligibilityMode === 'ALL_STUDENTS') {
-                    eligibilityStatusClass = 'eligible';
-                    eligibilityIcon = <CheckCircleIcon size={13} />;
-                    const minCgpa = Number(job.eligibilityCriteria?.minCgpa || 0);
-                    eligibilitySummaryText = minCgpa > 0
-                      ? `Open to All Students • Min CGPA ${minCgpa}`
-                      : 'Open to All Students • Any Passing Year';
-                  } else {
-                    eligibilityStatusClass = 'eligible';
-                    eligibilityIcon = <GraduationCapIcon size={13} />;
-                    const minCgpa = Number(job.eligibilityCriteria?.minCgpa || 0);
-                    eligibilitySummaryText = minCgpa > 0
-                      ? `Restricted criteria • Min CGPA ${minCgpa}`
-                      : 'Restricted to eligible departments & batches';
                   }
 
                   return (
@@ -670,41 +643,6 @@ export function StudentJobOpportunitiesView() {
                             </span>
                           </div>
                         </div>
-
-                        {/* Description Preview */}
-                        <p className="job-card-description">
-                          {job.description?.trim() || 'Role overview, responsibilities, and selection details available in job details.'}
-                        </p>
-
-                        {/* Required Skills Chips */}
-                        {reqSkills.length > 0 && (
-                          <div className="job-card-skills-row">
-                            <span className="job-skills-label">Skills:</span>
-                            <div className="job-skills-chips">
-                              {visibleSkills.map((sk) => (
-                                <span key={sk} className="job-skill-chip" title={sk}>
-                                  {sk}
-                                </span>
-                              ))}
-                              {extraSkillsCount > 0 && (
-                                <span
-                                  className="job-skill-chip more"
-                                  title={`Additional required skills: ${reqSkills.slice(3).join(', ')}`}
-                                >
-                                  +{extraSkillsCount} more
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Concise Eligibility Summary */}
-                        <div className={`job-card-eligibility-bar ${eligibilityStatusClass}`}>
-                          <span className="job-eligibility-icon">{eligibilityIcon}</span>
-                          <span className="job-eligibility-text truncate" title={eligibilitySummaryText}>
-                            {eligibilitySummaryText}
-                          </span>
-                        </div>
                       </div>
 
                       {/* Footer Actions */}
@@ -730,7 +668,7 @@ export function StudentJobOpportunitiesView() {
                             type="button"
                             className="job-btn-ineligible"
                             onClick={() => setSelectedJobForDetails(job)}
-                            title="Click to view why you are not eligible"
+                            title={eligibilitySummaryText ? `${eligibilitySummaryText} — Click to view details` : "Click to view why you are not eligible"}
                           >
                             Ineligible
                           </button>
