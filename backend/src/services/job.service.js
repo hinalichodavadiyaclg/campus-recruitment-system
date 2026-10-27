@@ -90,18 +90,20 @@ export async function listJobs({ auth, query = {} }) {
     mongoQuery.isSuspended = false;
     mongoQuery.deadline = { $gte: new Date() };
 
-    // Scoped to jobs relevant to student's department or unrestricted jobs
+    // Scoped to jobs relevant to student's department and passing year (or unrestricted jobs)
     try {
-      const studentDept = await getStudentDepartment(auth);
+      const studentScope = await getStudentDepartment(auth);
       mongoQuery.$and = mongoQuery.$and || [];
-      if (studentDept?.departmentId) {
+
+      // 1. Department restriction
+      if (studentScope?.departmentId) {
         mongoQuery.$and.push({
           $or: [
             { eligibilityMode: 'ALL_STUDENTS' },
             { 'eligibilityCriteria.allowedDepartmentIds': { $size: 0 } },
             { 'eligibilityCriteria.allowedDepartmentIds': { $exists: false } },
             { 'eligibilityCriteria.allowedDepartmentIds': null },
-            { 'eligibilityCriteria.allowedDepartmentIds': studentDept.departmentId }
+            { 'eligibilityCriteria.allowedDepartmentIds': studentScope.departmentId }
           ]
         });
       } else {
@@ -111,6 +113,28 @@ export async function listJobs({ auth, query = {} }) {
             { 'eligibilityCriteria.allowedDepartmentIds': { $size: 0 } },
             { 'eligibilityCriteria.allowedDepartmentIds': { $exists: false } },
             { 'eligibilityCriteria.allowedDepartmentIds': null }
+          ]
+        });
+      }
+
+      // 2. Passing year restriction
+      if (studentScope?.passingYear) {
+        mongoQuery.$and.push({
+          $or: [
+            { eligibilityMode: 'ALL_STUDENTS' },
+            { 'eligibilityCriteria.allowedPassingYears': { $size: 0 } },
+            { 'eligibilityCriteria.allowedPassingYears': { $exists: false } },
+            { 'eligibilityCriteria.allowedPassingYears': null },
+            { 'eligibilityCriteria.allowedPassingYears': Number(studentScope.passingYear) }
+          ]
+        });
+      } else {
+        mongoQuery.$and.push({
+          $or: [
+            { eligibilityMode: 'ALL_STUDENTS' },
+            { 'eligibilityCriteria.allowedPassingYears': { $size: 0 } },
+            { 'eligibilityCriteria.allowedPassingYears': { $exists: false } },
+            { 'eligibilityCriteria.allowedPassingYears': null }
           ]
         });
       }
@@ -273,19 +297,35 @@ export async function getJobById({ auth, id }) {
       throw new AppError(404, 'JOB_NOT_FOUND', 'Job posting not found.');
     }
 
-    if (
-      job.eligibilityMode === 'RESTRICTED' &&
-      Array.isArray(job.eligibilityCriteria?.allowedDepartmentIds) &&
-      job.eligibilityCriteria.allowedDepartmentIds.length > 0
-    ) {
-      const studentDept = await getStudentDepartment(auth);
-      const studentDeptIdStr = studentDept?.departmentId ? String(studentDept.departmentId) : null;
-      const allowedDeptIdStrs = job.eligibilityCriteria.allowedDepartmentIds.map((d) =>
-        String(d?._id || d)
-      );
+    if (job.eligibilityMode === 'RESTRICTED') {
+      const studentScope = await getStudentDepartment(auth);
 
-      if (!studentDeptIdStr || !allowedDeptIdStrs.includes(studentDeptIdStr)) {
-        throw new AppError(404, 'JOB_NOT_FOUND', 'Job posting not found.');
+      // Department restriction check
+      if (
+        Array.isArray(job.eligibilityCriteria?.allowedDepartmentIds) &&
+        job.eligibilityCriteria.allowedDepartmentIds.length > 0
+      ) {
+        const studentDeptIdStr = studentScope?.departmentId ? String(studentScope.departmentId) : null;
+        const allowedDeptIdStrs = job.eligibilityCriteria.allowedDepartmentIds.map((d) =>
+          String(d?._id || d)
+        );
+
+        if (!studentDeptIdStr || !allowedDeptIdStrs.includes(studentDeptIdStr)) {
+          throw new AppError(404, 'JOB_NOT_FOUND', 'Job posting not found.');
+        }
+      }
+
+      // Passing year restriction check
+      if (
+        Array.isArray(job.eligibilityCriteria?.allowedPassingYears) &&
+        job.eligibilityCriteria.allowedPassingYears.length > 0
+      ) {
+        const studentYear = studentScope?.passingYear ? Number(studentScope.passingYear) : null;
+        const allowedYears = job.eligibilityCriteria.allowedPassingYears.map(Number);
+
+        if (!studentYear || !allowedYears.includes(studentYear)) {
+          throw new AppError(404, 'JOB_NOT_FOUND', 'Job posting not found.');
+        }
       }
     }
   } else if (auth.userType === 'COMPANY' || auth.roleId === ROLE_IDS.COMPANY) {

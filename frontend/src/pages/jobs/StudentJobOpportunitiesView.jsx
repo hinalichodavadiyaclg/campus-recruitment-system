@@ -265,12 +265,14 @@ export function StudentJobOpportunitiesView() {
     fetchJobs();
   };
 
+  const studentPassingYear = user?.passingYear;
+
   return (
     <PortalLayout
       title="Job Opportunities"
       subtitle={
-        studentDeptName
-          ? `Discover recruitment opportunities relevant to ${studentDeptName}.`
+        studentDeptName || studentPassingYear
+          ? `Discover recruitment opportunities relevant to ${[studentDeptName, studentPassingYear ? `${studentPassingYear} Batch` : null].filter(Boolean).join(' • ')}.`
           : 'Discover recruitment opportunities relevant to your career goals.'
       }
       category="Recruitment Module"

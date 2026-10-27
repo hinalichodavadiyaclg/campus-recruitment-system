@@ -53,6 +53,7 @@ async function enrichSafeUser(safeUser, user) {
       safeUser.department = student.department;
       safeUser.departmentId = student.departmentId ? String(student.departmentId) : undefined;
       safeUser.courseId = student.courseId ? String(student.courseId) : undefined;
+      safeUser.passingYear = student.passingYear ? Number(student.passingYear) : undefined;
       if (!safeUser.firstName) safeUser.firstName = student.firstName;
       if (!safeUser.lastName) safeUser.lastName = student.lastName;
       if (student.departmentId) {

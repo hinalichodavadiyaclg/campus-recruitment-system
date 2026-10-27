@@ -724,4 +724,117 @@ test('Job Management Backend API Integration Tests', async (t) => {
     assert.equal(mgmtDirectGet.status, 200);
     assert.equal(mgmtDirectGet.body.data.title, 'Management Trainee Opening');
   });
+
+  await t.test('9. Passing Year Restricted Job Visibility (e.g. 2027 Passing Year Only)', async () => {
+    const company = await createTestCompany('yr-res');
+    const recruiter = await createAuthenticatedSession(ROLE_IDS.COMPANY, 'COMPANY', company._id);
+
+    const ts = Date.now();
+
+    // 1. Create Student A with passing year 2027
+    const student2027Session = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+    await Student.create({
+      userId: student2027Session.user._id,
+      universityId: `UNI-2027-${ts % 100000}`,
+      firstName: 'Pooja',
+      lastName: 'Batch2027',
+      email: student2027Session.user.email,
+      mobileNumber: '9876543220',
+      branch: 'Information Technology',
+      department: 'Information Technology',
+      semester: 4,
+      cgpa: 8.2,
+      passingYear: 2027
+    });
+
+    // 2. Create Student B with passing year 2026
+    const student2026Session = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+    await Student.create({
+      userId: student2026Session.user._id,
+      universityId: `UNI-2026-${ts % 100000}`,
+      firstName: 'Rahul',
+      lastName: 'Batch2026',
+      email: student2026Session.user.email,
+      mobileNumber: '9876543221',
+      branch: 'Information Technology',
+      department: 'Information Technology',
+      semester: 6,
+      cgpa: 7.9,
+      passingYear: 2026
+    });
+
+    // 3. Company posts Job restricted strictly to 2027 passing year students
+    const job2027Res = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${recruiter.token}`)
+      .send({
+        title: '2027 Graduate Engineering Trainee',
+        description: 'Exclusive opportunity for students graduating in the 2027 batch.',
+        jobType: 'FULL_TIME',
+        workMode: 'REMOTE',
+        vacancies: 5,
+        deadline: futureDate(25),
+        status: 'OPEN',
+        eligibilityMode: 'RESTRICTED',
+        eligibilityCriteria: {
+          allowedPassingYears: [2027]
+        }
+      });
+    assert.equal(job2027Res.status, 201);
+    const job2027Id = job2027Res.body.data._id;
+
+    // 4. Company posts Job with Any Passing Year (empty allowedPassingYears)
+    const anyYearJobRes = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${recruiter.token}`)
+      .send({
+        title: 'General Technical Associate',
+        description: 'Open to all graduating batches.',
+        jobType: 'FULL_TIME',
+        workMode: 'REMOTE',
+        vacancies: 8,
+        deadline: futureDate(30),
+        status: 'OPEN',
+        eligibilityMode: 'RESTRICTED',
+        eligibilityCriteria: {
+          allowedPassingYears: []
+        }
+      });
+    assert.equal(anyYearJobRes.status, 201);
+    const anyYearJobId = anyYearJobRes.body.data._id;
+
+    // 5. Verify Student with Passing Year 2027:
+    // MUST see BOTH the 2027-restricted job AND the Any-Passing-Year job
+    const list2027 = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${student2027Session.token}`);
+    assert.equal(list2027.status, 200);
+    const jobIds2027 = list2027.body.data.items.map((j) => String(j._id));
+    assert.ok(jobIds2027.includes(String(job2027Id)), '2027 student MUST see 2027-restricted job');
+    assert.ok(jobIds2027.includes(String(anyYearJobId)), '2027 student MUST see any-year job');
+
+    // 2027 student direct get by ID -> 200 OK
+    const get2027 = await request(app)
+      .get(`/api/jobs/${job2027Id}`)
+      .set('Authorization', `Bearer ${student2027Session.token}`);
+    assert.equal(get2027.status, 200);
+    assert.equal(get2027.body.data.title, '2027 Graduate Engineering Trainee');
+
+    // 6. Verify Student with Passing Year 2026:
+    // MUST NOT see the 2027-restricted job
+    // MUST see the Any-Passing-Year job
+    const list2026 = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${student2026Session.token}`);
+    assert.equal(list2026.status, 200);
+    const jobIds2026 = list2026.body.data.items.map((j) => String(j._id));
+    assert.ok(!jobIds2026.includes(String(job2027Id)), '2026 student MUST NOT see 2027-restricted job');
+    assert.ok(jobIds2026.includes(String(anyYearJobId)), '2026 student MUST see any-year job');
+
+    // 2026 student direct get by ID for 2027 job -> 404 Not Found
+    const get2026 = await request(app)
+      .get(`/api/jobs/${job2027Id}`)
+      .set('Authorization', `Bearer ${student2026Session.token}`);
+    assert.equal(get2026.status, 404);
+  });
 });

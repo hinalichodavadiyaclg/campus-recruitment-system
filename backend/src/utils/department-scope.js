@@ -90,11 +90,14 @@ export async function getStudentDepartment(auth) {
     }).lean();
   }
 
+  const passingYear = student.passingYear ? Number(student.passingYear) : null;
+
   if (dept) {
     return {
       departmentId: dept._id,
       departmentName: dept.name,
-      departmentCode: dept.code
+      departmentCode: dept.code,
+      passingYear
     };
   }
 
@@ -102,10 +105,16 @@ export async function getStudentDepartment(auth) {
     return {
       departmentId: student.departmentId,
       departmentName: student.department || '',
-      departmentCode: ''
+      departmentCode: '',
+      passingYear
     };
   }
 
-  return null;
+  return {
+    departmentId: null,
+    departmentName: student.department || '',
+    departmentCode: '',
+    passingYear
+  };
 }
 
