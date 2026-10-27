@@ -18,6 +18,7 @@ const [
   { Department },
   { Course },
   { Job },
+  { Student },
   { hashPassword },
   { createRawSessionToken, hashSessionToken },
   { ROLE_IDS }
@@ -31,6 +32,7 @@ const [
   import('../src/models/department.model.js'),
   import('../src/models/course.model.js'),
   import('../src/models/job.model.js'),
+  import('../src/models/student.model.js'),
   import('../src/utils/password.js'),
   import('../src/utils/session-token.js'),
   import('../src/utils/access-constants.js')
@@ -599,5 +601,127 @@ test('Job Management Backend API Integration Tests', async (t) => {
       .get(`/api/jobs/${jobId}`)
       .set('Authorization', `Bearer ${student.token}`);
     assert.equal(studentGetRestored.status, 200);
+  });
+
+  await t.test('8. Department-Restricted Job Visibility for Students', async () => {
+    const company = await createTestCompany('dept-res');
+    const recruiter = await createAuthenticatedSession(ROLE_IDS.COMPANY, 'COMPANY', company._id);
+
+    // 1. Create departments
+    const ts = Date.now();
+    const csDept = await Department.create({
+      name: `Computer Science and Engineering ${ts}`,
+      code: `CS${ts % 10000}`,
+      isActive: true
+    });
+    const mgmtDept = await Department.create({
+      name: `Management Studies ${ts}`,
+      code: `MGMT${ts % 10000}`,
+      isActive: true
+    });
+
+    // 2. Create Student in Computer Science
+    const studentCsSession = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+    await Student.create({
+      userId: studentCsSession.user._id,
+      universityId: `CS-UNI-${ts % 100000}`,
+      firstName: 'Alice',
+      lastName: 'CS',
+      email: studentCsSession.user.email,
+      mobileNumber: '9876543210',
+      branch: 'Computer Science',
+      department: csDept.name,
+      departmentId: csDept._id,
+      semester: 6,
+      cgpa: 8.5
+    });
+
+    // 3. Create Student in Management
+    const studentMgmtSession = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+    await Student.create({
+      userId: studentMgmtSession.user._id,
+      universityId: `MGMT-UNI-${ts % 100000}`,
+      firstName: 'Bob',
+      lastName: 'MGMT',
+      email: studentMgmtSession.user.email,
+      mobileNumber: '9876543211',
+      branch: 'Management',
+      department: mgmtDept.name,
+      departmentId: mgmtDept._id,
+      semester: 4,
+      cgpa: 8.0
+    });
+
+    // 4. Company posts Job restricted to Management Studies
+    const mgmtJobRes = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${recruiter.token}`)
+      .send({
+        title: 'Management Trainee Opening',
+        description: 'Exclusively open for students from Management Studies.',
+        jobType: 'FULL_TIME',
+        workMode: 'ON_SITE',
+        location: 'Campus Auditorium',
+        vacancies: 3,
+        deadline: futureDate(15),
+        status: 'OPEN',
+        eligibilityMode: 'RESTRICTED',
+        eligibilityCriteria: {
+          allowedDepartmentIds: [mgmtDept._id]
+        }
+      });
+    assert.equal(mgmtJobRes.status, 201);
+    const mgmtJobId = mgmtJobRes.body.data._id;
+
+    // 5. Company posts Job open to ALL_STUDENTS
+    const allStudentsJobRes = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${recruiter.token}`)
+      .send({
+        title: 'General Campus Placement Drive',
+        description: 'Open to all departments and disciplines.',
+        jobType: 'FULL_TIME',
+        workMode: 'REMOTE',
+        vacancies: 10,
+        deadline: futureDate(20),
+        status: 'OPEN',
+        eligibilityMode: 'ALL_STUDENTS'
+      });
+    assert.equal(allStudentsJobRes.status, 201);
+    const allStudentsJobId = allStudentsJobRes.body.data._id;
+
+    // 6. Verify CS Student:
+    // MUST see the ALL_STUDENTS job
+    // MUST NOT see the Management-restricted job
+    const csList = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${studentCsSession.token}`);
+    assert.equal(csList.status, 200);
+    const csJobIds = csList.body.data.items.map((j) => String(j._id));
+    assert.ok(csJobIds.includes(String(allStudentsJobId)), 'CS student should see ALL_STUDENTS job');
+    assert.ok(!csJobIds.includes(String(mgmtJobId)), 'CS student MUST NOT see Management-restricted job');
+
+    // CS Student accessing Management job directly by ID -> 404 Not Found
+    const csDirectGet = await request(app)
+      .get(`/api/jobs/${mgmtJobId}`)
+      .set('Authorization', `Bearer ${studentCsSession.token}`);
+    assert.equal(csDirectGet.status, 404);
+
+    // 7. Verify Management Student:
+    // MUST see BOTH the Management-restricted job and the ALL_STUDENTS job
+    const mgmtList = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${studentMgmtSession.token}`);
+    assert.equal(mgmtList.status, 200);
+    const mgmtJobIds = mgmtList.body.data.items.map((j) => String(j._id));
+    assert.ok(mgmtJobIds.includes(String(mgmtJobId)), 'Management student should see Management-restricted job');
+    assert.ok(mgmtJobIds.includes(String(allStudentsJobId)), 'Management student should see ALL_STUDENTS job');
+
+    // Management Student accessing Management job directly by ID -> 200 OK
+    const mgmtDirectGet = await request(app)
+      .get(`/api/jobs/${mgmtJobId}`)
+      .set('Authorization', `Bearer ${studentMgmtSession.token}`);
+    assert.equal(mgmtDirectGet.status, 200);
+    assert.equal(mgmtDirectGet.body.data.title, 'Management Trainee Opening');
   });
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { jobService } from '../../services/job.service.js';
@@ -58,6 +58,9 @@ export function StudentJobOpportunitiesView() {
   const { user, role, has } = useAuth();
   const { toast } = useToast();
 
+  const studentDeptId = user?.departmentId;
+  const studentDeptName = user?.departmentName || user?.department;
+
   // Search & Filter State
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
@@ -111,6 +114,19 @@ export function StudentJobOpportunitiesView() {
       mounted = false;
     };
   }, []);
+
+  const scopedDepartments = useMemo(() => {
+    if (!studentDeptId && !studentDeptName) return departments;
+    const filtered = departments.filter(
+      (d) =>
+        (studentDeptId && String(d._id) === String(studentDeptId)) ||
+        (studentDeptName && (
+          d.name?.trim().toLowerCase() === studentDeptName.trim().toLowerCase() ||
+          d.code?.trim().toLowerCase() === studentDeptName.trim().toLowerCase()
+        ))
+    );
+    return filtered.length > 0 ? filtered : departments;
+  }, [departments, studentDeptId, studentDeptName]);
 
   // Load student applications to identify applied status
   const loadStudentApplications = useCallback(async () => {
@@ -252,7 +268,11 @@ export function StudentJobOpportunitiesView() {
   return (
     <PortalLayout
       title="Job Opportunities"
-      subtitle="Discover recruitment opportunities relevant to your career goals."
+      subtitle={
+        studentDeptName
+          ? `Discover recruitment opportunities relevant to ${studentDeptName}.`
+          : 'Discover recruitment opportunities relevant to your career goals.'
+      }
       category="Recruitment Module"
       section="Recruitment"
       currentPath="/jobs"
@@ -277,8 +297,8 @@ export function StudentJobOpportunitiesView() {
               setPage(1);
             }}
           >
-            <option value="">All Departments</option>
-            {departments.map((dept) => (
+            <option value="">{studentDeptName ? 'All Eligible Jobs' : 'All Departments'}</option>
+            {scopedDepartments.map((dept) => (
               <option key={dept._id} value={dept._id}>
                 {dept.name || dept.code}
               </option>

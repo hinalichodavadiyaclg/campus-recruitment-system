@@ -5,6 +5,7 @@ import { Role } from '../models/role.model.js';
 import { User } from '../models/user.model.js';
 import { UserSession } from '../models/user-session.model.js';
 import { PlacementOfficer } from '../models/placement_officer.model.js';
+import { Student } from '../models/student.model.js';
 import { Department } from '../models/department.model.js';
 import { ROLE_IDS } from '../utils/access-constants.js';
 import { AppError } from '../utils/app-error.js';
@@ -31,6 +32,40 @@ async function enrichSafeUser(safeUser, user) {
           $or: [
             { name: new RegExp(`^${officer.department.trim()}$`, 'i') },
             { code: new RegExp(`^${officer.department.trim()}$`, 'i') }
+          ]
+        }).lean();
+        if (dept) {
+          safeUser.departmentId = String(dept._id);
+          safeUser.departmentName = dept.name;
+          safeUser.departmentCode = dept.code;
+        }
+      }
+    }
+  } else if (user.roleId === ROLE_IDS.STUDENT || user.userType === 'STUDENT') {
+    const student = await Student.findOne({
+      $or: [
+        { userId: user._id || safeUser._id },
+        ...(user.universityId ? [{ universityId: user.universityId }] : []),
+        ...(user.email ? [{ email: user.email.toLowerCase().trim() }] : [])
+      ]
+    }).lean();
+    if (student) {
+      safeUser.department = student.department;
+      safeUser.departmentId = student.departmentId ? String(student.departmentId) : undefined;
+      safeUser.courseId = student.courseId ? String(student.courseId) : undefined;
+      if (!safeUser.firstName) safeUser.firstName = student.firstName;
+      if (!safeUser.lastName) safeUser.lastName = student.lastName;
+      if (student.departmentId) {
+        const dept = await Department.findById(student.departmentId).lean();
+        if (dept) {
+          safeUser.departmentName = dept.name;
+          safeUser.departmentCode = dept.code;
+        }
+      } else if (student.department) {
+        const dept = await Department.findOne({
+          $or: [
+            { name: new RegExp(`^${student.department.trim()}$`, 'i') },
+            { code: new RegExp(`^${student.department.trim()}$`, 'i') }
           ]
         }).lean();
         if (dept) {

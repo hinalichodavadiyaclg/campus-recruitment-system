@@ -5,7 +5,7 @@ import { Student } from '../models/student.model.js';
 import { ROLE_IDS } from '../utils/access-constants.js';
 import { AppError } from '../utils/app-error.js';
 import { executeWithJobIdRetry, getNextCandidateJobId } from '../utils/job-id.js';
-import { getCoordinatorDepartment } from '../utils/department-scope.js';
+import { getCoordinatorDepartment, getStudentDepartment } from '../utils/department-scope.js';
 import { findCompanyByUserId } from './company.service.js';
 import {
   dispatchJobPublishedNotifications,
@@ -89,6 +89,34 @@ export async function listJobs({ auth, query = {} }) {
     mongoQuery.status = 'OPEN';
     mongoQuery.isSuspended = false;
     mongoQuery.deadline = { $gte: new Date() };
+
+    // Scoped to jobs relevant to student's department or unrestricted jobs
+    try {
+      const studentDept = await getStudentDepartment(auth);
+      mongoQuery.$and = mongoQuery.$and || [];
+      if (studentDept?.departmentId) {
+        mongoQuery.$and.push({
+          $or: [
+            { eligibilityMode: 'ALL_STUDENTS' },
+            { 'eligibilityCriteria.allowedDepartmentIds': { $size: 0 } },
+            { 'eligibilityCriteria.allowedDepartmentIds': { $exists: false } },
+            { 'eligibilityCriteria.allowedDepartmentIds': null },
+            { 'eligibilityCriteria.allowedDepartmentIds': studentDept.departmentId }
+          ]
+        });
+      } else {
+        mongoQuery.$and.push({
+          $or: [
+            { eligibilityMode: 'ALL_STUDENTS' },
+            { 'eligibilityCriteria.allowedDepartmentIds': { $size: 0 } },
+            { 'eligibilityCriteria.allowedDepartmentIds': { $exists: false } },
+            { 'eligibilityCriteria.allowedDepartmentIds': null }
+          ]
+        });
+      }
+    } catch {
+      // Gracefully handle unprofiled student account
+    }
   } else if (auth.userType === 'COMPANY' || auth.roleId === ROLE_IDS.COMPANY) {
     // Companies see all their own jobs across all statuses, but cannot see other companies' jobs
     const company = await findCompanyByUserId(auth.userId);
@@ -243,6 +271,22 @@ export async function getJobById({ auth, id }) {
       job.status === 'OPEN' && !job.isSuspended && new Date(job.deadline) >= new Date();
     if (!isAvailable) {
       throw new AppError(404, 'JOB_NOT_FOUND', 'Job posting not found.');
+    }
+
+    if (
+      job.eligibilityMode === 'RESTRICTED' &&
+      Array.isArray(job.eligibilityCriteria?.allowedDepartmentIds) &&
+      job.eligibilityCriteria.allowedDepartmentIds.length > 0
+    ) {
+      const studentDept = await getStudentDepartment(auth);
+      const studentDeptIdStr = studentDept?.departmentId ? String(studentDept.departmentId) : null;
+      const allowedDeptIdStrs = job.eligibilityCriteria.allowedDepartmentIds.map((d) =>
+        String(d?._id || d)
+      );
+
+      if (!studentDeptIdStr || !allowedDeptIdStrs.includes(studentDeptIdStr)) {
+        throw new AppError(404, 'JOB_NOT_FOUND', 'Job posting not found.');
+      }
     }
   } else if (auth.userType === 'COMPANY' || auth.roleId === ROLE_IDS.COMPANY) {
     const company = await findCompanyByUserId(auth.userId);
