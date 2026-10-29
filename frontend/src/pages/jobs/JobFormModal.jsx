@@ -21,7 +21,7 @@ import {
 const DEFAULT_FORM = {
   companyId: '',
   title: '',
-  category: 'Software Engineering',
+  category: '',
   jobType: 'FULL_TIME',
   workMode: 'ON_SITE',
   location: 'Surat, Gujarat',
@@ -35,14 +35,16 @@ const DEFAULT_FORM = {
     salaryFormat: 'PER_ANNUM',
     additionalPerks: ''
   },
+  requiredSkills: '',
+  preferredSkills: '',
   selectionProcess: ['Resume Screening', 'Technical Assessment', 'HR Interview'],
   eligibilityMode: 'ALL_STUDENTS',
   eligibilityCriteria: {
     allowedDepartmentIds: [],
     allowedCourseIds: [],
-    allowedPassingYears: [], // Default to unrestricted passing years
-    minCgpa: 6.0,
-    maxActiveBacklogs: 0,
+    allowedPassingYears: [],
+    minCgpa: 0,
+    maxActiveBacklogs: null,
     requiredSkills: '',
     preferredSkills: '',
     requiresNaandiTraining: true
@@ -67,11 +69,11 @@ export function JobFormModal({
   onSave
 }) {
   const isEdit = Boolean(job?._id);
-  const isAdmin =
-    role?.id === 'ROLE_PLACEMENT_HEAD' ||
-    role?.id === 'ROLE_SUPER_ADMIN' ||
-    user?.roleId === 'ROLE_PLACEMENT_HEAD' ||
-    user?.roleId === 'ROLE_SUPER_ADMIN';
+  const isCompany =
+    user?.userType === 'COMPANY' ||
+    role?.id === 'ROLE_COMPANY' ||
+    user?.roleId === 'ROLE_COMPANY';
+  const isStaff = !isCompany;
 
   // Step state
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -96,14 +98,6 @@ export function JobFormModal({
   const [deptSearch, setDeptSearch] = useState('');
   const [courseSearch, setCourseSearch] = useState('');
 
-  // Passing Year Eligibility State
-  const currentYear = new Date().getFullYear();
-  const [passingYearMode, setPassingYearMode] = useState('ANY'); // 'ANY' | 'SELECTED'
-  const [availablePassingYears, setAvailablePassingYears] = useState(() =>
-    Array.from({ length: 8 }, (_, i) => currentYear - 3 + i)
-  );
-  const [customYearInput, setCustomYearInput] = useState('');
-
   // Fetch departments, courses, and companies with retry support
   const loadLookups = useCallback(async () => {
     try {
@@ -119,7 +113,7 @@ export function JobFormModal({
       setDepartments(Array.isArray(deptList) ? deptList : []);
       setCourses(Array.isArray(courseList) ? courseList : []);
 
-      if (isAdmin && !isEdit) {
+      if (isStaff && !isEdit) {
         const compRes = await companyService.listCompanies({ limit: 100 });
         const compList = compRes?.companies || compRes?.items || (Array.isArray(compRes) ? compRes : []);
         setCompanies(Array.isArray(compList) ? compList : []);
@@ -130,7 +124,7 @@ export function JobFormModal({
     } finally {
       setLoadingLookups(false);
     }
-  }, [isAdmin, isEdit]);
+  }, [isStaff, isEdit]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -145,7 +139,6 @@ export function JobFormModal({
     setErrors({});
     setDeptSearch('');
     setCourseSearch('');
-    setCustomYearInput('');
 
     if (job) {
       let formattedDeadline = '';
@@ -159,11 +152,9 @@ export function JobFormModal({
       const crit = job.eligibilityCriteria || {};
       const savedDeptIds = (crit.allowedDepartmentIds || []).map((d) => String(d._id || d));
       const savedCourseIds = (crit.allowedCourseIds || []).map((c) => String(c._id || c));
-      const savedPassingYears = (crit.allowedPassingYears || []).map(Number).filter(Boolean);
 
       const hasDeptRestrictions = savedDeptIds.length > 0;
       const hasCourseRestrictions = savedCourseIds.length > 0;
-      const hasYearRestrictions = savedPassingYears.length > 0;
 
       setIsAllDepartments(!hasDeptRestrictions);
       setSelectedDeptIds(savedDeptIds);
@@ -171,14 +162,12 @@ export function JobFormModal({
       setSelectedCourseIds(savedCourseIds);
       setSelectedDegreeLevel('ALL');
 
-      if (hasYearRestrictions) {
-        setPassingYearMode('SELECTED');
-        setAvailablePassingYears((prev) =>
-          Array.from(new Set([...prev, ...savedPassingYears])).sort((a, b) => a - b)
-        );
-      } else {
-        setPassingYearMode('ANY');
-      }
+      const reqSkillsStr = Array.isArray(crit.requiredSkills)
+        ? crit.requiredSkills.join(', ')
+        : (typeof crit.requiredSkills === 'string' ? crit.requiredSkills : (job.requiredSkills || ''));
+      const prefSkillsStr = Array.isArray(crit.preferredSkills)
+        ? crit.preferredSkills.join(', ')
+        : (typeof crit.preferredSkills === 'string' ? crit.preferredSkills : (job.preferredSkills || ''));
 
       // Normalize responsibilities to array of strings
       let initialResponsibilities = [''];
@@ -195,13 +184,15 @@ export function JobFormModal({
       setFormData({
         companyId: job.companyId?._id || job.companyId || '',
         title: job.title || '',
-        category: job.category || 'Software Engineering',
+        category: job.category || '',
         jobType: job.jobType || 'FULL_TIME',
         workMode: job.workMode || 'ON_SITE',
         location: job.location || '',
         vacancies: job.vacancies || 1,
         description: job.description || '',
         responsibilities: initialResponsibilities,
+        requiredSkills: reqSkillsStr,
+        preferredSkills: prefSkillsStr,
         compensation: {
           salaryMin: job.compensation?.salaryMin ?? '',
           salaryMax: job.compensation?.salaryMax ?? '',
@@ -210,15 +201,15 @@ export function JobFormModal({
           additionalPerks: job.compensation?.additionalPerks || ''
         },
         selectionProcess: Array.isArray(job.selectionProcess) ? [...job.selectionProcess] : [],
-        eligibilityMode: job.eligibilityMode || (hasDeptRestrictions || hasCourseRestrictions || hasYearRestrictions ? 'RESTRICTED' : 'ALL_STUDENTS'),
+        eligibilityMode: job.eligibilityMode || (hasDeptRestrictions || hasCourseRestrictions ? 'RESTRICTED' : 'ALL_STUDENTS'),
         eligibilityCriteria: {
           allowedDepartmentIds: savedDeptIds,
           allowedCourseIds: savedCourseIds,
-          allowedPassingYears: savedPassingYears,
-          minCgpa: crit.minCgpa ?? 0,
-          maxActiveBacklogs: crit.maxActiveBacklogs ?? '',
-          requiredSkills: Array.isArray(crit.requiredSkills) ? crit.requiredSkills.join(', ') : '',
-          preferredSkills: Array.isArray(crit.preferredSkills) ? crit.preferredSkills.join(', ') : '',
+          allowedPassingYears: [],
+          minCgpa: 0,
+          maxActiveBacklogs: null,
+          requiredSkills: reqSkillsStr,
+          preferredSkills: prefSkillsStr,
           requiresNaandiTraining: true
         },
         deadline: formattedDeadline,
@@ -234,7 +225,6 @@ export function JobFormModal({
       setIsAllCourses(true);
       setSelectedCourseIds([]);
       setSelectedDegreeLevel('ALL');
-      setPassingYearMode('ANY');
 
       setFormData({
         ...DEFAULT_FORM,
@@ -268,49 +258,6 @@ export function JobFormModal({
       ...prev,
       eligibilityCriteria: { ...prev.eligibilityCriteria, [field]: value }
     }));
-  };
-
-  // Passing Year Mode & Selection Handlers
-  const handlePassingYearModeChange = (mode) => {
-    setPassingYearMode(mode);
-    if (mode === 'ANY') {
-      handleCriteriaChange('allowedPassingYears', []);
-    } else if (mode === 'SELECTED') {
-      const existing = formData.eligibilityCriteria.allowedPassingYears || [];
-      if (existing.length === 0) {
-        handleCriteriaChange('allowedPassingYears', [currentYear]);
-      }
-    }
-    if (errors.passingYears) {
-      setErrors((prev) => ({ ...prev, passingYears: null }));
-    }
-  };
-
-  const handleTogglePassingYear = (year) => {
-    const current = formData.eligibilityCriteria.allowedPassingYears || [];
-    const exists = current.includes(year);
-    const updated = exists ? current.filter((y) => y !== year) : [...current, year];
-    handleCriteriaChange('allowedPassingYears', updated);
-    if (errors.passingYears) {
-      setErrors((prev) => ({ ...prev, passingYears: null }));
-    }
-  };
-
-  const handleAddCustomYear = () => {
-    const y = parseInt(customYearInput.trim(), 10);
-    if (!y || isNaN(y) || y < 1990 || y > 2100) {
-      setErrors((prev) => ({ ...prev, passingYears: 'Enter a valid graduation year between 1990 and 2100.' }));
-      return;
-    }
-    setAvailablePassingYears((prev) => Array.from(new Set([...prev, y])).sort((a, b) => a - b));
-    const current = formData.eligibilityCriteria.allowedPassingYears || [];
-    if (!current.includes(y)) {
-      handleCriteriaChange('allowedPassingYears', [...current, y]);
-    }
-    setCustomYearInput('');
-    if (errors.passingYears) {
-      setErrors((prev) => ({ ...prev, passingYears: null }));
-    }
   };
 
   // Repeatable responsibility items handlers
@@ -576,7 +523,7 @@ export function JobFormModal({
         newErrors.location = 'Location is required for On-Site or Hybrid jobs.';
       }
 
-      if (isAdmin && !isEdit && !formData.companyId) {
+      if (isStaff && !isEdit && !formData.companyId) {
         newErrors.companyId = 'Please select a recruiting company profile.';
       }
     } else if (stepIdx === 1) {
@@ -597,12 +544,6 @@ export function JobFormModal({
         }
         if (!isAllCourses && selectedCourseIds.length === 0) {
           newErrors.courses = 'Select at least one course or choose "Select All Courses".';
-        }
-        if (passingYearMode === 'SELECTED') {
-          const years = formData.eligibilityCriteria.allowedPassingYears || [];
-          if (years.length === 0) {
-            newErrors.passingYears = 'Please select at least one passing year or switch to "Any Passing Year".';
-          }
         }
       }
     } else if (stepIdx === 3) {
@@ -674,14 +615,12 @@ export function JobFormModal({
           ? []
           : selectedCourseIds;
 
-      const payloadAllowedPassingYears =
-        formData.eligibilityMode === 'ALL_STUDENTS' || passingYearMode === 'ANY'
-          ? []
-          : (crit.allowedPassingYears || []);
-
       const cleanedResponsibilities = (formData.responsibilities || [])
         .map((r) => (typeof r === 'string' ? r.trim() : ''))
         .filter(Boolean);
+
+      const parsedRequiredSkills = parseSkills(formData.requiredSkills || crit.requiredSkills);
+      const parsedPreferredSkills = parseSkills(formData.preferredSkills || crit.preferredSkills);
 
       const payload = {
         title: formData.title.trim(),
@@ -704,18 +643,18 @@ export function JobFormModal({
         eligibilityCriteria: {
           allowedDepartmentIds: payloadAllowedDeptIds,
           allowedCourseIds: payloadAllowedCourseIds,
-          allowedPassingYears: payloadAllowedPassingYears,
-          minCgpa: Number(crit.minCgpa || 0),
-          maxActiveBacklogs: crit.maxActiveBacklogs !== '' && crit.maxActiveBacklogs !== null ? Number(crit.maxActiveBacklogs) : null,
-          requiredSkills: parseSkills(crit.requiredSkills),
-          preferredSkills: parseSkills(crit.preferredSkills),
+          allowedPassingYears: [], // Unrestricted - Passing batch filtered by recruiter on applications
+          minCgpa: 0, // Unrestricted - CGPA filtered by recruiter on applications
+          maxActiveBacklogs: null,
+          requiredSkills: parsedRequiredSkills,
+          preferredSkills: parsedPreferredSkills,
           requiresNaandiTraining: true // University mandatory policy - fail-closed authoritative
         },
         deadline: new Date(formData.deadline).toISOString(),
         status: isEdit ? (formData.status || 'DRAFT') : finalStatus
       };
 
-      if (isAdmin && !isEdit && formData.companyId) {
+      if (isStaff && !isEdit && formData.companyId) {
         payload.companyId = formData.companyId;
       }
 
@@ -794,7 +733,7 @@ export function JobFormModal({
         {currentStepIndex === 0 && (
           <div className="job-form-tab-pane">
             <div className="form-grid">
-              {isAdmin && !isEdit && (
+              {isStaff && !isEdit && (
                 <div className="field">
                   <label>
                     Recruiting Company <span style={{ color: 'var(--red)' }}>*</span>
@@ -913,19 +852,9 @@ export function JobFormModal({
 
               {/* Separate Job Responsibilities - Repeatable List */}
               <div className="field">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label style={{ margin: 0 }}>
-                    Job Responsibilities & Deliverables <span style={{ color: 'var(--red)' }}>*</span>
-                  </label>
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={handleAddResponsibility}
-                    style={{ fontSize: '0.8rem', padding: '3px 8px', height: '28px', color: 'var(--teal)' }}
-                  >
-                    <PlusIcon size={13} /> Add Responsibility
-                  </button>
-                </div>
+                <label>
+                  Job Responsibilities & Deliverables <span style={{ color: 'var(--red)' }}>*</span>
+                </label>
                 <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '8px' }}>
                   Specify individual day-to-day duties, project deliverables, and team expectations.
                 </div>
@@ -933,14 +862,20 @@ export function JobFormModal({
                 <div className="job-resp-builder">
                   {formData.responsibilities.map((resp, index) => (
                     <div key={index} className="job-resp-row">
-                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--muted)', width: '22px' }}>
+                      <span className="job-resp-index">
                         {index + 1}.
                       </span>
                       <input
                         type="text"
-                        placeholder={`e.g. ${index === 0 ? 'Develop full-stack web applications using Node.js & React' : 'Write comprehensive unit tests and automated regression suites'}`}
+                        placeholder={`e.g. ${index === 0 ? 'Develop full-stack web applications using Node.js & React' : index === 1 ? 'Collaborate with cross-functional teams to deliver scalable features' : 'Write comprehensive unit tests and automated regression suites'}`}
                         value={resp}
                         onChange={(e) => handleResponsibilityChange(index, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddResponsibility();
+                          }
+                        }}
                       />
                       <button
                         type="button"
@@ -954,12 +889,53 @@ export function JobFormModal({
                       </button>
                     </div>
                   ))}
+
+                  {/* Add Responsibility Button Below - To-Do List Style */}
+                  <button
+                    type="button"
+                    className="job-resp-add-row-btn"
+                    onClick={handleAddResponsibility}
+                  >
+                    <span className="job-resp-add-icon-circle">
+                      <PlusIcon size={13} />
+                    </span>
+                    <span>Add responsibility</span>
+                  </button>
                 </div>
                 {errors.responsibilities && (
                   <span className="field-error" style={{ marginTop: '6px', display: 'block' }}>
                     {errors.responsibilities}
                   </span>
                 )}
+              </div>
+
+              {/* Candidate Skills & Competencies */}
+              <div className="job-form-grid-2">
+                <div className="field">
+                  <label>Required Skills</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. JavaScript, React, SQL (comma-separated)"
+                    value={formData.requiredSkills || ''}
+                    onChange={(e) => handleChange('requiredSkills', e.target.value)}
+                  />
+                  <div style={{ fontSize: '0.76rem', color: 'var(--muted)', marginTop: '4px' }}>
+                    Core competencies and tools required for this position.
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label>Preferred Skills</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. TypeScript, Docker, Cloud (comma-separated)"
+                    value={formData.preferredSkills || ''}
+                    onChange={(e) => handleChange('preferredSkills', e.target.value)}
+                  />
+                  <div style={{ fontSize: '0.76rem', color: 'var(--muted)', marginTop: '4px' }}>
+                    Secondary qualifications or tools that provide an advantage.
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1096,12 +1072,12 @@ export function JobFormModal({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <CheckIcon size={16} color="var(--teal)" />
                     <span>
-                      <strong>Institution-Wide Drive:</strong> All registered students across all departments, courses, and passing batches are eligible to apply without department restrictions.
+                      <strong>Institution-Wide Drive:</strong> All registered students across all academic departments and courses are eligible to apply without discipline restrictions.
                     </span>
                   </div>
                 ) : (
                   <div>
-                    <strong>Restricted Criteria Drive:</strong> Candidates must meet the explicitly selected departments, courses, passing batches, and academic cutoffs configured below.
+                    <strong>Restricted Discipline Drive:</strong> Candidates must belong to the explicitly selected academic departments and courses configured below.
                   </div>
                 )}
               </div>
@@ -1353,177 +1329,8 @@ export function JobFormModal({
                     )}
                   </div>
                 </div>
-
-                {/* Passing-Year Batch Restriction Card */}
-                <div
-                  style={{
-                    background: '#ffffff',
-                    border: '1px solid var(--line)',
-                    borderRadius: '10px',
-                    padding: '16px',
-                    marginBottom: '16px'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
-                    <label style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--navy)', margin: 0 }}>
-                      Passing-Year Batch Restriction
-                    </label>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 600 }}>
-                      {passingYearMode === 'ANY'
-                        ? 'All batches eligible'
-                        : `${(formData.eligibilityCriteria.allowedPassingYears || []).length} batch(es) selected`}
-                    </span>
-                  </div>
-
-                  <div className="passing-year-mode-wrap">
-                    <button
-                      type="button"
-                      className={`passing-year-mode-btn ${passingYearMode === 'ANY' ? 'active' : ''}`}
-                      onClick={() => handlePassingYearModeChange('ANY')}
-                    >
-                      {passingYearMode === 'ANY' && <CheckIcon size={14} color="var(--teal)" />}
-                      <span>Any Passing Year</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`passing-year-mode-btn ${passingYearMode === 'SELECTED' ? 'active' : ''}`}
-                      onClick={() => handlePassingYearModeChange('SELECTED')}
-                    >
-                      {passingYearMode === 'SELECTED' && <CheckIcon size={14} color="var(--teal)" />}
-                      <span>Selected Passing Years</span>
-                    </button>
-                  </div>
-
-                  {passingYearMode === 'ANY' ? (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--muted)', background: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--line)' }}>
-                      ✓ <strong>Unrestricted:</strong> Eligible students from all graduating batches and alumni years may apply.
-                    </div>
-                  ) : (
-                    <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '8px' }}>
-                        Select one or more eligible graduating batches:
-                      </div>
-
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-                        {availablePassingYears.map((yr) => {
-                          const active = (formData.eligibilityCriteria.allowedPassingYears || []).includes(yr);
-                          return (
-                            <button
-                              key={yr}
-                              type="button"
-                              className={`passing-year-chip ${active ? 'active' : ''}`}
-                              onClick={() => handleTogglePassingYear(yr)}
-                            >
-                              {active && '✓ '}
-                              {yr}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Custom Year Addition */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input
-                          type="number"
-                          min="1990"
-                          max="2100"
-                          placeholder="Add batch year (e.g. 2024)"
-                          value={customYearInput}
-                          onChange={(e) => setCustomYearInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleAddCustomYear();
-                            }
-                          }}
-                          style={{ width: '190px', height: '32px', fontSize: '0.82rem' }}
-                        />
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={handleAddCustomYear}
-                          style={{ height: '32px', padding: '0 10px', fontSize: '0.8rem' }}
-                        >
-                          + Add Year
-                        </button>
-                      </div>
-
-                      {errors.passingYears && (
-                        <span className="field-error" style={{ display: 'block', marginTop: '6px' }}>
-                          {errors.passingYears}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
               </>
             )}
-
-            {/* Academic Cutoffs & Candidate Skills Card — Available for BOTH 'Open to All Students' and 'Restricted Criteria' */}
-            <div
-              style={{
-                background: '#ffffff',
-                border: '1px solid var(--line)',
-                borderRadius: '10px',
-                padding: '16px',
-                marginBottom: '16px'
-              }}
-            >
-              <h4 style={{ margin: '0 0 12px', fontSize: '0.88rem', color: 'var(--navy)' }}>
-                Academic Cutoffs & Candidate Skills
-              </h4>
-
-              <div className="job-form-grid-2" style={{ marginBottom: '14px' }}>
-                <div className="field">
-                  <label>Minimum CGPA (0.0 - 10.0)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="10"
-                    placeholder="e.g. 6.5 (0 for no cutoff)"
-                    value={formData.eligibilityCriteria.minCgpa}
-                    onChange={(e) => handleCriteriaChange('minCgpa', e.target.value)}
-                  />
-                  {errors.minCgpa && <span className="field-error">{errors.minCgpa}</span>}
-                </div>
-
-                <div className="field">
-                  <label>Max Active Backlogs Allowed</label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="0 for clean record (leave blank for any)"
-                    value={formData.eligibilityCriteria.maxActiveBacklogs}
-                    onChange={(e) => handleCriteriaChange('maxActiveBacklogs', e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Skills Grid */}
-              <div className="job-form-grid-2">
-                <div className="field">
-                  <label>Required Skills</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. JavaScript, React, SQL (comma-separated)"
-                    value={formData.eligibilityCriteria.requiredSkills}
-                    onChange={(e) => handleCriteriaChange('requiredSkills', e.target.value)}
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Preferred Skills</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. TypeScript, Docker, Cloud (comma-separated)"
-                    value={formData.eligibilityCriteria.preferredSkills}
-                    onChange={(e) => handleCriteriaChange('preferredSkills', e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1648,8 +1455,8 @@ export function JobFormModal({
                     <label>Target Eligibility</label>
                     <span>
                       {formData.eligibilityMode === 'ALL_STUDENTS'
-                        ? 'Open to All Students (Any Passing Year)'
-                        : `${isAllDepartments ? 'All' : selectedDeptIds.length} Depts • ${passingYearMode === 'ANY' ? 'Any Year' : (formData.eligibilityCriteria.allowedPassingYears || []).join(', ') || 'Any Year'} • Min CGPA: ${formData.eligibilityCriteria.minCgpa || 0}`}
+                        ? 'Open to All Students (Institution-Wide)'
+                        : `${isAllDepartments ? 'All Departments' : `${selectedDeptIds.length} Depts`} • ${isAllCourses ? 'All Courses' : `${selectedCourseIds.length} Courses`}`}
                     </span>
                   </div>
 

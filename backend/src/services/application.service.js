@@ -188,6 +188,33 @@ export async function listApplications({ auth, query = {} }) {
     mongoQuery.recruitmentRound = Number(query.recruitmentRound);
   }
 
+  // Recruiter & Placement cell applicant filtering by passing year (batch) and minimum CGPA
+  if (query.passingYear || (query.minCgpa !== undefined && query.minCgpa !== null && query.minCgpa !== '')) {
+    const studentFilter = {};
+    if (query.passingYear) {
+      studentFilter.passingYear = Number(query.passingYear);
+    }
+    if (query.minCgpa !== undefined && query.minCgpa !== null && query.minCgpa !== '') {
+      studentFilter.cgpa = { $gte: Number(query.minCgpa) };
+    }
+    const matchingStudentIds = await Student.find(studentFilter).distinct('_id');
+
+    if (mongoQuery.studentId) {
+      if (Array.isArray(mongoQuery.studentId.$in)) {
+        const matchingSet = new Set(matchingStudentIds.map(String));
+        mongoQuery.studentId.$in = mongoQuery.studentId.$in.filter((id) =>
+          matchingSet.has(String(id))
+        );
+      } else {
+        const currentId = String(mongoQuery.studentId);
+        const matchingSet = new Set(matchingStudentIds.map(String));
+        mongoQuery.studentId = matchingSet.has(currentId) ? currentId : null;
+      }
+    } else {
+      mongoQuery.studentId = { $in: matchingStudentIds };
+    }
+  }
+
   const [items, total] = await Promise.all([
     Application.find(mongoQuery)
       .sort({ createdAt: -1 })
@@ -195,7 +222,7 @@ export async function listApplications({ auth, query = {} }) {
       .limit(limit)
       .populate('jobId', 'jobId title jobType workMode location deadline status')
       .populate('companyId', 'companyName companyId officeAddress website industryType')
-      .populate('studentId', 'firstName lastName universityId email mobileNumber branch department cgpa'),
+      .populate('studentId', 'firstName lastName universityId email mobileNumber branch department cgpa passingYear'),
     Application.countDocuments(mongoQuery)
   ]);
 
@@ -240,15 +267,6 @@ export async function getApplicationById({ auth, id }) {
 }
 
 export async function updateApplicationStatus({ auth, id, status, note, reviewerNotes }) {
-  if (
-    auth.userType !== 'COMPANY' &&
-    auth.roleId !== ROLE_IDS.COMPANY &&
-    auth.roleId !== ROLE_IDS.PLACEMENT_HEAD &&
-    auth.roleId !== ROLE_IDS.SUPER_ADMIN
-  ) {
-    throw new AppError(403, 'FORBIDDEN', 'You do not have permission to update application status.');
-  }
-
   const application = await Application.findById(id);
   if (!application) {
     throw new AppError(404, 'APPLICATION_NOT_FOUND', 'Application record not found.');
@@ -258,6 +276,17 @@ export async function updateApplicationStatus({ auth, id, status, note, reviewer
     const company = await findCompanyByUserId(auth.userId);
     if (String(application.companyId) !== String(company._id)) {
       throw new AppError(403, 'FORBIDDEN', 'You do not have permission to update applications for another company.');
+    }
+  } else if (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
+    const coordDept = await getCoordinatorDepartment(auth);
+    if (coordDept?.departmentId) {
+      const student = await Student.findById(application.studentId).lean();
+      const matchesDept =
+        (student?.departmentId && String(student.departmentId) === String(coordDept.departmentId)) ||
+        (student?.department && student.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase());
+      if (!matchesDept) {
+        throw new AppError(403, 'FORBIDDEN', 'You are not authorized to update applications from another department.');
+      }
     }
   }
 

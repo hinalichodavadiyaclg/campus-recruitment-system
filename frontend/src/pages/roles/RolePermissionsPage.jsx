@@ -46,6 +46,12 @@ export function RolePermissionsPage({ roleId }) {
     setSaving(true);
     try {
       await roleService.assignPermissions(roleId, selectedIds);
+      try {
+        localStorage.setItem('auth_perm_sync', Date.now().toString());
+        window.dispatchEvent(new Event('auth:refresh'));
+      } catch {
+        // Fallback for isolated environments
+      }
       toast('Role permissions updated successfully.');
       window.location.hash = `#/roles/${roleId}`;
     } catch (err) {

@@ -36,6 +36,7 @@ export function JobTable({
   const isCompany = roleType === 'COMPANY';
   const isHead = roleType === 'PLACEMENT_HEAD';
   const isCoordinator = roleType === 'PLACEMENT_COORDINATOR';
+  const hasManagementActions = Boolean(onEdit || onStatusChange || onSuspend || onReopen);
 
   return (
     <div className="card table-card job-data-table-card">
@@ -52,8 +53,8 @@ export function JobTable({
               <th style={{ textAlign: 'center' }}>Vacancies</th>
               <th>Deadline</th>
               <th>Status</th>
-              <th style={{ textAlign: isCoordinator ? 'center' : 'right', minWidth: isCoordinator ? '145px' : '85px' }}>
-                {isCoordinator ? 'Applications' : 'Actions'}
+              <th style={{ textAlign: (isCoordinator && !hasManagementActions) ? 'center' : 'right', minWidth: isCoordinator ? (hasManagementActions ? '230px' : '145px') : '85px' }}>
+                {isCoordinator && !hasManagementActions ? 'Applications' : 'Actions'}
               </th>
             </tr>
           </thead>
@@ -397,6 +398,20 @@ export function JobTable({
                                 >
                                   View Details
                                 </button>
+                                {onEdit && (
+                                  <button
+                                    type="button"
+                                    className="job-action-menu-item"
+                                    onClick={() => {
+                                      setOpenActionMenuId(null);
+                                      onEdit?.(job);
+                                    }}
+                                    disabled={isSuspended}
+                                    title={isSuspended ? 'Cannot edit suspended job' : 'Edit Job'}
+                                  >
+                                    <EditIcon size={13} /> Edit Job
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   className="job-action-menu-item"
@@ -424,18 +439,149 @@ export function JobTable({
                         </div>
                       )}
 
-                      {/* Placement Coordinator Scoped Applications Action */}
+                      {/* Placement Coordinator Scoped Applications & Dynamic Actions */}
                       {isCoordinator && (
-                        <button
-                          type="button"
-                          className="secondary job-coord-app-btn"
-                          onClick={() => onViewApplicants?.(job)}
-                          title="View applicants from your department"
-                        >
-                          <UsersIcon size={13} />
-                          <span>Applicants ({appsCount})</span>
-                          <ChevronRightIcon size={12} style={{ opacity: 0.65 }} />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="secondary job-coord-app-btn"
+                            onClick={() => onViewApplicants?.(job)}
+                            title="View applicants from your department"
+                          >
+                            <UsersIcon size={13} />
+                            <span>Applicants ({appsCount})</span>
+                            <ChevronRightIcon size={12} style={{ opacity: 0.65 }} />
+                          </button>
+
+                          {hasManagementActions && (
+                            <div className="job-action-dropdown-wrap">
+                              <button
+                                type="button"
+                                className="secondary job-action-dropdown-btn"
+                                onClick={() => toggleActionMenu(job._id)}
+                                aria-expanded={openActionMenuId === job._id}
+                              >
+                                <span>Manage</span>
+                                <ChevronDownIcon size={12} />
+                              </button>
+
+                              {openActionMenuId === job._id && (
+                                <>
+                                  <div
+                                    className="job-action-menu-backdrop"
+                                    onClick={() => setOpenActionMenuId(null)}
+                                  />
+                                  <div className={`job-action-dropdown-menu ${isDropUp ? 'drop-up' : ''}`}>
+                                    <button
+                                      type="button"
+                                      className="job-action-menu-item"
+                                      onClick={() => {
+                                        setOpenActionMenuId(null);
+                                        onViewDetails?.(job);
+                                      }}
+                                    >
+                                      View Details
+                                    </button>
+
+                                    {onEdit && (
+                                      <button
+                                        type="button"
+                                        className="job-action-menu-item"
+                                        onClick={() => {
+                                          setOpenActionMenuId(null);
+                                          onEdit?.(job);
+                                        }}
+                                        disabled={isSuspended}
+                                        title={isSuspended ? 'Cannot edit suspended job' : 'Edit Job'}
+                                      >
+                                        <EditIcon size={13} /> Edit Job
+                                      </button>
+                                    )}
+
+                                    {onStatusChange && job.status === 'DRAFT' && !isSuspended && (
+                                      <button
+                                        type="button"
+                                        className="job-action-menu-item"
+                                        onClick={() => {
+                                          setOpenActionMenuId(null);
+                                          onStatusChange?.(job, 'OPEN');
+                                        }}
+                                      >
+                                        Publish Job
+                                      </button>
+                                    )}
+
+                                    {onStatusChange && job.status === 'OPEN' && !isSuspended && (
+                                      <button
+                                        type="button"
+                                        className="job-action-menu-item"
+                                        onClick={() => {
+                                          setOpenActionMenuId(null);
+                                          onStatusChange?.(job, 'PAUSED');
+                                        }}
+                                      >
+                                        Pause Applications
+                                      </button>
+                                    )}
+
+                                    {onStatusChange && job.status === 'PAUSED' && !isSuspended && (
+                                      <button
+                                        type="button"
+                                        className="job-action-menu-item"
+                                        onClick={() => {
+                                          setOpenActionMenuId(null);
+                                          onStatusChange?.(job, 'OPEN');
+                                        }}
+                                      >
+                                        Resume Applications
+                                      </button>
+                                    )}
+
+                                    {onStatusChange && ['OPEN', 'PAUSED'].includes(job.status) && !isSuspended && (
+                                      <button
+                                        type="button"
+                                        className="job-action-menu-item is-danger"
+                                        onClick={() => {
+                                          setOpenActionMenuId(null);
+                                          onStatusChange?.(job, 'CLOSED');
+                                        }}
+                                      >
+                                        Close Job
+                                      </button>
+                                    )}
+
+                                    {onReopen && job.status === 'CLOSED' && !isSuspended && (
+                                      <button
+                                        type="button"
+                                        className="job-action-menu-item"
+                                        onClick={() => {
+                                          setOpenActionMenuId(null);
+                                          onReopen?.(job);
+                                        }}
+                                      >
+                                        <RefreshCwIcon size={13} /> Reopen Job
+                                      </button>
+                                    )}
+
+                                    {onSuspend && (
+                                      <button
+                                        type="button"
+                                        className={`job-action-menu-item ${!isSuspended ? 'is-danger' : ''}`}
+                                        onClick={() => {
+                                          setOpenActionMenuId(null);
+                                          onSuspend?.(job);
+                                        }}
+                                      >
+                                        <ShieldIcon size={13} />
+                                        <span>{isSuspended ? 'Restore Job' : 'Suspend Job'}</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>

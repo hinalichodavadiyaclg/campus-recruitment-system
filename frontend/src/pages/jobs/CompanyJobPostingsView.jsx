@@ -469,13 +469,17 @@ export function CompanyJobPostingsView() {
             jobs={jobs}
             roleType="COMPANY"
             onViewDetails={(j) => setSelectedJobForDetails(j)}
-            onEdit={(j) => {
-              setSelectedJobForForm(j);
-              setIsFormModalOpen(true);
-            }}
-            onStatusChange={(j, target) => handleRequestStatusChange(j, target)}
-            onReopen={(j) => setSelectedJobForReopen(j)}
-            onViewApplicants={handleViewApplicants}
+            onEdit={
+              has('JOB_UPDATE')
+                ? (j) => {
+                    setSelectedJobForForm(j);
+                    setIsFormModalOpen(true);
+                  }
+                : undefined
+            }
+            onStatusChange={has('JOB_UPDATE') ? (j, target) => handleRequestStatusChange(j, target) : undefined}
+            onReopen={has('JOB_UPDATE') ? (j) => setSelectedJobForReopen(j) : undefined}
+            onViewApplicants={has('APPLICATION_READ') ? handleViewApplicants : undefined}
           />
 
           {/* Pagination Controls */}

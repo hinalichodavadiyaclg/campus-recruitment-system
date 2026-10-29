@@ -54,6 +54,8 @@ export function ApplicationsPage() {
   // Filters
   const [selectedJobId, setSelectedJobId] = useState(getInitialJobId);
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedPassingYear, setSelectedPassingYear] = useState('');
+  const [selectedMinCgpa, setSelectedMinCgpa] = useState('');
   const [page, setPage] = useState(1);
   const limit = 15;
 
@@ -83,9 +85,9 @@ export function ApplicationsPage() {
   const [selectedAppForStatus, setSelectedAppForStatus] = useState(null);
   const [selectedAppForWithdraw, setSelectedAppForWithdraw] = useState(null);
 
-  // Load available jobs for filter dropdown if company or placement admin
+  // Load available jobs for filter dropdown if user has JOB_READ and is non-student
   useEffect(() => {
-    if (isStudent) return;
+    if (isStudent || !has('JOB_READ')) return;
     let mounted = true;
     async function loadJobs() {
       try {
@@ -99,7 +101,7 @@ export function ApplicationsPage() {
     return () => {
       mounted = false;
     };
-  }, [isStudent]);
+  }, [isStudent, has]);
 
   // Main application list fetch
   const fetchApplications = useCallback(async () => {
@@ -111,7 +113,9 @@ export function ApplicationsPage() {
         page,
         limit,
         jobId: selectedJobId || undefined,
-        status: selectedStatus || undefined
+        status: selectedStatus || undefined,
+        passingYear: selectedPassingYear || undefined,
+        minCgpa: selectedMinCgpa || undefined
       };
 
       const res = await applicationService.listApplications(params);
@@ -126,7 +130,7 @@ export function ApplicationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, selectedJobId, selectedStatus]);
+  }, [page, limit, selectedJobId, selectedStatus, selectedPassingYear, selectedMinCgpa]);
 
   useEffect(() => {
     fetchApplications();
@@ -157,7 +161,6 @@ export function ApplicationsPage() {
     isStudent && !['SELECTED', 'REJECTED', 'WITHDRAWN'].includes(app.status);
 
   const canAdvanceStage = (app) =>
-    (isCompany || isPlacementHead || isSuperAdmin) &&
     has('APPLICATION_UPDATE') &&
     ALLOWED_STATUS_TRANSITIONS[app.status]?.length > 0;
 
@@ -223,8 +226,50 @@ export function ApplicationsPage() {
             </select>
           </div>
 
+          {/* Passing Batch Filter */}
+          <div className="app-filter-item">
+            <span className="app-filter-label">Passing Batch</span>
+            <select
+              className="app-filter-select"
+              value={selectedPassingYear}
+              onChange={(e) => {
+                setSelectedPassingYear(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All Batches</option>
+              {[2024, 2025, 2026, 2027, 2028].map((yr) => (
+                <option key={yr} value={yr}>
+                  {yr} Batch
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Min CGPA Screening Filter */}
+          <div className="app-filter-item">
+            <span className="app-filter-label">Min CGPA</span>
+            <select
+              className="app-filter-select"
+              value={selectedMinCgpa}
+              onChange={(e) => {
+                setSelectedMinCgpa(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">Any CGPA</option>
+              <option value="6.0">6.0+ CGPA</option>
+              <option value="6.5">6.5+ CGPA</option>
+              <option value="7.0">7.0+ CGPA</option>
+              <option value="7.5">7.5+ CGPA</option>
+              <option value="8.0">8.0+ CGPA</option>
+              <option value="8.5">8.5+ CGPA</option>
+              <option value="9.0">9.0+ CGPA</option>
+            </select>
+          </div>
+
           {/* Reset Filters */}
-          {(selectedJobId || selectedStatus) && (
+          {(selectedJobId || selectedStatus || selectedPassingYear || selectedMinCgpa) && (
             <button
               type="button"
               className="ghost"
@@ -232,6 +277,8 @@ export function ApplicationsPage() {
               onClick={() => {
                 setSelectedJobId('');
                 setSelectedStatus('');
+                setSelectedPassingYear('');
+                setSelectedMinCgpa('');
                 setPage(1);
               }}
             >
@@ -292,7 +339,7 @@ export function ApplicationsPage() {
           <p style={{ margin: '0 auto 20px', maxWidth: '440px', fontSize: '0.9rem', color: 'var(--muted)', lineHeight: 1.5 }}>
             {isStudent
               ? 'You have not submitted any job applications yet. Visit Job Postings to explore eligible campus drives and apply.'
-              : selectedJobId || selectedStatus
+              : (selectedJobId || selectedStatus || selectedPassingYear || selectedMinCgpa)
               ? 'No applicant records match your current filter selections.'
               : 'No student applications have been received yet for your active recruitment drives.'}
           </p>
@@ -362,6 +409,7 @@ export function ApplicationsPage() {
                           </div>
                           <span style={{ fontSize: '0.76rem', color: 'var(--muted)', fontWeight: 600 }}>
                             {studentInfo.cgpa !== undefined && studentInfo.cgpa !== null ? `${studentInfo.cgpa} CGPA` : ''}
+                            {studentInfo.passingYear ? ` • ${studentInfo.passingYear} Batch` : ''}
                           </span>
                         </td>
                       )}

@@ -104,6 +104,10 @@ export function ApplicationDetailsModal({
             <strong>{student.cgpa !== undefined && student.cgpa !== null ? `${student.cgpa} CGPA` : '—'}</strong>
           </div>
           <div>
+            <span style={{ color: 'var(--muted)', display: 'block', fontSize: '0.74rem' }}>Graduating Batch</span>
+            <strong>{student.passingYear ? `${student.passingYear} Batch` : '—'}</strong>
+          </div>
+          <div>
             <span style={{ color: 'var(--muted)', display: 'block', fontSize: '0.74rem' }}>Contact Email</span>
             <strong>{student.email || '—'}</strong>
           </div>

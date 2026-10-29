@@ -43,6 +43,10 @@ export function UserRoleChangePage({ userId }) {
     setConfirmOpen(false);
     try {
       await userService.changeRole(userId, selectedRole);
+      try {
+        localStorage.setItem('auth_perm_sync', Date.now().toString());
+        window.dispatchEvent(new Event('auth:refresh'));
+      } catch {}
       toast('User role changed.');
       window.location.hash = `#/users/${userId}`;
     } catch (err) {
