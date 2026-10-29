@@ -830,74 +830,21 @@ export function StudentJobOpportunitiesView() {
 
         {/* Right Main Column: Results Toolbar + Job Cards Grid */}
         <section className="job-cards-container" aria-label="Job Results">
-          {/* Results Toolbar */}
-          <div className="job-results-toolbar">
-            <div className="job-toolbar-left">
-              <button
-                type="button"
-                className="job-toggle-sidebar-btn"
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                title={sidebarCollapsed ? 'Expand sidebar filters' : 'Collapse sidebar filters'}
-              >
-                <FilterIcon size={14} />
-                <span>{sidebarCollapsed ? 'Show Filters' : 'Hide Filters'}</span>
-              </button>
-
-              <span className="job-count-text">
-                Showing <b className="text-navy">{jobs.length}</b> of{' '}
-                <b className="text-navy">{pagination.total || jobs.length}</b> opportunities
-              </span>
-            </div>
-
-            <div className="job-toolbar-right">
-              <div className="job-toolbar-sort-wrap">
-                <span className="job-sort-label">Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="job-toolbar-sort-select"
-                  aria-label="Sort jobs by"
-                >
-                  <option value="recent">Recently Posted</option>
-                  <option value="deadline">Deadline Soon</option>
-                  <option value="vacancies">Highest Vacancies</option>
-                  <option value="salary">Highest Salary</option>
-                </select>
-              </div>
-
-              {/* View Mode Toggle: Grid vs List (Naukri style) */}
-              <div className="job-toolbar-view-toggle" role="group" aria-label="View format">
-                <button
-                  type="button"
-                  className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                  onClick={() => setViewMode('grid')}
-                  title="Grid View (2 columns)"
-                  aria-label="Grid View"
-                >
-                  <GridIcon size={15} />
-                </button>
-                <button
-                  type="button"
-                  className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
-                  onClick={() => setViewMode('list')}
-                  title="List View (Full width)"
-                  aria-label="List View"
-                >
-                  <ListIcon size={15} />
-                </button>
-              </div>
-
-              <button
-                type="button"
-                className="ghost job-toolbar-refresh-btn"
-                onClick={fetchJobs}
-                title="Refresh listings"
-                aria-label="Refresh listings"
-              >
-                <RefreshCwIcon size={14} className={loading ? 'spin-refresh' : ''} />
-                <span className="hide-on-mobile">Refresh</span>
-              </button>
-            </div>
+          {/* Results Header Info (Matching main) */}
+          <div className="job-cards-header-info">
+            <span className="job-count-text">
+              Showing <b>{jobs.length}</b> of <b>{pagination.total || jobs.length}</b> open opportunities
+              {appliedSearch && <span> matching "{appliedSearch}"</span>}
+            </span>
+            <button
+              type="button"
+              className="ghost"
+              onClick={fetchJobs}
+              style={{ padding: '6px 12px', fontSize: '0.8rem', height: '32px' }}
+              title="Refresh job postings"
+            >
+              <RefreshCwIcon size={14} className={loading ? 'spin-refresh' : ''} /> Refresh
+            </button>
           </div>
 
           {/* Active Filter Chips Bar */}
@@ -946,20 +893,11 @@ export function StudentJobOpportunitiesView() {
             />
           ) : (
             <>
-              <div className={`job-grid ${viewMode === 'list' ? 'list-view' : ''}`}>
+              <div className="job-grid">
                 {jobs.map((job) => {
                   const companyName = job.companyId?.companyName || 'Company';
                   const palette = getCompanyPalette(companyName);
-                  const studentApp = getStudentAppForJob(job._id, job.recruitmentRound);
-                  const appStatus = studentApp?.status;
-                  const isActivelyApplied = appStatus === 'APPLIED' || appStatus === 'UNDER_REVIEW';
-                  const isShortlisted =
-                    appStatus === 'SHORTLISTED' ||
-                    appStatus === 'ASSESSMENT' ||
-                    appStatus === 'INTERVIEW';
-                  const isSelected = appStatus === 'SELECTED';
-                  const isRejected = appStatus === 'REJECTED';
-                  const isWithdrawn = appStatus === 'WITHDRAWN';
+                  const appliedApp = getStudentAppForJob(job._id, job.recruitmentRound);
 
                   const isSuspended = Boolean(job.isSuspended);
                   const isDeadlinePassed = new Date(job.deadline) < new Date();
@@ -998,11 +936,6 @@ export function StudentJobOpportunitiesView() {
                   );
                   const salaryText = formatSalary(job.compensation);
 
-                  // Informational skills (strict single line, no description)
-                  const requiredSkills = Array.isArray(job.eligibilityCriteria?.requiredSkills)
-                    ? job.eligibilityCriteria.requiredSkills
-                    : [];
-
                   // Formal Eligibility Failure summary
                   let formalIneligibleReason = '';
                   if (job.eligibility && job.eligibility.isEligible === false) {
@@ -1028,7 +961,7 @@ export function StudentJobOpportunitiesView() {
                   return (
                     <article key={job._id} className="job-card">
                       <div className="job-card-main">
-                        {/* Header: Company Avatar + (Title & Status) + Company Name */}
+                        {/* Compact Unified Header: Pastel Circle Avatar + (Title & Status) + (Company & Posted Time) */}
                         <div className="job-card-header">
                           <div
                             className="job-company-avatar"
@@ -1056,11 +989,7 @@ export function StudentJobOpportunitiesView() {
                                 display: job.companyId?.logoUrl ? 'none' : 'flex'
                               }}
                             >
-                              <BuildingIcon
-                                size={20}
-                                color={palette.color}
-                                className="job-company-icon"
-                              />
+                              <BuildingIcon size={20} color={palette.color} className="job-company-icon" />
                             </div>
                           </div>
 
@@ -1074,20 +1003,8 @@ export function StudentJobOpportunitiesView() {
                                 {job.title}
                               </h3>
                               <div className="job-status-pill-wrap">
-                                {isSelected ? (
-                                  <span className="job-badge-pill selected">Selected 🎉</span>
-                                ) : isShortlisted ? (
-                                  <span className="job-badge-pill shortlisted">
-                                    {appStatus === 'INTERVIEW' ? 'Interview' : 'Shortlisted'}
-                                  </span>
-                                ) : isActivelyApplied ? (
-                                  <span className="job-badge-pill applied">
-                                    {appStatus === 'UNDER_REVIEW' ? 'Under Review' : 'Applied'}
-                                  </span>
-                                ) : isWithdrawn ? (
-                                  <span className="job-badge-pill withdrawn">Withdrawn</span>
-                                ) : isRejected ? (
-                                  <span className="job-badge-pill rejected">Not Selected</span>
+                                {appliedApp ? (
+                                  <span className="job-badge-pill applied">Applied</span>
                                 ) : isSuspended ? (
                                   <span className="job-badge-pill suspended">Suspended</span>
                                 ) : isDeadlinePassed ? (
@@ -1103,13 +1020,16 @@ export function StudentJobOpportunitiesView() {
                             <p className="job-company-name" title={companyName}>
                               {companyName}
                             </p>
+                            <span className="job-posted-time">
+                              <ClockIcon size={11} /> {formatRelativeTime(job.createdAt || job.publishedAt) || 'Recently'}
+                            </span>
                           </div>
                         </div>
 
-                        {/* Structured Specifications Box (Naukri style) */}
+                        {/* Structured Key Specifications Box */}
                         <div className="job-card-specs-box">
                           <div className="job-spec-item" title="Job Type and Work Mode">
-                            <BriefcaseIcon size={14} className="job-spec-icon" />
+                            <BriefcaseIcon size={13} className="job-spec-icon" />
                             <span className="job-spec-val">
                               {getJobTypeLabel(job.jobType)} • {getWorkModeLabel(job.workMode)}
                             </span>
@@ -1117,7 +1037,7 @@ export function StudentJobOpportunitiesView() {
 
                           {locationText && (
                             <div className="job-spec-item" title="Location">
-                              <MapPinIcon size={14} className="job-spec-icon" />
+                              <MapPinIcon size={13} className="job-spec-icon" />
                               <span className="job-spec-val" title={locationText}>
                                 {locationText}
                               </span>
@@ -1125,138 +1045,65 @@ export function StudentJobOpportunitiesView() {
                           )}
 
                           <div className="job-spec-item" title="Compensation">
-                            <AwardIcon size={14} className="job-spec-icon" />
-                            <span
-                              className={`job-spec-val ${hasSalary ? 'spec-salary' : 'spec-muted'}`}
-                            >
+                            <AwardIcon size={13} className="job-spec-icon" />
+                            <span className={`job-spec-val ${hasSalary ? 'spec-salary' : 'spec-muted'}`}>
                               {salaryText}
                             </span>
                           </div>
 
                           <div className="job-spec-item" title="Application Deadline & Vacancies">
-                            <CalendarIcon size={14} className="job-spec-icon" />
+                            <CalendarIcon size={13} className="job-spec-icon" />
                             <span className={`job-spec-val ${isClosingSoon ? 'spec-urgent' : ''}`}>
                               {isDeadlinePassed ? 'Closed' : formatDate(job.deadline)} ({vacancyText})
                             </span>
                           </div>
                         </div>
-
-                        {/* Key Skills Row - Strictly ONE Single Line without wrapping */}
-                        {requiredSkills.length > 0 && (
-                          <div
-                            className="job-naukri-skills-row"
-                            title={`Skills: ${requiredSkills.join(', ')}`}
-                          >
-                            <span className="job-skills-tag-label">Skills:</span>
-                            <div className="job-skills-chips-single-line">
-                              {requiredSkills.slice(0, 3).map((skill) => (
-                                <span key={skill} className="job-skill-chip" title={skill}>
-                                  {skill}
-                                </span>
-                              ))}
-                              {requiredSkills.length > 3 && (
-                                <span
-                                  className="job-skill-chip more"
-                                  title={requiredSkills.slice(3).join(', ')}
-                                >
-                                  +{requiredSkills.length - 3} more
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
                       </div>
 
-                      {/* Footer Actions & Posted Time (Naukri style) */}
+                      {/* Footer Actions */}
                       <div className="job-card-footer">
-                        <div className="job-card-footer-left">
-                          <ClockIcon size={12} color="var(--muted)" />
-                          <span className="job-posted-time">
-                            {formatRelativeTime(job.createdAt || job.publishedAt) || 'Recently'}
-                          </span>
-                        </div>
+                        <button
+                          type="button"
+                          className="job-btn-secondary"
+                          onClick={() => setSelectedJobForDetails(job)}
+                        >
+                          View Details
+                        </button>
 
-                        <div className="job-card-footer-actions">
+                        {appliedApp ? (
                           <button
                             type="button"
-                            className="job-btn-secondary"
+                            className="job-btn-applied"
                             onClick={() => setSelectedJobForDetails(job)}
                           >
-                            View Details
+                            <CheckCircleIcon size={14} /> Applied
                           </button>
-
-                          {isSelected ? (
-                            <button
-                              type="button"
-                              className="job-btn-status-pill selected"
-                              onClick={() => setSelectedJobForDetails(job)}
-                              title="Congratulations! You have been selected. Click for details."
-                            >
-                              ★ Selected
-                            </button>
-                          ) : isShortlisted ? (
-                            <button
-                              type="button"
-                              className="job-btn-status-pill shortlisted"
-                              onClick={() => setSelectedJobForDetails(job)}
-                              title={`Status: ${appStatus}. Click for details.`}
-                            >
-                              Shortlisted
-                            </button>
-                          ) : isActivelyApplied ? (
-                            <button
-                              type="button"
-                              className="job-btn-applied"
-                              onClick={() => setSelectedJobForDetails(job)}
-                              title={`Status: ${appStatus}. Click to view details.`}
-                            >
-                              <CheckCircleIcon size={14} /> Applied
-                            </button>
-                          ) : isWithdrawn ? (
-                            <button
-                              type="button"
-                              className="job-btn-withdrawn"
-                              onClick={() => setSelectedJobForDetails(job)}
-                              title="You withdrew your application for this recruitment drive. Click to view details."
-                            >
-                              Withdrawn
-                            </button>
-                          ) : isRejected ? (
-                            <button
-                              type="button"
-                              className="job-btn-rejected"
-                              onClick={() => setSelectedJobForDetails(job)}
-                              title="Application was not selected for this recruitment drive."
-                            >
-                              Not Selected
-                            </button>
-                          ) : !isEligible ? (
-                            <button
-                              type="button"
-                              className="job-btn-ineligible"
-                              onClick={() => setSelectedJobForDetails(job)}
-                              title={
-                                formalIneligibleReason
-                                  ? `${formalIneligibleReason} — Click to view details`
-                                  : 'Formal criteria requirements not met'
-                              }
-                            >
-                              Ineligible
-                            </button>
-                          ) : isSuspended || isDeadlinePassed || job.status !== 'OPEN' ? (
-                            <button type="button" className="job-btn-disabled" disabled>
-                              Unavailable
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="job-btn-primary"
-                              onClick={() => setSelectedJobForApply(job)}
-                            >
-                              Apply Now →
-                            </button>
-                          )}
-                        </div>
+                        ) : !isEligible ? (
+                          <button
+                            type="button"
+                            className="job-btn-ineligible"
+                            onClick={() => setSelectedJobForDetails(job)}
+                            title={formalIneligibleReason || 'Criteria requirements not met'}
+                          >
+                            Ineligible
+                          </button>
+                        ) : isSuspended || isDeadlinePassed || job.status !== 'OPEN' ? (
+                          <button
+                            type="button"
+                            className="job-btn-disabled"
+                            disabled
+                          >
+                            Unavailable
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="job-btn-primary"
+                            onClick={() => setSelectedJobForApply(job)}
+                          >
+                            Apply Now →
+                          </button>
+                        )}
                       </div>
                     </article>
                   );

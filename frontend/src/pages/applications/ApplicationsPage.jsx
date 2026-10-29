@@ -238,7 +238,7 @@ export function ApplicationsPage() {
               }}
             >
               <option value="">All Batches</option>
-              {[2024, 2025, 2026, 2027, 2028].map((yr) => (
+              {[2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030].map((yr) => (
                 <option key={yr} value={yr}>
                   {yr} Batch
                 </option>

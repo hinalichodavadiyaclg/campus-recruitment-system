@@ -643,8 +643,8 @@ export function JobFormModal({
         eligibilityCriteria: {
           allowedDepartmentIds: payloadAllowedDeptIds,
           allowedCourseIds: payloadAllowedCourseIds,
-          allowedPassingYears: [], // Unrestricted - Passing batch filtered by recruiter on applications
-          minCgpa: 0, // Unrestricted - CGPA filtered by recruiter on applications
+          allowedPassingYears: [], // Open to all batches (recruiter filters on Applications)
+          minCgpa: 0, // Open to all CGPAs (recruiter filters on Applications)
           maxActiveBacklogs: null,
           requiredSkills: parsedRequiredSkills,
           preferredSkills: parsedPreferredSkills,
