@@ -451,6 +451,23 @@ export async function updateResume(userId, resumeData) {
     uploadedAt: new Date()
   };
   await student.save();
+  try {
+    const { StudentResume } = await import('../models/student_resume.model.js');
+    const latest = await StudentResume.findOne({ studentId: student._id }).sort({ versionNumber: -1 });
+    const nextVersion = (latest?.versionNumber || 0) + 1;
+    await StudentResume.updateMany({ studentId: student._id, isActive: true }, { $set: { isActive: false } });
+    await StudentResume.create({
+      studentId: student._id,
+      userId,
+      fileName: resumeData.fileName,
+      fileUrl: resumeData.url,
+      fileType: (resumeData.fileName || '').endsWith('.docx') ? 'DOCX' : 'PDF',
+      fileSize: resumeData.fileSize || 0,
+      versionNumber: nextVersion,
+      isActive: true,
+      extractionStatus: 'PENDING'
+    });
+  } catch (_) {}
   return student.resume;
 }
 
@@ -459,6 +476,10 @@ export async function deleteResume(userId) {
 
   student.resume = undefined;
   await student.save();
+  try {
+    const { StudentResume } = await import('../models/student_resume.model.js');
+    await StudentResume.updateMany({ studentId: student._id }, { $set: { isActive: false } });
+  } catch (_) {}
   return { message: 'Resume deleted successfully.' };
 }
 

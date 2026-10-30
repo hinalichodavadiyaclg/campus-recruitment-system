@@ -1,0 +1,153 @@
+/* AI Resume Analyzer Styling */
+.ai-resume-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.resume-mgmt-card {
+  padding: 20px;
+}
+
+.resume-dropzone {
+  border: 2px dashed var(--line, #cbd5e1);
+  border-radius: 10px;
+  padding: 32px 20px;
+  text-align: center;
+  background: var(--bg-card-subtle, #f8fafc);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.resume-dropzone.active {
+  border-color: #087c91;
+  background: #e7f5f6;
+}
+
+.resume-dropzone:hover {
+  border-color: #102e5f;
+}
+
+.resume-file-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: var(--bg-card-subtle, #f8fafc);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.score-badge-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.score-high {
+  background: linear-gradient(135deg, #16734b 0%, #10b981 100%);
+}
+
+.score-medium {
+  background: linear-gradient(135deg, #087c91 0%, #0ea5e9 100%);
+}
+
+.score-low {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+}
+
+.category-score-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.category-score-item {
+  background: #ffffff;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.category-progress-track {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.category-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: #087c91;
+  transition: width 0.4s ease;
+}
+
+.recommendation-card {
+  background: #ffffff;
+  border: 1px solid var(--line, #e2e8f0);
+  border-left: 4px solid #087c91;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.recommendation-card.priority-high {
+  border-left-color: #ef4444;
+}
+
+.recommendation-card.priority-medium {
+  border-left-color: #f59e0b;
+}
+
+.recommendation-card.priority-low {
+  border-left-color: #10b981;
+}
+
+.skill-pill {
+  display: inline-block;
+  background: #f1f5f9;
+  color: #1e293b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  margin: 3px;
+}
+
+.skill-pill.matched {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.skill-pill.missing {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.comparison-box {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+@media (max-width: 640px) {
+  .comparison-box {
+    grid-template-columns: 1fr;
+  }
+}
