@@ -112,3 +112,31 @@ test('evaluateJobMatchHeuristic calculates accurate matched and missing skills',
   assert.equal(match.jobSnapshot.title, 'Full Stack Engineer');
 });
 
+test('analyzeResume correctly flags a certificate as non-resume with 0 score', async () => {
+  const certificateText = `
+    Vanita Vishram Women's University | Training & Placement Cell
+    CERTIFICATE OF COMPLETION
+    This is to proudly certify that
+    Anaya Joshi
+    has successfully completed the training and workshop program on
+    "Python for AI 2"
+    Conducted by the Central Placement Cell & Academic Departments with distinction.
+    Certificate No: CERT-2026-0018
+    Issued On: 30 Oct 2026
+    SCAN TO VERIFY
+    Director / Head Training & Placement Cell
+  `;
+
+  const result = await analyzeResume({
+    resumeText: certificateText
+  });
+
+  assert.equal(result.isResume, false);
+  assert.equal(result.documentType, 'CERTIFICATE');
+  assert.equal(result.overallScore, 0);
+  assert.equal(result.categoryScores.atsCompatibility, 0);
+  assert.equal(result.categoryScores.skills, 0);
+  assert.ok(result.summary.includes('Non-Resume Document Detected'));
+  assert.ok(result.summary.includes('Certificate of Completion'));
+  assert.ok(result.recommendations.some((r) => r.problem.includes('Certificate')));
+});

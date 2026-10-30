@@ -10,6 +10,7 @@ import {
   DownloadIcon,
   TrashIcon,
   CheckCircleIcon,
+  AlertTriangleIcon,
   InfoIcon,
   ShieldIcon,
   BriefcaseIcon,
@@ -476,6 +477,33 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
             </button>
           </div>
 
+          {/* Non-Resume Alert Banner */}
+          {currentReport.isResume === false && (
+            <div
+              style={{
+                padding: '14px 18px',
+                background: '#fff1f2',
+                border: '1px solid #fecdd3',
+                borderRadius: '8px',
+                color: '#9f1239',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px'
+              }}
+            >
+              <AlertTriangleIcon size={22} style={{ color: '#e11d48', flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.94rem', marginBottom: '4px' }}>
+                  Non-Resume Document Detected ({currentReport.documentType || 'Certificate'})
+                </div>
+                <p style={{ margin: 0, fontSize: '0.84rem', lineHeight: 1.45, color: '#4c0519' }}>
+                  The uploaded file appears to be an institutional <strong>{currentReport.documentType === 'CERTIFICATE' ? 'Certificate of Completion / Participation' : currentReport.documentType}</strong> rather than an employment Resume or CV. ATS scoring and recruiter evaluation require a structured resume. Click <strong>Replace Resume</strong> above to upload your actual resume document.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Score Header Card */}
           <div
             style={{
@@ -491,7 +519,9 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
           >
             <div
               className={`score-badge-circle ${
-                currentReport.overallScore >= 80
+                currentReport.isResume === false
+                  ? 'score-invalid'
+                  : currentReport.overallScore >= 80
                   ? 'score-high'
                   : currentReport.overallScore >= 65
                   ? 'score-medium'
@@ -503,8 +533,10 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
             </div>
 
             <div style={{ flex: 1, minWidth: '220px' }}>
-              <strong style={{ fontSize: '1rem', color: '#102e5f', display: 'block', marginBottom: '4px' }}>
-                {currentReport.overallScore >= 80
+              <strong style={{ fontSize: '1rem', color: currentReport.isResume === false ? '#be123c' : '#102e5f', display: 'block', marginBottom: '4px' }}>
+                {currentReport.isResume === false
+                  ? `Non-Resume Document: ${currentReport.documentType === 'CERTIFICATE' ? 'Certificate Detected' : currentReport.documentType}`
+                  : currentReport.overallScore >= 80
                   ? 'Excellent Resume Alignment'
                   : currentReport.overallScore >= 65
                   ? 'Good Candidate Foundation'

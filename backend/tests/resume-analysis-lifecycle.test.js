@@ -296,4 +296,31 @@ test('Complete AI Resume Analyzer Lifecycle: Upload, Versioning, Analysis, Job M
   assert.ok(activeAfterDelete);
   assert.equal(activeAfterDelete.versionNumber, 1);
   assert.equal(activeAfterDelete.isActive, true);
+
+  // 8. Rejection check: Uploading a standalone certificate in place of a resume is rejected
+  const certPdf = await createMockPdf([
+    "Vanita Vishram Women's University | Training & Placement Cell",
+    'CERTIFICATE OF COMPLETION',
+    'This is to proudly certify that Riya Patel has completed the training.',
+    'Certificate No: CERT-2026-0018',
+    'Authorized Signatory'
+  ]);
+
+  await assert.rejects(
+    () =>
+      resumeService.uploadResume({
+        file: {
+          originalname: 'CERT-2026-0018.pdf',
+          mimetype: 'application/pdf',
+          size: certPdf.length,
+          buffer: certPdf
+        },
+        auth: student1Auth
+      }),
+    (err) => {
+      assert.equal(err.code, 'INVALID_RESUME_DOCUMENT');
+      assert.match(err.message, /Certificate/i);
+      return true;
+    }
+  );
 });

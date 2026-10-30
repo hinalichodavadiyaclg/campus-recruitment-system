@@ -1,4 +1,5 @@
 import { AppError } from '../utils/app-error.js';
+import { classifyResumeDocument } from './resume-text-extraction.service.js';
 
 /**
  * Sanitizes untrusted resume text against prompt injection attempts.
@@ -48,6 +49,113 @@ export function calculateWeightedOverallScore(categoryScores) {
 }
 
 /**
+ * Generates an honest, non-inflated diagnostic report when the uploaded file is identified
+ * as a certificate, marksheet, or other non-resume document.
+ *
+ * @param {object} classification
+ * @param {string} rawText
+ * @param {object} [job]
+ * @returns {object}
+ */
+export function generateNonResumeReport(classification, rawText, job = null) {
+  const docType = classification?.documentType || 'CERTIFICATE';
+  let summary = '';
+  let problemTitle = '';
+  let problemDetails = '';
+
+  if (docType === 'CERTIFICATE') {
+    summary = 'Non-Resume Document Detected: The uploaded file was identified as an institutional Certificate of Completion / Participation, not a candidate Resume or Curriculum Vitae. A candidate resume requires structured sections detailing your Education history, Technical & Soft Skills inventory, Academic Projects, and Contact Coordinates. Please upload your actual resume document to receive ATS scoring and recruiter screening diagnostics.';
+    problemTitle = 'Certificate Uploaded Instead of Resume';
+    problemDetails = 'Automated ATS systems and recruiters require a comprehensive 1-2 page Resume or CV. A certificate credential alone cannot be parsed as a candidate employment profile.';
+  } else if (docType === 'MARKSHEET') {
+    summary = 'Non-Resume Document Detected: The uploaded file was identified as an academic Marksheet or Grade Report, not an employment Resume or CV. ATS scoring requires an authentic resume outlining your skills, practical projects, and profile summary.';
+    problemTitle = 'Marksheet / Grade Card Uploaded';
+    problemDetails = 'A marksheet or grade report does not contain applicant skills, project portfolios, or career history.';
+  } else {
+    summary = 'Insufficient Resume Content: The uploaded document contains fewer than 60 words and lacks essential resume sections (Education, Skills, Projects). Please upload a complete 1-2 page Resume or CV in PDF or DOCX format.';
+    problemTitle = 'Document Contains Insufficient Text';
+    problemDetails = 'ATS systems and recruiters need a complete candidate profile with readable text.';
+  }
+
+  const report = {
+    isResume: false,
+    documentType: docType,
+    overallScore: 0,
+    categoryScores: {
+      atsCompatibility: 0,
+      skills: 0,
+      education: 0,
+      projects: 0,
+      experience: 0,
+      resumeStructure: 0
+    },
+    summary,
+    strengths: [
+      docType === 'CERTIFICATE'
+        ? 'Document verified as an authentic course/workshop completion credential.'
+        : 'File was parsed and inspected successfully.'
+    ],
+    areasForImprovement: [
+      `Uploaded document is a ${docType === 'CERTIFICATE' ? 'Certificate of Completion' : 'non-resume document'}, not an employment resume.`,
+      'Completely lacks candidate contact coordinates (personal email address and mobile number).',
+      'Missing technical & functional skills inventory (programming languages, libraries, databases).',
+      'Missing academic projects portfolio demonstrating practical implementation abilities.',
+      'Missing formal educational timeline with degree, branch, CGPA, and expected graduation.'
+    ],
+    extractedSkills: {
+      technical: [],
+      soft: [],
+      industry: [],
+      missingOrWeak: []
+    },
+    missingSections: [
+      'Candidate Contact Coordinates (Email & Phone)',
+      'Technical & Soft Skills Inventory',
+      'Academic Projects Portfolio',
+      'Formal Education History (Degree, College, CGPA)',
+      'Work Experience / Internships'
+    ],
+    recommendations: [
+      {
+        problem: problemTitle,
+        whyItMatters: problemDetails,
+        howToImprove: 'Click "Replace Resume" above and upload your 1-2 page Resume or CV in PDF or DOCX format. Save certificates in your Certificates & Achievements tab.',
+        example: 'Standard layout: Header (Name & Contact) → Education → Technical Skills → Projects → Certifications & Workshops.',
+        priority: 'HIGH'
+      },
+      {
+        problem: 'Missing Essential Candidate Sections',
+        whyItMatters: 'Recruiters spend only seconds scanning for technical competencies and project experience. None of these exist in a certificate.',
+        howToImprove: 'Draft a standard resume highlighting your key coursework, practical programming projects, and extracurricular achievements.',
+        example: 'Example project: "Campus Event Tracker: Built with React and Node.js with user authentication and registration workflows."',
+        priority: 'HIGH'
+      }
+    ],
+    aiModel: 'vvwu-document-classifier-v1'
+  };
+
+  if (job) {
+    report.jobMatchResult = {
+      jobMatchScore: 0,
+      matchedSkills: [],
+      missingSkills: job.eligibilityCriteria?.requiredSkills || [],
+      partiallyDemonstratedSkills: [],
+      jobRecommendations: [
+        `Cannot match certificate against '${job.title}'. Please upload a complete resume demonstrating required skills: ${(job.eligibilityCriteria?.requiredSkills || []).join(', ')}.`
+      ],
+      jobSnapshot: {
+        title: job.title || '',
+        companyName: job.companyName || job.companyId?.companyName || '',
+        jobType: job.jobType || 'FULL_TIME',
+        workLocation: job.workLocation || ''
+      }
+    };
+  }
+
+  return report;
+}
+
+/**
  * Intelligent deterministic heuristic analyzer that generates a comprehensive,
  * realistic, content-driven analysis even when external AI APIs are offline or without API keys.
  *
@@ -60,6 +168,12 @@ export function calculateWeightedOverallScore(categoryScores) {
 export function analyzeResumeHeuristic(rawText, extractedData = {}, student = null, job = null) {
   const text = rawText || '';
   const lower = text.toLowerCase();
+
+  // 0. Verify document classification
+  const classification = classifyResumeDocument(text);
+  if (!classification.isResume) {
+    return generateNonResumeReport(classification, text, job);
+  }
 
   // 1. Contact Info & ATS Checks
   const hasEmail = Boolean(extractedData?.contact?.email || /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(text));
@@ -74,17 +188,17 @@ export function analyzeResumeHeuristic(rawText, extractedData = {}, student = nu
   const hasExpHeading = /experience|internship|training/i.test(lower);
   const hasCertHeading = /certificat/i.test(lower);
 
-  // ATS Score calculation (20% weight)
-  let atsScore = 50;
-  if (hasEmail) atsScore += 12;
-  if (hasPhone) atsScore += 10;
-  if (hasLinkedin || hasGithub) atsScore += 8;
-  if (hasEduHeading) atsScore += 7;
-  if (hasSkillsHeading) atsScore += 7;
-  if (hasProjHeading) atsScore += 6;
-  atsScore = Math.min(95, Math.max(35, atsScore));
+  // ATS Score calculation (20% weight) - Evidence driven
+  let atsScore = 15;
+  if (hasEmail) atsScore += 18;
+  if (hasPhone) atsScore += 18;
+  if (hasLinkedin || hasGithub) atsScore += 12;
+  if (hasEduHeading) atsScore += 12;
+  if (hasSkillsHeading) atsScore += 13;
+  if (hasProjHeading) atsScore += 12;
+  atsScore = Math.min(95, Math.max(15, atsScore));
 
-  // 2. Skills Analysis (20% weight)
+  // 2. Skills Analysis (20% weight) - Evidence driven
   const skillsList = Array.isArray(extractedData?.skills) ? extractedData.skills : [];
   const techSkills = [...skillsList];
 
@@ -97,35 +211,39 @@ export function analyzeResumeHeuristic(rawText, extractedData = {}, student = nu
     if (lower.includes(sk)) softSkills.push(sk.charAt(0).toUpperCase() + sk.slice(1));
   }
 
-  let skillsScore = 40 + Math.min(45, techSkills.length * 7) + Math.min(10, softSkills.length * 3);
-  skillsScore = Math.min(96, Math.max(30, skillsScore));
+  let skillsScore = Math.min(65, techSkills.length * 10) + Math.min(25, softSkills.length * 5);
+  if (hasSkillsHeading && skillsScore > 0) skillsScore += 10;
+  skillsScore = Math.min(96, Math.max(10, skillsScore));
 
   // 3. Education Score (10% weight)
-  let eduScore = hasEduHeading ? 65 : 30;
-  if (/b\.?tech|b\.?e|bca|mca|b\.?sc|m\.?sc|diploma|university|college/i.test(lower)) eduScore += 15;
+  let eduScore = hasEduHeading ? 35 : 10;
+  if (/b\.?tech|b\.?e|bca|mca|b\.?sc|m\.?sc|diploma|bachelor|master|engineering/i.test(lower)) eduScore += 25;
+  if (/university|college|institute/i.test(lower)) eduScore += 20;
   if (/cgpa|percentage|\b20\d\d\b|semester/i.test(lower)) eduScore += 15;
-  eduScore = Math.min(95, Math.max(30, eduScore));
+  eduScore = Math.min(95, Math.max(10, eduScore));
 
   // 4. Projects Score (20% weight)
-  let projScore = hasProjHeading ? 55 : 30;
-  const projectMentions = (text.match(/github|deployed|api|database|frontend|backend|app|system|developed|implemented|designed/gi) || []).length;
-  projScore += Math.min(35, projectMentions * 4);
-  projScore = Math.min(96, Math.max(35, projScore));
+  let projScore = hasProjHeading ? 35 : 10;
+  const projectMentions = (text.match(/github|deployed|api|database|frontend|backend|app|system|developed|implemented|designed|created/gi) || []).length;
+  projScore += Math.min(45, projectMentions * 5);
+  if (/react|node|express|mongodb|python|java|sql/i.test(lower) && hasProjHeading) projScore += 15;
+  projScore = Math.min(96, Math.max(10, projScore));
 
   // 5. Experience / Practical Exposure (10% weight - Fresher-Friendly)
-  let expScore = 55; // Base fair score for campus freshers
-  if (/intern|internship/i.test(lower)) expScore += 25;
-  if (/naandi|edunet|training|workshop|hackathon|freelance/i.test(lower)) expScore += 15;
-  if (hasExpHeading) expScore += 5;
-  expScore = Math.min(95, Math.max(40, expScore));
+  let expScore = 35; // Base score for campus freshers
+  if (/intern|internship/i.test(lower)) expScore += 35;
+  if (/naandi|edunet|training|workshop|hackathon|freelance/i.test(lower)) expScore += 20;
+  if (hasExpHeading) expScore += 10;
+  expScore = Math.min(95, Math.max(20, expScore));
 
   // 6. Resume Structure & Content (20% weight)
-  let structScore = 60;
+  let structScore = 20;
   const wordCount = text.split(/\s+/).filter(Boolean).length;
-  if (wordCount >= 180 && wordCount <= 750) structScore += 15;
-  if (hasEmail && hasPhone && hasEduHeading && hasSkillsHeading) structScore += 15;
-  if (text.includes('•') || text.includes('- ') || text.includes('* ')) structScore += 8;
-  structScore = Math.min(95, Math.max(35, structScore));
+  if (wordCount >= 180 && wordCount <= 750) structScore += 35;
+  else if (wordCount >= 90) structScore += 20;
+  if (hasEmail && hasPhone && hasEduHeading && hasSkillsHeading) structScore += 25;
+  if (text.includes('•') || text.includes('- ') || text.includes('* ')) structScore += 15;
+  structScore = Math.min(95, Math.max(15, structScore));
 
   const categoryScores = {
     atsCompatibility: atsScore,
@@ -146,7 +264,7 @@ export function analyzeResumeHeuristic(rawText, extractedData = {}, student = nu
   if (hasEmail && hasPhone) {
     strengths.push('Complete and professional contact coordinates for rapid recruiter outreach.');
   }
-  if (projScore >= 75) {
+  if (projScore >= 70) {
     strengths.push('Detailed academic/practical project section showcasing hands-on technology execution.');
   }
   if (hasGithub || hasLinkedin) {
@@ -220,13 +338,9 @@ export function analyzeResumeHeuristic(rawText, extractedData = {}, student = nu
     summary += 'Strengthening project descriptions with specific technologies and adding external portfolio links will significantly enhance recruiter interest.';
   }
 
-  // Job Match (if job provided)
-  let jobMatchResult = null;
-  if (job) {
-    jobMatchResult = evaluateJobMatchHeuristic(text, techSkills, job);
-  }
-
-  return {
+  const analysisResult = {
+    isResume: true,
+    documentType: 'RESUME',
     overallScore,
     categoryScores,
     summary,
@@ -235,32 +349,56 @@ export function analyzeResumeHeuristic(rawText, extractedData = {}, student = nu
     extractedSkills: {
       technical: techSkills,
       soft: softSkills,
-      industry: ['Software Engineering', 'Web Development'],
-      missingOrWeak: ['Cloud Infrastructure', 'CI/CD Pipelines']
+      industry: ['Web Development', 'Software Engineering'],
+      missingOrWeak: ['Cloud Deployment (AWS/Docker)', 'Unit Testing', 'CI/CD Pipelines']
     },
     missingSections,
     recommendations,
-    jobMatchResult,
-    aiModel: 'vvwu-ai-analyzer-v1'
+    aiModel: 'vvwu-heuristic-engine-v1'
   };
+
+  // 7. Optional Job Match Evaluation
+  if (job) {
+    analysisResult.jobMatchResult = evaluateJobMatchHeuristic({
+      resumeText: text,
+      techSkills,
+      job
+    });
+  }
+
+  return analysisResult;
 }
 
 /**
+ * Heuristically evaluates alignment between resume competencies and a specific Job.
+ */
+/**
  * Evaluates match against a specific Job posting.
  *
- * @param {string} resumeText
- * @param {Array<string>} resumeSkills
- * @param {object} job
+ * @param {string|object} arg1
+ * @param {Array<string>} [arg2]
+ * @param {object} [arg3]
  * @returns {object}
  */
-export function evaluateJobMatchHeuristic(resumeText, resumeSkills, job) {
-  const lowerText = resumeText.toLowerCase();
+export function evaluateJobMatchHeuristic(arg1, arg2, arg3) {
+  let resumeText, resumeSkills, job;
+  if (typeof arg1 === 'object' && arg1 !== null && !Array.isArray(arg1) && !arg2) {
+    resumeText = arg1.resumeText || '';
+    resumeSkills = arg1.techSkills || arg1.resumeSkills || [];
+    job = arg1.job;
+  } else {
+    resumeText = arg1 || '';
+    resumeSkills = Array.isArray(arg2) ? arg2 : [];
+    job = arg3;
+  }
+
+  const lowerText = (resumeText || '').toLowerCase();
   const resumeSkillsLower = new Set(resumeSkills.map((s) => s.toLowerCase()));
 
-  const required = Array.isArray(job.eligibilityCriteria?.requiredSkills)
+  const required = Array.isArray(job?.eligibilityCriteria?.requiredSkills)
     ? job.eligibilityCriteria.requiredSkills
     : [];
-  const preferred = Array.isArray(job.eligibilityCriteria?.preferredSkills)
+  const preferred = Array.isArray(job?.eligibilityCriteria?.preferredSkills)
     ? job.eligibilityCriteria.preferredSkills
     : [];
 
@@ -298,9 +436,9 @@ export function evaluateJobMatchHeuristic(resumeText, resumeSkills, job) {
       `Incorporate practical experience or projects demonstrating the missing required skill(s): ${missingSkills.slice(0, 3).join(', ')}.`
     );
   }
-  if (job.roleOverview) {
+  if (job?.roleOverview || job?.title) {
     jobRecommendations.push(
-      `Align your career summary and project highlights with the role objective: "${job.title} at ${job.companyName || 'the hiring organization'}"`
+      `Align your career summary and project highlights with the role objective: "${job?.title || 'Target Role'} at ${job?.companyName || 'the hiring organization'}"`
     );
   }
 
@@ -311,29 +449,24 @@ export function evaluateJobMatchHeuristic(resumeText, resumeSkills, job) {
     partiallyDemonstratedSkills: Array.from(new Set(partiallyDemonstratedSkills)),
     jobRecommendations,
     jobSnapshot: {
-      title: job.title || 'Job Opening',
-      companyName: job.companyName || job.companyId?.companyName || 'Hiring Company',
-      jobType: job.jobType || 'FULL_TIME',
-      workLocation: job.workLocation || 'On-site'
+      title: job?.title || '',
+      companyName: job?.companyName || job?.companyId?.companyName || '',
+      jobType: job?.jobType || 'FULL_TIME',
+      workLocation: job?.workLocation || ''
     }
   };
 }
 
-/**
- * Main AI Analysis dispatcher. Uses Google Gemini API if configured; otherwise seamlessly uses
- * the deterministic analysis engine.
- *
- * @param {object} params
- * @param {string} params.resumeText
- * @param {object} [params.extractedData]
- * @param {object} [params.student]
- * @param {object} [params.job]
- * @returns {Promise<object>}
- */
 export async function analyzeResume({ resumeText, extractedData = {}, student = null, job = null }) {
   const sanitized = sanitizeResumeText(resumeText);
   if (!sanitized || sanitized.length < 20) {
     throw new AppError(400, 'INSUFFICIENT_TEXT', 'Resume contains insufficient readable text for analysis.');
+  }
+
+  // Pre-check: Verify document type (Resume vs Certificate vs Marksheet)
+  const classification = classifyResumeDocument(sanitized);
+  if (!classification.isResume) {
+    return generateNonResumeReport(classification, sanitized, job);
   }
 
   const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -365,11 +498,20 @@ async function callGeminiApi({ apiKey, sanitizedText, extractedData, student, jo
 
   const prompt = `
 You are an expert ATS and Campus Recruitment Resume Evaluator for Vanita Vishram Women's University (VVWU).
-Analyze the following resume document objectively.
+Analyze the following document objectively.
 
-<RESUME_DOCUMENT>
+CRITICAL INSTRUCTION:
+First check if this document is actually a candidate RESUME or CURRICULUM VITAE.
+If it is a single-page certificate (e.g. Certificate of Completion, Certificate of Participation, Workshop Certificate), marksheet, or non-resume document:
+- Set "isResume": false
+- Set "documentType": "CERTIFICATE" (or "MARKSHEET")
+- Set "overallScore": 0
+- Set all categoryScores to 0
+- Set "summary" clearly stating: "Non-Resume Document Detected: The uploaded file appears to be a certificate/credential rather than a candidate Resume or CV. Please upload an authentic resume document."
+
+<DOCUMENT_TEXT>
 ${sanitizedText}
-</RESUME_DOCUMENT>
+</DOCUMENT_TEXT>
 
 ${job ? `Target Job Details:
 Title: ${job.title}
@@ -379,13 +521,15 @@ Role Overview: ${job.roleOverview || job.description || ''}` : ''}
 
 You MUST return STRICT JSON ONLY (no markdown backticks, no text outside JSON) conforming to this schema:
 {
+  "isResume": boolean,
+  "documentType": "RESUME" | "CERTIFICATE" | "MARKSHEET" | "INSUFFICIENT_CONTENT",
   "overallScore": number (0-100),
   "categoryScores": {
     "atsCompatibility": number (0-100),
     "skills": number (0-100),
     "education": number (0-100),
     "projects": number (0-100),
-    "experience": number (0-100, do not penalize freshers without formal jobs),
+    "experience": number (0-100),
     "resumeStructure": number (0-100)
   },
   "summary": "string",
@@ -442,7 +586,7 @@ You MUST return STRICT JSON ONLY (no markdown backticks, no text outside JSON) c
     throw new Error('Empty response from Gemini API.');
   }
 
-  const cleaned = rawContent.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const cleaned = rawContent.replace(/\`\`\`json/gi, '').replace(/\`\`\`/g, '').trim();
   const parsed = JSON.parse(cleaned);
 
   // Validate critical fields
@@ -451,6 +595,11 @@ You MUST return STRICT JSON ONLY (no markdown backticks, no text outside JSON) c
   }
 
   parsed.aiModel = model;
+  if (parsed.isResume === undefined) {
+    parsed.isResume = true;
+    parsed.documentType = 'RESUME';
+  }
+
   if (job) {
     parsed.jobMatchResult = parsed.jobMatchResult || {};
     parsed.jobMatchResult.jobSnapshot = {
@@ -463,4 +612,3 @@ You MUST return STRICT JSON ONLY (no markdown backticks, no text outside JSON) c
 
   return parsed;
 }
-

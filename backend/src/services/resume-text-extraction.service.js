@@ -226,3 +226,85 @@ export function parseBasicResumeSections(text) {
     certifications
   };
 }
+
+/**
+ * Accurately determines if the extracted document text is an authentic Resume/CV
+ * or a non-resume document such as a Certificate of Completion, Marksheet, or ID card.
+ *
+ * @param {string} text
+ * @returns {{ isResume: boolean, documentType: 'RESUME' | 'CERTIFICATE' | 'MARKSHEET' | 'INSUFFICIENT_CONTENT', reason: string }}
+ */
+export function classifyResumeDocument(text) {
+  const clean = (text || '').trim();
+  const wordCount = clean.split(/\s+/).filter(Boolean).length;
+
+  const certificatePhrases = [
+    /certificate of (completion|participation|merit|appreciation|achievement|excellence)/i,
+    /this is to (proudly )?certify that/i,
+    /has (successfully )?completed the (training|workshop|course|program)/i,
+    /is hereby awarded this certificate/i,
+    /\bcertificate (no|number|id)\b/i,
+    /\bauthorized signatory\b/i,
+    /\bbonafide certificate\b/i,
+    /\bconducted by the (central )?placement cell\b/i,
+    /\bscan to verify\b/i,
+    /director \/ head\s*training & placement cell/i
+  ];
+
+  const certificateMatches = certificatePhrases.filter((regex) => regex.test(clean));
+
+  const marksheetPhrases = [
+    /statement of marks/i,
+    /semester grade report/i,
+    /grade card/i,
+    /transcript of records/i,
+    /\btotal credits earned\b/i
+  ];
+  const marksheetMatches = marksheetPhrases.filter((regex) => regex.test(clean));
+
+  const hasResumeHeadings = [
+    /\b(technical )?skills\b/i.test(clean),
+    /\bprojects?\b/i.test(clean),
+    /\beducation\b/i.test(clean),
+    /\bexperience|internships?\b/i.test(clean),
+    /\bcurriculum vitae\b|\bresume\b/i.test(clean)
+  ].filter(Boolean).length;
+
+  const hasContact =
+    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(clean) ||
+    /(?:\+91[\s-]?)?[6-9]\d{9}\b/.test(clean);
+
+  // Standalone Certificate detection
+  if (
+    certificateMatches.length >= 2 ||
+    (certificateMatches.length >= 1 && (wordCount < 120 || hasResumeHeadings < 2))
+  ) {
+    return {
+      isResume: false,
+      documentType: 'CERTIFICATE',
+      reason: 'The uploaded file appears to be a course/workshop Certificate of Completion, not a candidate Resume or Curriculum Vitae.'
+    };
+  }
+
+  if (marksheetMatches.length >= 1 && hasResumeHeadings < 2) {
+    return {
+      isResume: false,
+      documentType: 'MARKSHEET',
+      reason: 'The uploaded file appears to be an academic Marksheet or Grade Report, not a Resume or Curriculum Vitae.'
+    };
+  }
+
+  if (wordCount < 60 && hasResumeHeadings < 2 && !hasContact) {
+    return {
+      isResume: false,
+      documentType: 'INSUFFICIENT_CONTENT',
+      reason: 'The uploaded document contains insufficient content (fewer than 60 words and no resume sections).'
+    };
+  }
+
+  return {
+    isResume: true,
+    documentType: 'RESUME',
+    reason: 'Valid resume document structure.'
+  };
+}

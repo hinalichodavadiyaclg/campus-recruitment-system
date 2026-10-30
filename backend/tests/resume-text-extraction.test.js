@@ -3,7 +3,7 @@ import test from 'node:test';
 import {
   detectAndValidateFileType,
   extractResumeText,
-  parseBasicResumeSections
+  parseBasicResumeSections, classifyResumeDocument
 } from '../src/services/resume-text-extraction.service.js';
 
 test('detectAndValidateFileType identifies valid PDF by magic bytes', () => {
@@ -106,3 +106,28 @@ test('extractResumeText extracts text from PDFKit generated PDF document', async
   assert.ok(result.extractedData.skills.includes('Python'));
 });
 
+test('classifyResumeDocument differentiates certificates and resumes accurately', () => {
+  const certText = `
+    Vanita Vishram Women's University | Training & Placement Cell
+    CERTIFICATE OF COMPLETION
+    This is to proudly certify that Anaya Joshi has successfully completed the workshop.
+    Certificate No: CERT-2026-0018
+    Authorized Signatory
+  `;
+
+  const certResult = classifyResumeDocument(certText);
+  assert.equal(certResult.isResume, false);
+  assert.equal(certResult.documentType, 'CERTIFICATE');
+
+  const resumeText = `
+    Riya Patel
+    riya@example.com | 9876543210
+    Education: B.Tech Computer Engineering
+    Skills: React, Node.js, Python, MongoDB
+    Projects: Campus Portal built using React and Node.js.
+  `;
+
+  const resumeResult = classifyResumeDocument(resumeText);
+  assert.equal(resumeResult.isResume, true);
+  assert.equal(resumeResult.documentType, 'RESUME');
+});

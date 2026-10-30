@@ -52,6 +52,15 @@ const resumeAnalysisSchema = new Schema(
       default: null,
       index: true
     },
+    isResume: {
+      type: Boolean,
+      default: true
+    },
+    documentType: {
+      type: String,
+      enum: ['RESUME', 'CERTIFICATE', 'MARKSHEET', 'INSUFFICIENT_CONTENT', 'UNKNOWN'],
+      default: 'RESUME'
+    },
     overallScore: {
       type: Number,
       required: true,

@@ -7,7 +7,7 @@ import { Job } from '../models/job.model.js';
 import { StudentResume } from '../models/student_resume.model.js';
 import { ResumeAnalysis } from '../models/resume_analysis.model.js';
 import { AppError } from '../utils/app-error.js';
-import { extractResumeText } from './resume-text-extraction.service.js';
+import { extractResumeText, classifyResumeDocument } from './resume-text-extraction.service.js';
 import { analyzeResume } from './ai-resume-analyzer.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -61,6 +61,16 @@ export async function uploadResume({ file, auth }) {
     file.originalname,
     file.mimetype
   );
+
+  // Validate document type - reject standalone certificates, marksheets, etc.
+  const classification = classifyResumeDocument(extractedText);
+  if (!classification.isResume) {
+    throw new AppError(
+      400,
+      'INVALID_RESUME_DOCUMENT',
+      `${classification.reason} Please upload a complete 1-2 page Resume or CV in PDF or DOCX format.`
+    );
+  }
 
   // Determine versioning
   const latestResume = await StudentResume.findOne({ studentId: student._id }).sort({ versionNumber: -1 });
@@ -231,6 +241,8 @@ export async function analyzeResumeById({ resumeId, jobId = null }, auth) {
     resumeVersion: resume.versionNumber,
     analysisType: job ? 'JOB_MATCH' : 'GENERAL',
     jobId: job ? job._id : null,
+    isResume: analysisResult.isResume !== false,
+    documentType: analysisResult.documentType || 'RESUME',
     overallScore: analysisResult.overallScore,
     categoryScores: analysisResult.categoryScores,
     summary: analysisResult.summary,
