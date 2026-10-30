@@ -383,14 +383,11 @@ export async function getEligibleJobsForStudent(auth) {
   }
 
   const jobs = await Job.find(query)
-    .populate('companyId', 'companyName')
-    .select('jobId title companyId jobType workMode location eligibilityCriteria description createdAt')
+    .select('title companyName jobType workLocation eligibilityCriteria roleOverview createdAt')
     .sort({ createdAt: -1 })
     .limit(20)
     .lean();
 
-  return jobs.map((j) => ({
-    ...j,
-    companyName: j.companyId?.companyName || 'Campus Partner'
-  }));
+  return jobs;
 }
+

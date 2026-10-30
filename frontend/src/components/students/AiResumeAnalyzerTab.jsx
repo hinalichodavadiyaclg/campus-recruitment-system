@@ -1034,3 +1034,4 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
     </div>
   );
 }
+

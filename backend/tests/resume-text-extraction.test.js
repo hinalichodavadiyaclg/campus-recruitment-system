@@ -105,3 +105,4 @@ test('extractResumeText extracts text from PDFKit generated PDF document', async
   assert.equal(result.extractedData.contact.email, 'pooja.shah@example.com');
   assert.ok(result.extractedData.skills.includes('Python'));
 });
+

@@ -1,5 +1,5 @@
 import { asyncHandler } from '../utils/async-handler.js';
-import { sendSuccess } from '../utils/response.js';
+import { sendSuccess } from '../utils/api-response.js';
 import * as resumeService from '../services/resume-analysis.service.js';
 
 export const uploadResume = asyncHandler(async (req, res) => {
@@ -71,3 +71,4 @@ export const getEligibleJobs = asyncHandler(async (req, res) => {
   const result = await resumeService.getEligibleJobsForStudent(req.auth);
   return sendSuccess(res, 200, result);
 });
+

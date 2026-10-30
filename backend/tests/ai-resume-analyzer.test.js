@@ -111,3 +111,4 @@ test('evaluateJobMatchHeuristic calculates accurate matched and missing skills',
   assert.ok(match.jobRecommendations.length > 0);
   assert.equal(match.jobSnapshot.title, 'Full Stack Engineer');
 });
+

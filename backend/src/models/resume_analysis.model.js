@@ -118,3 +118,4 @@ resumeAnalysisSchema.index({ studentId: 1, createdAt: -1 });
 resumeAnalysisSchema.index({ resumeId: 1, createdAt: -1 });
 
 export const ResumeAnalysis = model('ResumeAnalysis', resumeAnalysisSchema);
+

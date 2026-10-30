@@ -102,3 +102,4 @@ const studentResumeSchema = new Schema(
 studentResumeSchema.index({ studentId: 1, versionNumber: -1 });
 
 export const StudentResume = model('StudentResume', studentResumeSchema);
+

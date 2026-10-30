@@ -64,3 +64,4 @@ export const resumeAnalysisService = {
    */
   getEligibleJobs: () => apiRequest('/api/student/resumes/eligible-jobs')
 };
+

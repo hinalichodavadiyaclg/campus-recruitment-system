@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { authenticate } from '../middleware/auth.js';
-import { authorizeAnyPermission } from '../middleware/rbac.js';
+import { authenticate } from '../middleware/authenticate.js';
+import { authorizeAnyPermission } from '../middleware/authorize.js';
 import { PERMISSION_IDS } from '../utils/access-constants.js';
 import * as resumeController from '../controllers/resume-analysis.controller.js';
 
@@ -56,3 +56,4 @@ resumeAnalysisRouter.get('/:id', resumeController.getResumeById);
 
 // Delete resume
 resumeAnalysisRouter.delete('/:id', resumeController.deleteResume);
+
