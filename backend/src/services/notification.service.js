@@ -49,24 +49,59 @@ export async function createNotification({
   }
 }
 
-/**
- * Create multiple notifications in bulk with deduplication handling
- */
 export async function createNotificationsBatch(notifications = []) {
   if (!Array.isArray(notifications) || notifications.length === 0) {
     return [];
   }
 
-  const results = [];
-  for (const item of notifications) {
-    try {
-      const created = await createNotification(item);
-      if (created) results.push(created);
-    } catch (err) {
-      // Continue processing remaining notifications
+  const validItems = notifications.filter(item => item && item.recipientId && item.title && item.message);
+  if (validItems.length === 0) return [];
+
+  // For small batches (<= 5), individual insert with deduplication is clean and reliable
+  if (validItems.length <= 5) {
+    const results = [];
+    for (const item of validItems) {
+      try {
+        const created = await createNotification(item);
+        if (created) results.push(created);
+      } catch (err) {
+        // Continue processing remaining
+      }
     }
+    return results;
   }
-  return results;
+
+  // For larger cohorts (e.g. workshop publication), use high-throughput bulk insert
+  const docs = validItems.map(item => ({
+    recipientId: item.recipientId,
+    type: item.type || 'SYSTEM',
+    title: item.title,
+    message: item.message,
+    relatedResourceType: item.relatedResourceType || 'SYSTEM',
+    relatedResourceId: item.relatedResourceId || null,
+    actionUrl: item.actionUrl || null,
+    dedupKey: item.dedupKey || undefined,
+    metadata: item.metadata || {},
+    isRead: false,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }));
+
+  try {
+    const inserted = await Notification.insertMany(docs, { ordered: false });
+    return inserted;
+  } catch (error) {
+    // When ordered: false, non-duplicate documents succeed and duplicates trigger code 11000
+    if (error.code === 11000 || error.writeErrors?.length > 0) {
+      const nonDuplicateErrors = (error.writeErrors || []).filter(e => e.code !== 11000);
+      if (nonDuplicateErrors.length > 0) {
+        console.error('Batch notification insertion encountered write errors:', nonDuplicateErrors.length);
+      }
+      return error.insertedDocs || [];
+    }
+    console.error('Failed to batch insert notifications:', error.message);
+    return [];
+  }
 }
 
 /**

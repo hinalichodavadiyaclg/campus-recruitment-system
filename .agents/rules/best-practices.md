@@ -25,3 +25,14 @@ All development work in this repository must adhere strictly to software enginee
   - When validating functionality, run targeted automated backend test files (e.g. `node --test tests/<test-name>.test.js`) rather than full frontend builds.
 - **Data Integrity & Zero Mock Seeding**:
   - If no data exists in the system, show clean, elegant empty states. **Never seed fake or mock data** into the database to fill UI elements.
+
+## 5. Server Uptime & Session Preservation
+- **Do not restart servers unnecessarily**: Keep the frontend and backend running while making code changes. Restart only when technically required, such as for backend changes that cannot be hot-reloaded or configuration changes requiring a process restart.
+- **Preserve authentication sessions**: Never change JWT secrets, session secrets, cookie settings, token expiration, authentication middleware, or session configuration as part of unrelated tasks.
+- **Never invalidate active sessions unnecessarily**: Do not clear session storage, delete session records, revoke tokens, or force logout users unless explicitly required and approved.
+- **Use stable configuration**: Load secrets and environment variables from existing configuration. Never generate new secrets on every startup or modify `.env` files without explicit approval.
+- **Use hot reload where available**: Make small, targeted code changes and let the existing development tooling reload affected modules. Avoid stopping and restarting all services for frontend-only changes.
+- **Protect running processes**: Before starting a server, check whether the correct instance is already running. Avoid duplicate backend or frontend processes and unnecessary port termination.
+- **Preserve database and session data**: Never reset databases, delete session collections, clear application data, or run destructive commands without explicit approval.
+- **Verify before restarting**: If a restart appears necessary, explain why, identify which service needs it, and restart only that service. Do not restart MongoDB or unrelated services for ordinary code changes.
+- **Test authentication safely**: After changes to authentication-related code, verify login, existing-session behavior, protected routes, and logout without changing production credentials or invalidating unrelated users' sessions.

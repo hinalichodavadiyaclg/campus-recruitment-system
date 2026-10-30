@@ -298,6 +298,31 @@ test('3. submitSessionAttendance - Unassigned trainer & Coordinator bypass rejec
       return true;
     }
   );
+
+  // Placement Head can record session attendance for all workshops even when not assigned as a trainer
+  const placementHeadAuth = {
+    userId: new mongoose.Types.ObjectId(),
+    roleId: ROLE_IDS.PLACEMENT_HEAD,
+    userType: 'PLACEMENT'
+  };
+
+  const headResult = await submitSessionAttendance(
+    {
+      workshopId: workshop._id,
+      sessionId: 'SES-01',
+      attendees: [
+        {
+          registrationId: registrationDoc._id,
+          studentId: studentDoc._id,
+          attendanceStatus: 'PRESENT'
+        }
+      ]
+    },
+    placementHeadAuth
+  );
+
+  assert.equal(headResult.success, true);
+  assert.equal(headResult.recordedCount, 1);
 });
 
 test('4. submitSessionAttendance - Attendance correction requires mandatory reason (>= 5 chars)', async () => {

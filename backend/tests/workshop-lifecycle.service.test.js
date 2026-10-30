@@ -19,6 +19,7 @@ import { WorkshopRegistration } from '../src/models/workshop_registration.model.
 import { WorkshopAuditLog } from '../src/models/workshop_audit_log.model.js';
 import { Department } from '../src/models/department.model.js';
 import { PlacementOfficer } from '../src/models/placement_officer.model.js';
+import { Company } from '../src/models/company.model.js';
 import { User } from '../src/models/user.model.js';
 import { ROLE_IDS } from '../src/utils/access-constants.js';
 import { connectDatabase, disconnectDatabase } from '../src/config/database.js';
@@ -124,16 +125,19 @@ test('1. createWorkshop - Successfully creates workshop with sequential WS-YYYY-
   const workshop = await createWorkshop(payload, coordinatorAuth);
 
   assert.ok(workshop._id);
-  assert.equal(workshop.approvalStatus, 'DRAFT');
-  assert.equal(workshop.isPublished, false);
+  assert.equal(workshop.approvalStatus, 'APPROVED');
+  assert.equal(workshop.isPublished, true);
   assert.equal(workshop.lifecycleStatus, 'SCHEDULED');
   assert.ok(workshop.workshopId.startsWith('WS-2026-'));
 
-  // Verify audit log creation
-  const audit = await WorkshopAuditLog.findOne({ entityId: workshop.workshopId });
-  assert.ok(audit);
-  assert.equal(audit.action, 'WORKSHOP_CREATED');
-  assert.equal(String(audit.changedBy), String(coordinatorAuth.userId));
+  // Verify audit log creation and auto-publication
+  const createAudit = await WorkshopAuditLog.findOne({ entityId: workshop.workshopId, action: 'WORKSHOP_CREATED' });
+  assert.ok(createAudit);
+  assert.equal(String(createAudit.changedBy), String(coordinatorAuth.userId));
+
+  const publishAudit = await WorkshopAuditLog.findOne({ entityId: workshop.workshopId, action: 'WORKSHOP_PUBLISHED' });
+  assert.ok(publishAudit);
+  assert.equal(String(publishAudit.changedBy), String(coordinatorAuth.userId));
 });
 
 test('2. createWorkshop - Authorization & Department Scoping Rejections', async () => {
@@ -221,7 +225,8 @@ test('3. Lifecycle Transitions - Submission, Approval, Rejection, and Publicatio
           startAt: futureStart,
           endAt: futureEnd
         }
-      ]
+      ],
+      approvalStatus: 'DRAFT'
     },
     coordinatorAuth
   );
@@ -308,9 +313,9 @@ test('4. Published Workshop Immutability - Rejects modification of structural fi
     coordinatorAuth
   );
 
-  await submitWorkshopForApproval(created._id, coordinatorAuth);
-  await approveWorkshop(created._id, {}, adminAuth);
-  await publishWorkshop(created._id, coordinatorAuth);
+  // Workshop created by coordinator is automatically approved and published
+  assert.equal(created.approvalStatus, 'APPROVED');
+  assert.equal(created.isPublished, true);
 
   // Attempting to change ownershipType must be rejected
   await assert.rejects(
@@ -391,19 +396,24 @@ test('5. cancelWorkshop - Cascades cancellation to active registrations and clea
     }
   ]);
 
-  // Cancel workshop
-  await cancelWorkshop(
+  // Workshop is preserved with CANCELLED lifecycle status and active registrations are cancelled
+  const cancelResult = await cancelWorkshop(
     created._id,
     { reason: 'Trainer unavailable due to unforeseen emergency.' },
     adminAuth
   );
 
-  // Workshop lifecycleStatus is CANCELLED and isPublished is false
+  assert.equal(cancelResult.lifecycleStatus, 'CANCELLED');
+  assert.equal(cancelResult.isPublished, false);
+
+  // Workshop document is preserved in database with CANCELLED lifecycle status
   const cancelledWorkshop = await Workshop.findById(created._id);
+  assert.ok(cancelledWorkshop);
   assert.equal(cancelledWorkshop.lifecycleStatus, 'CANCELLED');
   assert.equal(cancelledWorkshop.isPublished, false);
+  assert.equal(cancelledWorkshop.cancellationReason, 'Trainer unavailable due to unforeseen emergency.');
 
-  // Attempting to republish cancelled workshop must be rejected
+  // Attempting to republish cancelled workshop must be rejected with 400 CANNOT_PUBLISH_CANCELLED
   await assert.rejects(
     async () => publishWorkshop(created._id, coordinatorAuth),
     (err) => {
@@ -454,7 +464,8 @@ test('6. deleteWorkshop - Hard deletion rules and audit preservation', async () 
           startAt: futureStart,
           endAt: futureEnd
         }
-      ]
+      ],
+      approvalStatus: 'DRAFT'
     },
     coordinatorAuth
   );
@@ -500,7 +511,8 @@ test('6. deleteWorkshop - Hard deletion rules and audit preservation', async () 
           startAt: futureStart,
           endAt: futureEnd
         }
-      ]
+      ],
+      approvalStatus: 'DRAFT'
     },
     coordinatorAuth
   );
@@ -552,7 +564,8 @@ test('7. Scoped Reads & Listing - Access controls for Students and Coordinators'
           startAt: futureStart,
           endAt: futureEnd
         }
-      ]
+      ],
+      approvalStatus: 'DRAFT'
     },
     coordinatorAuth
   );
@@ -601,3 +614,117 @@ test('7. Scoped Reads & Listing - Access controls for Students and Coordinators'
     }
   );
 });
+
+test('8. Placement Cell and Head workshops auto-publish without approval, while Company workshops require approval (start in DRAFT)', async () => {
+  const futureStart = new Date('2026-12-25T10:00:00Z');
+  const futureEnd = new Date('2026-12-25T13:00:00Z');
+
+  // 1. Placement Cell / Head creates Central workshop -> auto-approved and auto-published
+  const cellWs = await createWorkshop(
+    {
+      title: 'Placement Cell Annual Career Summit',
+      description: 'Institutional career training created by central placement cell.',
+      category: 'CAREER_PREP',
+      mode: 'ONLINE',
+      meetingLink: 'https://meet.google.com/placement-cell',
+      ownershipType: 'CENTRAL_PLACEMENT_CELL',
+      startAt: futureStart,
+      endAt: futureEnd,
+      registrationDeadline: new Date('2026-12-24T18:00:00Z'),
+      maxParticipants: 200,
+      sessions: [
+        {
+          sessionId: 'SES-01',
+          sessionNumber: 1,
+          title: 'Orientation',
+          startAt: futureStart,
+          endAt: futureEnd
+        }
+      ]
+    },
+    adminAuth
+  );
+
+  assert.equal(cellWs.approvalStatus, 'APPROVED');
+  assert.equal(cellWs.isPublished, true);
+  assert.equal(cellWs.lifecycleStatus, 'SCHEDULED');
+
+  const cellPublishAudit = await WorkshopAuditLog.findOne({
+    entityId: cellWs.workshopId,
+    action: 'WORKSHOP_PUBLISHED'
+  });
+  assert.ok(cellPublishAudit);
+
+  // 2. Company creates workshop -> starts in DRAFT and isPublished is false (strictly requires approval)
+  const companyDoc = await Company.create({
+    companyId: 'COMP-TEST-AUTO',
+    companyName: 'Tech Innovators Corp',
+    industryType: 'IT',
+    hrRecruiterName: 'John Doe',
+    email: 'john@techinnovators.com',
+    yearEstablished: 2018
+  });
+
+  const companyUserId = new mongoose.Types.ObjectId();
+  await User.create({
+    _id: companyUserId,
+    email: 'john@techinnovators.com',
+    passwordHash: 'hashed',
+    userType: 'COMPANY',
+    roleId: ROLE_IDS.COMPANY,
+    companyId: companyDoc._id,
+    accountStatus: 'ACTIVE'
+  });
+
+  const companyAuth = {
+    userId: companyUserId,
+    roleId: ROLE_IDS.COMPANY,
+    userType: 'COMPANY',
+    companyId: companyDoc._id
+  };
+
+  const companyWs = await createWorkshop(
+    {
+      title: 'Company Innovation Workshop',
+      description: 'Technical masterclass proposed by external corporate partner.',
+      category: 'TECHNICAL',
+      mode: 'ONLINE',
+      meetingLink: 'https://meet.google.com/innovators',
+      startAt: futureStart,
+      endAt: futureEnd,
+      registrationDeadline: new Date('2026-12-24T18:00:00Z'),
+      maxParticipants: 50,
+      trainers: [
+        {
+          trainerType: 'COMPANY',
+          companyId: String(companyDoc._id),
+          name: 'Chief Scientist',
+          designation: 'VP of AI'
+        }
+      ],
+      sessions: [
+        {
+          sessionId: 'SES-01',
+          sessionNumber: 1,
+          title: 'AI in Enterprise',
+          startAt: futureStart,
+          endAt: futureEnd
+        }
+      ]
+    },
+    companyAuth
+  );
+
+  // Company workshop strictly requires approval
+  assert.equal(companyWs.approvalStatus, 'DRAFT');
+  assert.equal(companyWs.isPublished, false);
+  assert.equal(companyWs.lifecycleStatus, 'SCHEDULED');
+
+  // Verify no auto-publish audit log for company workshop
+  const companyPublishAudit = await WorkshopAuditLog.findOne({
+    entityId: companyWs.workshopId,
+    action: 'WORKSHOP_PUBLISHED'
+  });
+  assert.equal(companyPublishAudit, null);
+});
+

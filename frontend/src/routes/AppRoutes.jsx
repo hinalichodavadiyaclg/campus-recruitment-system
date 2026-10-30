@@ -56,6 +56,7 @@ import { NotFoundModulePage } from '../pages/common/NotFoundModulePage.jsx';
 import { WorkshopsPage } from '../pages/workshops/WorkshopsPage.jsx';
 import { WorkshopDetailsPage } from '../pages/workshops/WorkshopDetailsPage.jsx';
 import { PublicCertificateVerifyPage } from '../pages/workshops/PublicCertificateVerifyPage.jsx';
+import { StudentMyCertificatesPage } from '../pages/workshops/StudentMyCertificatesPage.jsx';
 
 const PUBLIC_ROUTES = [
   '/login',
@@ -268,6 +269,10 @@ export function AppRoutes() {
 
   if (parts[0] === 'placements') {
     return <NotFoundModulePage title="Placements" path="/placements" />;
+  }
+
+  if (parts[0] === 'certificates' || parts[0] === 'my-certificates') {
+    return <StudentMyCertificatesPage />;
   }
 
   if (parts[0] === 'training-workshops' || parts[0] === 'workshops' || parts[0] === 'training') {

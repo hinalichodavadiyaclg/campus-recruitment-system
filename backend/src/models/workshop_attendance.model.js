@@ -4,8 +4,7 @@ const { Schema, model } = mongoose;
 
 export const ATTENDANCE_STATUSES = Object.freeze([
   'PRESENT',
-  'ABSENT',
-  'EXCUSED'
+  'ABSENT'
 ]);
 
 const workshopAttendanceSchema = new Schema(

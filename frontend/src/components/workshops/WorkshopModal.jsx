@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal.jsx';
 import { departmentService } from '../../services/department.service.js';
 import { courseService } from '../../services/course.service.js';
+import { companyService } from '../../services/company.service.js';
+import { workshopService } from '../../services/workshop.service.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { PlusIcon, TrashIcon } from '../common/Icons.jsx';
 import {
@@ -11,7 +13,9 @@ import {
   getInitialWorkshopFormData,
   getTabForErrorKey,
   validateWorkshopForm,
-  buildTargetAudiencePayload
+  buildTargetAudiencePayload,
+  canUserEditWorkshop,
+  canUserReviewWorkshopEdit
 } from './workshopValidation.js';
 
 // Re-export constants for external consumers
@@ -22,7 +26,9 @@ export {
   getInitialWorkshopFormData,
   getTabForErrorKey,
   validateWorkshopForm,
-  buildTargetAudiencePayload
+  buildTargetAudiencePayload,
+  canUserEditWorkshop,
+  canUserReviewWorkshopEdit
 };
 
 export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isProcessing }) {
@@ -31,14 +37,18 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
   const isPublished = Boolean(workshop?.isPublished);
 
   const isCoordinator = role?.id === 'ROLE_PLACEMENT_COORDINATOR' || user?.roleId === 'ROLE_PLACEMENT_COORDINATOR';
+  const isCompany = user?.userType === 'COMPANY' || role?.id === 'ROLE_COMPANY' || user?.roleId === 'ROLE_COMPANY';
 
   // Form State
   const [activeTab, setActiveTab] = useState('basic');
   const [formData, setFormData] = useState(() => getInitialWorkshopFormData());
   const [departments, setDepartments] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [templates, setTemplates] = useState([]);
   const [fieldErrors, setFieldErrors] = useState({});
   const [serverError, setServerError] = useState('');
+  const [submitAction, setSubmitAction] = useState('submit');
 
   // Helper to resolve coordinator department ID from user object or department list
   const getCoordinatorDeptId = (deptList = departments) => {
@@ -107,6 +117,46 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
         .then((res) => setCourses(res.items || []))
         .catch(() => {});
 
+      // Load company records for Company Trainer selection
+      if (isCompany) {
+        companyService.getMyProfile()
+          .then((comp) => {
+            if (comp && (comp._id || comp.companyId)) {
+              setCompanies([comp]);
+            } else if (user?.companyId) {
+              setCompanies([{ _id: String(user.companyId), companyName: user.companyName || 'My Company' }]);
+            }
+          })
+          .catch(() => {
+            if (user?.companyId) {
+              setCompanies([{ _id: String(user.companyId), companyName: user.companyName || 'My Company' }]);
+            }
+          });
+      } else {
+        companyService.listCompanies({ limit: 100 })
+          .then((res) => {
+            const list = res.items || [];
+            if (workshop && Array.isArray(workshop.trainers)) {
+              workshop.trainers.forEach((t) => {
+                if (t.companyId && typeof t.companyId === 'object' && t.companyId._id) {
+                  if (!list.some(c => String(c._id) === String(t.companyId._id))) {
+                    list.push(t.companyId);
+                  }
+                }
+              });
+            }
+            setCompanies(list);
+          })
+          .catch(() => {});
+      }
+
+      // Fetch certificate templates
+      workshopService.getTemplates()
+        .then((res) => {
+          setTemplates(res?.data || res || []);
+        })
+        .catch(() => {});
+
       if (workshop) {
         // Resolve targeting scope from existing workshop
         let targetingScope = 'ALL_DEPARTMENTS';
@@ -155,7 +205,18 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
           endAt: toLocalInputValue(workshop.endAt),
           registrationOpensAt: toLocalInputValue(workshop.registrationOpensAt),
           registrationDeadline: toLocalInputValue(workshop.registrationDeadline),
-          trainers: Array.isArray(workshop.trainers) ? workshop.trainers.map(t => ({ ...t })) : [],
+          trainers: Array.isArray(workshop.trainers) ? workshop.trainers.map(t => ({
+            trainerType: t.trainerType || 'EXTERNAL',
+            name: t.name || '',
+            designation: t.designation || '',
+            organization: t.organization || '',
+            companyId: typeof t.companyId === 'object' && t.companyId?._id
+              ? String(t.companyId._id)
+              : (t.companyId ? String(t.companyId) : ''),
+            userId: typeof t.userId === 'object' && t.userId?._id
+              ? String(t.userId._id)
+              : (t.userId ? String(t.userId) : '')
+          })) : [],
           targetAudience: workshop.targetAudience ? {
             isAllDepartments: Boolean(workshop.targetAudience.isAllDepartments),
             departmentRules: Array.isArray(workshop.targetAudience.departmentRules)
@@ -172,7 +233,8 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                 endAt: toLocalInputValue(s.endAt),
                 trainerIds: s.trainerIds || []
               }))
-            : []
+            : [],
+          certificateTemplateId: workshop.certificateTemplateId?._id || workshop.certificateTemplateId || ''
         });
       } else {
         // Strict directive: No default values filled in advance
@@ -464,16 +526,33 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
 
   // Trainer Management
   const addTrainer = () => {
+    let defaultType = 'EXTERNAL';
+    let defaultCompanyId = '';
+    let defaultUserId = undefined;
+    let defaultOrg = '';
+
+    if (isCompany) {
+      defaultType = 'COMPANY';
+      const defaultComp = (companies && companies.length > 0) ? companies[0] : null;
+      defaultCompanyId = defaultComp ? String(defaultComp._id) : (user?.companyId ? String(user.companyId) : '');
+      defaultOrg = defaultComp?.companyName || '';
+    } else if (isCoordinator) {
+      defaultType = 'PLACEMENT_COORDINATOR';
+      defaultUserId = user?._id || user?.userId;
+      defaultOrg = 'VVWU Central Placement Cell';
+    }
+
     setFormData((prev) => ({
       ...prev,
       trainers: [
         ...prev.trainers,
         {
-          trainerType: isCoordinator ? 'PLACEMENT_COORDINATOR' : 'EXTERNAL',
+          trainerType: defaultType,
           name: '',
           designation: '',
-          organization: '',
-          userId: isCoordinator ? (user?._id || user?.userId) : undefined
+          organization: defaultOrg,
+          companyId: defaultCompanyId,
+          userId: defaultUserId
         }
       ]
     }));
@@ -488,6 +567,8 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
       const next = { ...prev };
       delete next[`trainer_${idx}_name`];
       delete next[`trainer_${idx}_type`];
+      delete next[`trainer_${idx}_companyId`];
+      delete next[`trainer_${idx}_userId`];
       delete next[`trainer_${idx}_designation`];
       delete next[`trainer_${idx}_organization`];
       return next;
@@ -497,16 +578,59 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
   const updateTrainer = (idx, field, value) => {
     setFormData((prev) => {
       const copy = [...prev.trainers];
-      copy[idx] = { ...copy[idx], [field]: value };
-      if (field === 'trainerType' && (value === 'PLACEMENT_COORDINATOR' || value === 'PLACEMENT_HEAD')) {
-        copy[idx].userId = user?._id || user?.userId;
-        copy[idx].companyId = undefined;
+      const current = { ...copy[idx], [field]: value };
+
+      if (field === 'trainerType') {
+        if (value === 'COMPANY') {
+          current.userId = undefined;
+          delete current.userId;
+          if (!current.companyId) {
+            const defaultComp = (companies && companies.length > 0) ? companies[0] : null;
+            if (isCompany && user?.companyId) {
+              current.companyId = String(user.companyId);
+            } else if (defaultComp && companies.length === 1) {
+              current.companyId = String(defaultComp._id);
+            }
+          }
+          if (current.companyId) {
+            const matched = (companies || []).find(c => String(c._id) === String(current.companyId));
+            if (matched) current.organization = matched.companyName;
+          }
+        } else if (value === 'PLACEMENT_COORDINATOR' || value === 'PLACEMENT_HEAD') {
+          current.companyId = undefined;
+          delete current.companyId;
+          current.userId = current.userId || user?._id || user?.userId;
+          if (!current.organization) {
+            current.organization = 'VVWU Central Placement Cell';
+          }
+        } else if (value === 'EXTERNAL') {
+          current.userId = undefined;
+          delete current.userId;
+          current.companyId = undefined;
+          delete current.companyId;
+        }
       }
+
+      if (field === 'companyId') {
+        current.companyId = value;
+        const matched = (companies || []).find(c => String(c._id) === String(value));
+        if (matched) {
+          current.organization = matched.companyName;
+        }
+      }
+
+      copy[idx] = current;
       return { ...prev, trainers: copy };
     });
+
     setFieldErrors((prev) => {
       const next = { ...prev };
       delete next[`trainer_${idx}_${field}`];
+      if (field === 'trainerType') {
+        delete next[`trainer_${idx}_companyId`];
+        delete next[`trainer_${idx}_userId`];
+        delete next[`trainer_${idx}_organization`];
+      }
       return next;
     });
   };
@@ -571,8 +695,9 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
   };
 
   // Validation & Submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e, actionType = submitAction) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setSubmitAction(actionType);
     setServerError('');
 
     const errors = validateWorkshopForm(formData, { isCoordinator });
@@ -596,23 +721,51 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
       registrationDeadline: toIsoUtc(formData.registrationDeadline)
     };
 
+    if (actionType === 'draft') {
+      payload.approvalStatus = 'DRAFT';
+    }
+
     if (formData.registrationOpensAt) {
       payload.registrationOpensAt = toIsoUtc(formData.registrationOpensAt);
     }
     if (formData.venue) payload.venue = formData.venue.trim();
     if (formData.meetingLink) payload.meetingLink = formData.meetingLink.trim();
     if (formData.bannerUrl) payload.bannerUrl = formData.bannerUrl.trim();
+    if (formData.certificateTemplateId) {
+      payload.certificateTemplateId = formData.certificateTemplateId;
+    } else {
+      payload.certificateTemplateId = null;
+    }
 
     // Map trainers
     payload.trainers = formData.trainers.map(t => {
       const clean = {
         trainerType: t.trainerType,
-        name: t.name.trim(),
-        designation: t.designation?.trim() || undefined,
-        organization: t.organization?.trim() || undefined
+        name: (t.name || '').trim()
       };
-      if (t.userId) clean.userId = t.userId;
-      if (t.companyId) clean.companyId = t.companyId;
+      if (t.designation && t.designation.trim()) {
+        clean.designation = t.designation.trim();
+      }
+      if (t.organization && t.organization.trim()) {
+        clean.organization = t.organization.trim();
+      }
+
+      if (t.trainerType === 'COMPANY') {
+        const compId = typeof t.companyId === 'object' && t.companyId?._id ? String(t.companyId._id) : String(t.companyId || '').trim();
+        if (compId) {
+          clean.companyId = compId;
+        }
+        // STRICT: Never send userId for COMPANY
+      } else if (t.trainerType === 'PLACEMENT_COORDINATOR' || t.trainerType === 'PLACEMENT_HEAD') {
+        const uid = typeof t.userId === 'object' && t.userId?._id ? String(t.userId._id) : String(t.userId || user?._id || user?.userId || '').trim();
+        if (uid) {
+          clean.userId = uid;
+        }
+        // STRICT: Never send companyId for PLACEMENT_*
+      } else if (t.trainerType === 'EXTERNAL') {
+        // STRICT: Never send userId or companyId for EXTERNAL
+      }
+
       return clean;
     });
 
@@ -654,19 +807,19 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
       delete payload.departmentId;
     }
 
-    // Handle published workshop immutability on edit
+    // Freeze structural ownership and targeting fields on published workshops
     if (isEdit && isPublished) {
-      delete payload.mode;
       delete payload.ownershipType;
       delete payload.departmentId;
-      delete payload.startAt;
-      delete payload.endAt;
-      delete payload.sessions;
       delete payload.targetAudience;
     }
 
+    if (isEdit && workshop?.updatedAt) {
+      payload.expectedUpdatedAt = workshop.updatedAt;
+    }
+
     try {
-      await onSubmit(payload);
+      await onSubmit(payload, actionType);
     } catch (err) {
       const detailedMessages = [];
       const mappedErrors = {};
@@ -681,7 +834,18 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                 detailedMessages.push(m);
               }
             });
-            const msg = msgList[0] || 'Invalid field';
+            let msg = msgList[0] || 'Invalid field';
+
+            // User-friendly mappings for trainer validation errors
+            if (msg.includes('companyId is required when trainerType is COMPANY')) {
+              msg = 'Please select a company for this company trainer.';
+            } else if (msg.includes('userId must be absent when trainerType is COMPANY')) {
+              msg = 'Company trainer cannot have internal user credentials.';
+            } else if (msg.includes('userId is required when trainerType is')) {
+              msg = 'Internal placement staff account is required for this trainer.';
+            } else if (msg.includes('companyId must be absent when trainerType is')) {
+              msg = 'Company cannot be assigned to this trainer type.';
+            }
 
             if (field === 'body' || field === 'formErrors') {
               msgList.forEach((m) => {
@@ -732,16 +896,15 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
         }
       }
 
-      if (detailedMessages.length > 0) {
-        setServerError(`${err.message || 'Validation error'}: ${detailedMessages.join(' | ')}`);
-      } else {
-        setServerError(err.message || 'Failed to save workshop. Please review fields.');
-      }
-
       if (Object.keys(mappedErrors).length > 0) {
         setFieldErrors(mappedErrors);
         const firstTab = Object.keys(mappedErrors).map(getTabForErrorKey).find(Boolean);
         if (firstTab) setActiveTab(firstTab);
+        setServerError('Please correct the highlighted errors in the form before submitting.');
+      } else if (detailedMessages.length > 0) {
+        setServerError(detailedMessages.join(' | '));
+      } else {
+        setServerError(err.message || 'Failed to save workshop. Please review fields.');
       }
     }
   };
@@ -765,12 +928,7 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
       title={isEdit ? `Edit Workshop (${workshop?.workshopId || 'Draft'})` : 'Create New Workshop'}
       maxWidth="860px"
     >
-      <form onSubmit={handleSubmit} style={{ marginTop: '12px' }} noValidate>
-        {isPublished && (
-          <div className="notice warn" style={{ marginBottom: '14px', fontSize: '0.85rem' }}>
-            <strong>Published Workshop:</strong> Mode, schedule boundaries, department, targeting, and sessions are locked by backend immutability rules. You may update title, description, max participants, and trainers.
-          </div>
-        )}
+      <form onSubmit={(e) => handleSubmit(e, submitAction)} style={{ marginTop: '12px' }} noValidate>
 
         {serverError && (
           <div className="notice error" style={{ marginBottom: '14px', fontSize: '0.85rem' }}>
@@ -922,7 +1080,6 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                   type="datetime-local"
                   name="startAt"
                   value={formData.startAt}
-                  disabled={isPublished}
                   onChange={handleChange}
                   style={{ borderColor: fieldErrors.startAt ? 'var(--red, #e53e3e)' : undefined }}
                 />
@@ -940,7 +1097,6 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                   type="datetime-local"
                   name="endAt"
                   value={formData.endAt}
-                  disabled={isPublished}
                   onChange={handleChange}
                   style={{ borderColor: fieldErrors.endAt ? 'var(--red, #e53e3e)' : undefined }}
                 />
@@ -997,7 +1153,6 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                 id="ws-mode"
                 name="mode"
                 value={formData.mode}
-                disabled={isPublished}
                 onChange={handleChange}
                 style={{ borderColor: fieldErrors.mode ? 'var(--red, #e53e3e)' : undefined }}
               >
@@ -1067,6 +1222,23 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                 </span>
               )}
             </div>
+
+            <div className="field">
+              <label htmlFor="ws-certificate-template">Certificate Design Template</label>
+              <select
+                id="ws-certificate-template"
+                name="certificateTemplateId"
+                value={formData.certificateTemplateId || ''}
+                onChange={handleChange}
+              >
+                <option value="">Default Institutional Certificate (VVWU)</option>
+                {templates.map((t) => (
+                  <option key={t._id} value={t._id}>
+                    {t.name} (v{t.version || 1})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
 
@@ -1082,7 +1254,7 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
             {formData.trainers.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '32px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px dashed var(--line)' }}>
                 <p style={{ margin: '0 0 12px 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-                  No trainers added.
+                  No trainers added yet.
                 </p>
                 <button type="button" className="secondary" onClick={addTrainer}>
                   <PlusIcon size={14} /> Add Trainer
@@ -1093,28 +1265,35 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                 <div
                   key={idx}
                   style={{
-                    padding: '14px',
+                    padding: '16px',
                     background: '#f8fafc',
                     border: '1px solid var(--line)',
                     borderRadius: '10px',
-                    marginBottom: '10px'
+                    marginBottom: '14px'
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <strong style={{ fontSize: '0.85rem' }}>Trainer #{idx + 1}</strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <strong style={{ fontSize: '0.88rem', color: 'var(--dark)' }}>Trainer #{idx + 1}</strong>
+                      <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', background: '#e2e8f0', color: '#475569', fontWeight: 600 }}>
+                        {t.trainerType === 'COMPANY' ? 'Company Trainer' : t.trainerType === 'EXTERNAL' ? 'External Industry Expert' : 'Placement Staff'}
+                      </span>
+                    </div>
                     <button
                       type="button"
                       className="link-button"
                       onClick={() => removeTrainer(idx)}
-                      style={{ color: 'var(--red)' }}
+                      style={{ color: 'var(--red)', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.82rem' }}
                     >
                       <TrashIcon size={14} /> Remove
                     </button>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                     <div className="field">
-                      <label>Trainer Type <span style={{ color: 'var(--red)' }}>*</span></label>
+                      <label htmlFor={`ws-trainer-${idx}-type`}>Trainer Type <span style={{ color: 'var(--red)' }}>*</span></label>
                       <select
+                        id={`ws-trainer-${idx}-type`}
                         value={t.trainerType}
                         onChange={(e) => updateTrainer(idx, 'trainerType', e.target.value)}
                         style={{ borderColor: fieldErrors[`trainer_${idx}_type`] ? 'var(--red, #e53e3e)' : undefined }}
@@ -1127,11 +1306,38 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                         </span>
                       )}
                     </div>
+
+                    {/* COMPANY TRAINER: Company selector dropdown populated from company records */}
+                    {t.trainerType === 'COMPANY' && (
+                      <div className="field">
+                        <label htmlFor={`ws-trainer-${idx}-company`}>Company Partner <span style={{ color: 'var(--red)' }}>*</span></label>
+                        <select
+                          id={`ws-trainer-${idx}-company`}
+                          value={t.companyId || ''}
+                          onChange={(e) => updateTrainer(idx, 'companyId', e.target.value)}
+                          style={{ borderColor: fieldErrors[`trainer_${idx}_companyId`] ? 'var(--red, #e53e3e)' : undefined }}
+                        >
+                          <option value="">-- Select Company --</option>
+                          {companies.map(c => (
+                            <option key={c._id} value={c._id}>
+                              {c.companyName} ({c.companyId || 'Registered'})
+                            </option>
+                          ))}
+                        </select>
+                        {fieldErrors[`trainer_${idx}_companyId`] && (
+                          <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
+                            {fieldErrors[`trainer_${idx}_companyId`]}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     <div className="field">
-                      <label>Full Name <span style={{ color: 'var(--red)' }}>*</span></label>
+                      <label htmlFor={`ws-trainer-${idx}-name`}>Full Name <span style={{ color: 'var(--red)' }}>*</span></label>
                       <input
-                        placeholder="Trainer Name"
-                        value={t.name}
+                        id={`ws-trainer-${idx}-name`}
+                        placeholder="e.g. Jiya Patel"
+                        value={t.name || ''}
                         onChange={(e) => updateTrainer(idx, 'name', e.target.value)}
                         style={{ borderColor: fieldErrors[`trainer_${idx}_name`] ? 'var(--red, #e53e3e)' : undefined }}
                       />
@@ -1141,10 +1347,12 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                         </span>
                       )}
                     </div>
+
                     <div className="field">
-                      <label>Designation</label>
+                      <label htmlFor={`ws-trainer-${idx}-designation`}>Designation</label>
                       <input
-                        placeholder="e.g. Lead Engineer"
+                        id={`ws-trainer-${idx}-designation`}
+                        placeholder={t.trainerType === 'COMPANY' ? 'e.g. HR Manager / Senior Recruiter' : 'e.g. Principal Cloud Architect'}
                         value={t.designation || ''}
                         onChange={(e) => updateTrainer(idx, 'designation', e.target.value)}
                         style={{ borderColor: fieldErrors[`trainer_${idx}_designation`] ? 'var(--red, #e53e3e)' : undefined }}
@@ -1155,20 +1363,44 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                         </span>
                       )}
                     </div>
-                    <div className="field">
-                      <label>Organization</label>
-                      <input
-                        placeholder="e.g. TechCorp / VVWU"
-                        value={t.organization || ''}
-                        onChange={(e) => updateTrainer(idx, 'organization', e.target.value)}
-                        style={{ borderColor: fieldErrors[`trainer_${idx}_organization`] ? 'var(--red, #e53e3e)' : undefined }}
-                      />
-                      {fieldErrors[`trainer_${idx}_organization`] && (
-                        <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
-                          {fieldErrors[`trainer_${idx}_organization`]}
-                        </span>
-                      )}
-                    </div>
+
+                    {/* EXTERNAL EXPERT: Organization text input */}
+                    {t.trainerType === 'EXTERNAL' && (
+                      <div className="field">
+                        <label htmlFor={`ws-trainer-${idx}-org`}>Organization / Affiliation <span style={{ color: 'var(--red)' }}>*</span></label>
+                        <input
+                          id={`ws-trainer-${idx}-org`}
+                          placeholder="e.g. Google India / Independent Consultant"
+                          value={t.organization || ''}
+                          onChange={(e) => updateTrainer(idx, 'organization', e.target.value)}
+                          style={{ borderColor: fieldErrors[`trainer_${idx}_organization`] ? 'var(--red, #e53e3e)' : undefined }}
+                        />
+                        {fieldErrors[`trainer_${idx}_organization`] && (
+                          <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
+                            {fieldErrors[`trainer_${idx}_organization`]}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* PLACEMENT STAFF: Department / Cell text input */}
+                    {(t.trainerType === 'PLACEMENT_COORDINATOR' || t.trainerType === 'PLACEMENT_HEAD') && (
+                      <div className="field">
+                        <label htmlFor={`ws-trainer-${idx}-dept`}>Department / Cell</label>
+                        <input
+                          id={`ws-trainer-${idx}-dept`}
+                          placeholder="e.g. VVWU Central Placement Cell"
+                          value={t.organization || ''}
+                          onChange={(e) => updateTrainer(idx, 'organization', e.target.value)}
+                          style={{ borderColor: fieldErrors[`trainer_${idx}_organization`] ? 'var(--red, #e53e3e)' : undefined }}
+                        />
+                        {fieldErrors[`trainer_${idx}_organization`] && (
+                          <span className="field-error" style={{ color: 'var(--red, #e53e3e)', fontSize: '0.82rem', marginTop: '4px', display: 'block' }}>
+                            {fieldErrors[`trainer_${idx}_organization`]}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
@@ -1294,7 +1526,7 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                                   }}
                                 />
                                 <span style={{ wordBreak: 'break-word' }}>
-                                  {course.name} ({course.code})
+                                  {course.name}
                                 </span>
                               </label>
                             ))
@@ -1330,11 +1562,9 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
         {activeTab === 'sessions' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '14px' }}>
-              {!isPublished && (
-                <button className="secondary" type="button" onClick={addSession} style={{ padding: '6px 12px' }}>
-                  <PlusIcon size={14} /> Add Session
-                </button>
-              )}
+              <button className="secondary" type="button" onClick={addSession} style={{ padding: '6px 12px' }}>
+                <PlusIcon size={14} /> Add Session
+              </button>
             </div>
 
             {fieldErrors.sessions && (
@@ -1348,11 +1578,9 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                 <p style={{ margin: '0 0 12px 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
                   No sessions added.
                 </p>
-                {!isPublished && (
-                  <button type="button" className="secondary" onClick={addSession}>
-                    <PlusIcon size={14} /> Add First Session
-                  </button>
-                )}
+                <button type="button" className="secondary" onClick={addSession}>
+                  <PlusIcon size={14} /> Add First Session
+                </button>
               </div>
             ) : (
               formData.sessions.map((s, idx) => (
@@ -1370,16 +1598,14 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                     <strong style={{ fontSize: '0.88rem', color: 'var(--ink)' }}>
                       Session #{s.sessionNumber || idx + 1}: {s.sessionId || `SES-${String(idx + 1).padStart(2, '0')}`}
                     </strong>
-                    {!isPublished && (
-                      <button
-                        type="button"
-                        className="link-button"
-                        onClick={() => removeSession(idx)}
-                        style={{ color: 'var(--red)' }}
-                      >
-                        <TrashIcon size={14} /> Delete
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => removeSession(idx)}
+                      style={{ color: 'var(--red)' }}
+                    >
+                      <TrashIcon size={14} /> Delete
+                    </button>
                   </div>
 
                   <div className="form-grid">
@@ -1404,7 +1630,6 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                         <input
                           type="datetime-local"
                           value={s.startAt}
-                          disabled={isPublished}
                           onChange={(e) => updateSession(idx, 'startAt', e.target.value)}
                           style={{ borderColor: fieldErrors[`session_${idx}_startAt`] ? 'var(--red, #e53e3e)' : undefined }}
                         />
@@ -1420,7 +1645,6 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
                         <input
                           type="datetime-local"
                           value={s.endAt}
-                          disabled={isPublished}
                           onChange={(e) => updateSession(idx, 'endAt', e.target.value)}
                           style={{ borderColor: fieldErrors[`session_${idx}_endAt`] ? 'var(--red, #e53e3e)' : undefined }}
                         />
@@ -1450,13 +1674,53 @@ export function WorkshopModal({ isOpen, workshop = null, onClose, onSubmit, isPr
         )}
 
         {/* Modal Bottom Actions */}
-        <div className="modal-actions" style={{ marginTop: '24px', borderTop: '1px solid var(--line)', paddingTop: '16px' }}>
+        <div className="modal-actions" style={{ marginTop: '24px', borderTop: '1px solid var(--line)', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
           <button className="ghost" type="button" onClick={onClose} disabled={isProcessing}>
             Cancel
           </button>
-          <button className="primary" type="submit" disabled={isProcessing}>
-            {isProcessing ? 'Saving Workshop…' : (isEdit ? 'Save Changes' : 'Create Workshop Draft')}
-          </button>
+          {!isPublished ? (
+            <>
+              <button
+                className="secondary"
+                type="button"
+                id="btn-workshop-save-draft"
+                disabled={isProcessing}
+                onClick={(e) => {
+                  setSubmitAction('draft');
+                  handleSubmit(e, 'draft');
+                }}
+              >
+                {isProcessing && submitAction === 'draft' ? 'Saving Draft…' : 'Save Draft'}
+              </button>
+              <button
+                className="primary"
+                type="button"
+                id="btn-workshop-submit"
+                disabled={isProcessing}
+                onClick={(e) => {
+                  setSubmitAction('submit');
+                  handleSubmit(e, 'submit');
+                }}
+              >
+                {isProcessing && submitAction === 'submit' ? 'Submitting…' : 'Submit'}
+              </button>
+            </>
+          ) : (
+            <button
+              className="primary"
+              type="button"
+              id="btn-workshop-save-changes"
+              disabled={isProcessing}
+              onClick={(e) => {
+                setSubmitAction('submit');
+                handleSubmit(e, 'submit');
+              }}
+            >
+              {isProcessing
+                ? (isCompany && (workshop?.approvalStatus === 'APPROVED' || workshop?.isPublished) ? 'Submitting Changes…' : 'Saving Changes…')
+                : (isCompany && (workshop?.approvalStatus === 'APPROVED' || workshop?.isPublished) ? 'Submit Changes for Approval' : 'Save Changes')}
+            </button>
+          )}
         </div>
       </form>
     </Modal>

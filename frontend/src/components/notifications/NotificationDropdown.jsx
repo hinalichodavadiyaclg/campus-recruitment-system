@@ -8,7 +8,8 @@ import {
   AlertCircleIcon,
   CheckCircleIcon,
   CheckIcon,
-  ClockIcon
+  ClockIcon,
+  GraduationCapIcon
 } from '../common/Icons.jsx';
 import './NotificationDropdown.css';
 
@@ -149,6 +150,15 @@ export function NotificationDropdown() {
         return (
           <div className="notif-icon-badge notif-icon-danger">
             <AlertCircleIcon size={16} />
+          </div>
+        );
+      case 'WORKSHOP_SUBMITTED_FOR_APPROVAL':
+      case 'WORKSHOP_EDIT_SUBMITTED':
+      case 'WORKSHOP_PUBLISHED':
+      case 'WORKSHOP_UPDATED':
+        return (
+          <div className="notif-icon-badge notif-icon-workshop">
+            <GraduationCapIcon size={16} />
           </div>
         );
       default:

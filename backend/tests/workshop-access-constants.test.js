@@ -172,10 +172,31 @@ test('Test Suite 4: Least-Privilege Role Authorization Matrix', async () => {
   // 2. Company Role
   const companyPerms = roleMap.get(ROLE_IDS.COMPANY);
   assert.ok(companyPerms, 'ROLE_COMPANY must exist');
-  for (const permId of EXPECTED_WORKSHOP_PERMISSIONS) {
-    assert.equal(companyPerms.has(permId), false, `Company recruiter must NOT hold workshop permission: ${permId}`);
+  const expectedCompanyWorkshop = [
+    PERMISSION_IDS.WORKSHOP_READ,
+    PERMISSION_IDS.WORKSHOP_CREATE,
+    PERMISSION_IDS.WORKSHOP_UPDATE,
+    PERMISSION_IDS.WORKSHOP_DELETE,
+    PERMISSION_IDS.WORKSHOP_CANCEL,
+    PERMISSION_IDS.WORKSHOP_ROSTER_READ,
+    PERMISSION_IDS.WORKSHOP_ATTENDANCE_MANAGE,
+    PERMISSION_IDS.WORKSHOP_AUDIT_READ
+  ];
+  for (const permId of expectedCompanyWorkshop) {
+    assert.ok(companyPerms.has(permId), `Company recruiter must hold own-workshop operational permission: ${permId}`);
   }
-  assert.equal(companyPerms.size, 8, 'ROLE_COMPANY must have exactly 8 permissions (3 baseline + 5 job/app)');
+  // Company firewall: must NOT have APPROVE, PUBLISH, CERTIFICATE_MANAGE, MANAGE, or student REGISTER
+  const prohibitedCompany = [
+    PERMISSION_IDS.WORKSHOP_APPROVE,
+    PERMISSION_IDS.WORKSHOP_PUBLISH,
+    PERMISSION_IDS.WORKSHOP_CERTIFICATE_MANAGE,
+    PERMISSION_IDS.WORKSHOP_MANAGE,
+    PERMISSION_IDS.WORKSHOP_REGISTER
+  ];
+  for (const permId of prohibitedCompany) {
+    assert.equal(companyPerms.has(permId), false, `Company recruiter must NOT hold privileged/student permission: ${permId}`);
+  }
+  assert.equal(companyPerms.size, 16, 'ROLE_COMPANY must have exactly 16 permissions (3 baseline + 5 job/app + 8 workshop)');
 
   // 3. Placement Coordinator Role
   const coordinatorPerms = roleMap.get(ROLE_IDS.PLACEMENT_COORDINATOR);
@@ -250,11 +271,13 @@ test('Test Suite 5: Domain Boundary & Anti-Bypass Architectural Invariants', asy
   assert.notEqual(PERMISSION_IDS.WORKSHOP_ATTENDANCE_MANAGE, PERMISSION_IDS.WORKSHOP_UPDATE);
   assert.notEqual(PERMISSION_IDS.WORKSHOP_ATTENDANCE_MANAGE, PERMISSION_IDS.WORKSHOP_READ);
 
-  // Student and Company roles must strictly lack WORKSHOP_ATTENDANCE_MANAGE
+  // Student must strictly lack WORKSHOP_ATTENDANCE_MANAGE
   const studentRole = await Role.findById(ROLE_IDS.STUDENT).lean();
-  const companyRole = await Role.findById(ROLE_IDS.COMPANY).lean();
   assert.equal(studentRole.permissionIds.includes(PERMISSION_IDS.WORKSHOP_ATTENDANCE_MANAGE), false);
-  assert.equal(companyRole.permissionIds.includes(PERMISSION_IDS.WORKSHOP_ATTENDANCE_MANAGE), false);
+
+  // Company holds WORKSHOP_ATTENDANCE_MANAGE scoped to their own workshops
+  const companyRole = await Role.findById(ROLE_IDS.COMPANY).lean();
+  assert.equal(companyRole.permissionIds.includes(PERMISSION_IDS.WORKSHOP_ATTENDANCE_MANAGE), true);
 });
 
 test('Test Suite 6: Isolated In-Memory Seeder Idempotency & State Preservation', async () => {

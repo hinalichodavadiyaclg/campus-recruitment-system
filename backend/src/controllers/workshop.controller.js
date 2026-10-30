@@ -2,6 +2,7 @@ import * as workshopService from '../services/workshop.service.js';
 import * as registrationService from '../services/workshop-registration.service.js';
 import * as attendanceService from '../services/workshop-attendance.service.js';
 import * as certificateService from '../services/workshop-certificate.service.js';
+import * as templateService from '../services/workshop-certificate-template.service.js';
 import * as auditService from '../services/workshop-audit.service.js';
 import { sendSuccess } from '../utils/api-response.js';
 
@@ -51,6 +52,20 @@ export async function reject(req, res) {
   const id = res.locals.input?.params?.id || req.params.id;
   const body = res.locals.input?.body || req.body;
   const result = await workshopService.rejectWorkshop(id, body, req.auth);
+  return sendSuccess(res, 200, result);
+}
+
+export async function approveEdit(req, res) {
+  const id = res.locals.input?.params?.id || req.params.id;
+  const body = res.locals.input?.body || req.body || {};
+  const result = await workshopService.approveWorkshopEdit(id, body, req.auth);
+  return sendSuccess(res, 200, result);
+}
+
+export async function rejectEdit(req, res) {
+  const id = res.locals.input?.params?.id || req.params.id;
+  const body = res.locals.input?.body || req.body;
+  const result = await workshopService.rejectWorkshopEdit(id, body, req.auth);
   return sendSuccess(res, 200, result);
 }
 
@@ -111,7 +126,8 @@ export async function submitAttendance(req, res) {
       workshopId,
       sessionId,
       attendees: body.attendees,
-      correctionReason: body.correctionReason
+      correctionReason: body.correctionReason,
+      remarks: body.remarks
     },
     req.auth
   );
@@ -177,6 +193,72 @@ export async function verifyCertificate(req, res) {
   return sendSuccess(res, 200, result);
 }
 
+export async function getWorkshopCertificates(req, res) {
+  const workshopId = res.locals.input?.params?.id || req.params.id;
+  const result = await certificateService.getWorkshopCertificates(workshopId, req.auth);
+  return sendSuccess(res, 200, result);
+}
+
+export async function downloadCertificate(req, res) {
+  const certificateId = res.locals.input?.params?.id || req.params.id;
+  const result = await certificateService.getCertificateDownloadPath(certificateId, req.auth);
+  return res.download(result.absolutePath, result.fileName);
+}
+
+// ==========================================
+// 5. Certificate Template Handlers
+// ==========================================
+
+export async function createTemplate(req, res) {
+  const body = req.body || {};
+  let backgroundUrl = body.backgroundUrl;
+
+  if (req.file) {
+    backgroundUrl = `/uploads/certificate-templates/${req.file.filename}`;
+  }
+
+  const result = await templateService.createTemplate(
+    {
+      companyId: body.companyId,
+      name: body.name,
+      backgroundUrl,
+      orientation: body.orientation,
+      signatoryName: body.signatoryName,
+      signatoryTitle: body.signatoryTitle
+    },
+    req.auth
+  );
+  return sendSuccess(res, 201, result);
+}
+
+export async function listTemplates(req, res) {
+  const query = req.query || {};
+  const result = await templateService.listTemplates(req.auth, query);
+  return sendSuccess(res, 200, result);
+}
+
+export async function getTemplate(req, res) {
+  const templateId = req.params.id;
+  const result = await templateService.getTemplateById(templateId, req.auth);
+  return sendSuccess(res, 200, result);
+}
+
+export async function updateTemplate(req, res) {
+  const templateId = req.params.id;
+  const body = req.body || {};
+  if (req.file) {
+    body.backgroundUrl = `/uploads/certificate-templates/${req.file.filename}`;
+  }
+  const result = await templateService.updateTemplate(templateId, body, req.auth);
+  return sendSuccess(res, 200, result);
+}
+
+export async function deleteTemplate(req, res) {
+  const templateId = req.params.id;
+  const result = await templateService.deleteTemplate(templateId, req.auth);
+  return sendSuccess(res, 200, result);
+}
+
 // ==========================================
 // 5. Audit History Handler
 // ==========================================
@@ -192,5 +274,11 @@ export async function getAuditLogs(req, res) {
     },
     req.auth
   );
+  return sendSuccess(res, 200, result);
+}
+
+export async function previewTemplate(req, res) {
+  const templateId = res.locals.input?.params?.id || req.params.id;
+  const result = await templateService.previewTemplate(templateId, req.auth);
   return sendSuccess(res, 200, result);
 }

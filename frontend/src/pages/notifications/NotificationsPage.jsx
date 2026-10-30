@@ -9,7 +9,8 @@ import {
   AlertCircleIcon,
   CheckCircleIcon,
   CheckIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  GraduationCapIcon
 } from '../../components/common/Icons.jsx';
 import './Notifications.css';
 
@@ -117,6 +118,11 @@ export function NotificationsPage() {
         return 'notif-badge-warning';
       case 'JOB_SUSPENDED':
         return 'notif-badge-danger';
+      case 'WORKSHOP_SUBMITTED_FOR_APPROVAL':
+      case 'WORKSHOP_EDIT_SUBMITTED':
+      case 'WORKSHOP_PUBLISHED':
+      case 'WORKSHOP_UPDATED':
+        return 'notif-badge-workshop';
       default:
         return 'notif-badge-default';
     }
@@ -147,6 +153,15 @@ export function NotificationsPage() {
         return (
           <div className="notif-card-icon notif-icon-danger">
             <AlertCircleIcon size={20} />
+          </div>
+        );
+      case 'WORKSHOP_SUBMITTED_FOR_APPROVAL':
+      case 'WORKSHOP_EDIT_SUBMITTED':
+      case 'WORKSHOP_PUBLISHED':
+      case 'WORKSHOP_UPDATED':
+        return (
+          <div className="notif-card-icon notif-icon-workshop">
+            <GraduationCapIcon size={20} />
           </div>
         );
       default:

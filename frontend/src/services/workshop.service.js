@@ -1,4 +1,4 @@
-import { apiRequest } from './api.js';
+import { apiRequest, downloadFile } from './api.js';
 
 export const workshopService = {
   /**
@@ -22,6 +22,9 @@ export const workshopService = {
     if (params.startDateTo) searchParams.set('startDateTo', params.startDateTo);
     if (params.myRegistrationsOnly !== undefined && params.myRegistrationsOnly !== '') {
       searchParams.set('myRegistrationsOnly', String(params.myRegistrationsOnly));
+    }
+    if (params.hasPendingEdit !== undefined && params.hasPendingEdit !== '') {
+      searchParams.set('hasPendingEdit', String(params.hasPendingEdit));
     }
     const qs = searchParams.toString();
     return apiRequest(`/api/workshops${qs ? `?${qs}` : ''}`);
@@ -85,6 +88,24 @@ export const workshopService = {
     }),
 
   /**
+   * Approve company workshop edit (Placement Head or Placement Coordinator for single-dept)
+   */
+  approveWorkshopEdit: (id, comment = '') =>
+    apiRequest(`/api/workshops/${id}/edit/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ comment })
+    }),
+
+  /**
+   * Reject company workshop edit with mandatory reason (Placement Head or Placement Coordinator for single-dept)
+   */
+  rejectWorkshopEdit: (id, reason) =>
+    apiRequest(`/api/workshops/${id}/edit/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    }),
+
+  /**
    * Publish approved workshop
    */
   publishWorkshop: (id) =>
@@ -127,6 +148,9 @@ export const workshopService = {
     if (params.limit) searchParams.set('limit', params.limit);
     if (params.status) searchParams.set('status', params.status);
     if (params.search) searchParams.set('search', params.search);
+    if (params.activeOnly !== undefined && params.activeOnly !== '') {
+      searchParams.set('activeOnly', String(params.activeOnly));
+    }
     const qs = searchParams.toString();
     return apiRequest(`/api/workshops/${id}/roster${qs ? `?${qs}` : ''}`);
   },
@@ -202,5 +226,58 @@ export const workshopService = {
     if (params.entityType) searchParams.set('entityType', params.entityType);
     const qs = searchParams.toString();
     return apiRequest(`/api/workshops/${workshopId}/audit-logs${qs ? `?${qs}` : ''}`);
-  }
+  },
+
+  /**
+   * Get all issued certificates for a workshop (Staff & Company)
+   */
+  getWorkshopCertificates: (workshopId) =>
+    apiRequest(`/api/workshops/${workshopId}/certificates`),
+
+  /**
+   * Download official certificate PDF
+   */
+  downloadCertificate: (certificateId, certNumber) =>
+    downloadFile(
+      `/api/workshops/certificates/${certificateId}/download`,
+      `${certNumber || 'certificate'}.pdf`
+    ),
+
+  /**
+   * Certificate Templates APIs
+   */
+  getTemplates: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.companyId) searchParams.set('companyId', params.companyId);
+    const qs = searchParams.toString();
+    return apiRequest(`/api/workshops/templates${qs ? `?${qs}` : ''}`);
+  },
+
+  createTemplate: (formData) =>
+    apiRequest('/api/workshops/templates', {
+      method: 'POST',
+      body: formData
+    }),
+
+  getTemplate: (templateId) =>
+    apiRequest(`/api/workshops/templates/${templateId}`),
+
+  updateTemplate: (templateId, formData) =>
+    apiRequest(`/api/workshops/templates/${templateId}`, {
+      method: 'PUT',
+      body: formData
+    }),
+
+  completeWorkshop: (workshopId) =>
+    apiRequest(`/api/workshops/${workshopId}/complete`, {
+      method: 'POST'
+    }),
+
+  previewTemplate: (templateId) =>
+    apiRequest(`/api/workshops/templates/${templateId}/preview`),
+
+  deleteTemplate: (templateId) =>
+    apiRequest(`/api/workshops/templates/${templateId}`, {
+      method: 'DELETE'
+    })
 };

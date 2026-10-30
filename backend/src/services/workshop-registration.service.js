@@ -7,6 +7,7 @@ import { AppError } from '../utils/app-error.js';
 import { getCoordinatorDepartment } from '../utils/department-scope.js';
 import { generateRegistrationId } from '../utils/sequence-generator.js';
 import { executeWorkshopTransaction, logWorkshopAudit } from './workshop-audit.service.js';
+import { isCompanyUser, isCompanyOwnWorkshop } from '../utils/company-workshop-scope.js';
 
 /**
  * Validates whether a student meets the workshop cohort targeting criteria.
@@ -319,15 +320,25 @@ export async function getWorkshopRoster(workshopId, queryParams = {}, auth) {
     }
   }
 
-  const { page = 1, limit = 20, status, search } = queryParams;
+  // Company scope check: Company can only view roster for their own workshops
+  if (isCompanyUser(auth)) {
+    const isOwn = await isCompanyOwnWorkshop(workshop, auth);
+    if (!isOwn) {
+      throw new AppError(403, 'FORBIDDEN', 'Company can only view and manage their own workshops.');
+    }
+  }
+
+  const { page = 1, limit = 20, status, search, activeOnly } = queryParams;
 
   const mongoQuery = { workshopId: workshop._id };
   if (status) {
     mongoQuery.status = status;
+  } else if (activeOnly) {
+    mongoQuery.activeRegistrationKey = 'ACTIVE';
   }
 
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+  const limitNum = Math.min(500, Math.max(1, parseInt(limit, 10) || 20));
   const skip = (pageNum - 1) * limitNum;
 
   let studentFilterIds = null;
@@ -345,7 +356,11 @@ export async function getWorkshopRoster(workshopId, queryParams = {}, auth) {
       .sort({ registeredAt: -1, _id: -1 })
       .skip(skip)
       .limit(limitNum)
-      .populate('studentId', 'firstName lastName universityId email branch department semester')
+      .populate({
+        path: 'studentId',
+        select: 'firstName lastName universityId email branch department courseId semester',
+        populate: { path: 'courseId', select: 'name code' }
+      })
       .lean(),
     WorkshopRegistration.countDocuments(mongoQuery)
   ]);

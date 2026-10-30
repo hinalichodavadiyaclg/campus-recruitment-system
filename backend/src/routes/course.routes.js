@@ -19,14 +19,28 @@ courseRoutes.use(authenticate);
 
 courseRoutes.get(
   '/',
-  authorizeAnyPermission(PERMISSION_IDS.COURSE_READ, PERMISSION_IDS.JOB_CREATE, PERMISSION_IDS.JOB_UPDATE),
+  authorizeAnyPermission(
+    PERMISSION_IDS.COURSE_READ,
+    PERMISSION_IDS.JOB_CREATE,
+    PERMISSION_IDS.JOB_UPDATE,
+    PERMISSION_IDS.WORKSHOP_CREATE,
+    PERMISSION_IDS.WORKSHOP_UPDATE,
+    PERMISSION_IDS.WORKSHOP_READ
+  ),
   validate(coursesListSchema),
   asyncHandler(courseController.list)
 );
 
 courseRoutes.get(
   '/:id',
-  authorizeAnyPermission(PERMISSION_IDS.COURSE_READ, PERMISSION_IDS.JOB_CREATE, PERMISSION_IDS.JOB_UPDATE),
+  authorizeAnyPermission(
+    PERMISSION_IDS.COURSE_READ,
+    PERMISSION_IDS.JOB_CREATE,
+    PERMISSION_IDS.JOB_UPDATE,
+    PERMISSION_IDS.WORKSHOP_CREATE,
+    PERMISSION_IDS.WORKSHOP_UPDATE,
+    PERMISSION_IDS.WORKSHOP_READ
+  ),
   validate(userIdParamsSchema),
   asyncHandler(courseController.getById)
 );

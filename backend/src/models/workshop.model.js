@@ -1,4 +1,7 @@
 import mongoose from 'mongoose';
+import './department.model.js';
+import './company.model.js';
+import './user.model.js';
 
 const { Schema, model } = mongoose;
 
@@ -281,6 +284,45 @@ const sessionSchema = new Schema(
   { _id: true }
 );
 
+const pendingEditSchema = new Schema(
+  {
+    status: {
+      type: String,
+      enum: ['PENDING', 'APPROVED', 'REJECTED'],
+      default: 'PENDING'
+    },
+    proposedChanges: {
+      type: Schema.Types.Mixed,
+      required: true
+    },
+    submittedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    submittedAt: {
+      type: Date,
+      default: Date.now
+    },
+    comment: {
+      type: String,
+      trim: true
+    },
+    reviewComment: {
+      type: String,
+      trim: true
+    },
+    reviewedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    reviewedAt: {
+      type: Date
+    }
+  },
+  { _id: false }
+);
+
 const workshopSchema = new Schema(
   {
     workshopId: {
@@ -322,6 +364,11 @@ const workshopSchema = new Schema(
       ref: 'Department',
       required: false
     },
+    companyId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Company',
+      required: false
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -342,6 +389,10 @@ const workshopSchema = new Schema(
       type: Boolean,
       required: true,
       default: false
+    },
+    publishVersion: {
+      type: Number,
+      default: 1
     },
     lifecycleStatus: {
       type: String,
@@ -400,6 +451,21 @@ const workshopSchema = new Schema(
         },
         message: 'Every workshop must have at least one session.'
       }
+    },
+    certificateTemplateId: {
+      type: Schema.Types.ObjectId,
+      ref: 'WorkshopCertificateTemplate',
+      required: false,
+      default: null
+    },
+    cancellationReason: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    pendingEdit: {
+      type: pendingEditSchema,
+      default: null
     }
   },
   {
@@ -474,6 +540,8 @@ workshopSchema.pre('validate', function (next) {
 workshopSchema.index({ workshopId: 1 }, { unique: true });
 workshopSchema.index({ approvalStatus: 1, isPublished: 1, lifecycleStatus: 1 });
 workshopSchema.index({ departmentId: 1 });
+workshopSchema.index({ companyId: 1 }, { sparse: true });
+workshopSchema.index({ 'trainers.companyId': 1 }, { sparse: true });
 workshopSchema.index({ startAt: 1, endAt: 1 });
 
 export const Workshop = model('Workshop', workshopSchema);

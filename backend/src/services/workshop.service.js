@@ -1,18 +1,46 @@
 import mongoose from 'mongoose';
 import { Workshop } from '../models/workshop.model.js';
 import { WorkshopRegistration } from '../models/workshop_registration.model.js';
+import { WorkshopAttendance } from '../models/workshop_attendance.model.js';
 import { Student } from '../models/student.model.js';
+import { User } from '../models/user.model.js';
 import { ROLE_IDS } from '../utils/access-constants.js';
 import { AppError } from '../utils/app-error.js';
 import { getCoordinatorDepartment } from '../utils/department-scope.js';
 import { generateWorkshopId } from '../utils/sequence-generator.js';
 import { executeWorkshopTransaction, logWorkshopAudit } from './workshop-audit.service.js';
+import { isStudentEligibleForCohort } from './workshop-registration.service.js';
+import { calculateRegistrationAttendance } from './workshop-attendance.service.js';
+import { issueCertificates } from './workshop-certificate.service.js';
+import {
+  isCompanyUser,
+  isCompanyOwnWorkshop,
+  getCompanyWorkshopQueryCondition,
+  getCompanyIdForAuth
+} from '../utils/company-workshop-scope.js';
+import {
+  dispatchWorkshopSubmittedForApproval,
+  dispatchCompanyWorkshopUpdateForReview,
+  dispatchWorkshopPublished,
+  dispatchWorkshopUpdateAnnouncement
+} from './workshop-notification.service.js';
 
 /**
- * Checks if user has permission to manage (create/update/submit) a workshop for a department.
+ * Checks if user has permission to manage (create/update/submit) a workshop for a department or company.
  */
-async function assertDepartmentScope(auth, workshopDepartmentId, ownershipType) {
+async function assertDepartmentScope(auth, workshopDepartmentId, ownershipType, workshop = null) {
   if (auth.roleId === ROLE_IDS.SUPER_ADMIN || auth.roleId === ROLE_IDS.PLACEMENT_HEAD) {
+    return;
+  }
+
+  if (isCompanyUser(auth)) {
+    if (workshop) {
+      const isOwn = await isCompanyOwnWorkshop(workshop, auth);
+      if (!isOwn) {
+        throw new AppError(403, 'FORBIDDEN', 'Company can only view and manage their own workshops.');
+      }
+      return;
+    }
     return;
   }
 
@@ -24,13 +52,44 @@ async function assertDepartmentScope(auth, workshopDepartmentId, ownershipType) 
     if (ownershipType === 'CENTRAL_PLACEMENT_CELL') {
       throw new AppError(403, 'FORBIDDEN', 'Placement Coordinators cannot manage Central Placement Cell workshops.');
     }
-    if (!workshopDepartmentId || String(workshopDepartmentId) !== String(coordDept.departmentId)) {
+    const deptIdStr = workshopDepartmentId?._id ? String(workshopDepartmentId._id) : String(workshopDepartmentId || '');
+    if (!deptIdStr || deptIdStr !== String(coordDept.departmentId)) {
       throw new AppError(403, 'FORBIDDEN', 'You are only authorized to manage workshops for your assigned department.');
     }
     return;
   }
 
   throw new AppError(403, 'FORBIDDEN', 'You do not have permission to perform this workshop action.');
+}
+
+/**
+ * Validates trainer assignment integrity against caller permissions and company identity.
+ */
+async function assertTrainersScope(trainers, auth, companyId) {
+  if (!Array.isArray(trainers) || trainers.length === 0) return;
+  const isCompany = isCompanyUser(auth);
+
+  for (const t of trainers) {
+    if (isCompany) {
+      if (t.trainerType === 'COMPANY') {
+        const callerCompanyId = String(companyId || (await getCompanyIdForAuth(auth)));
+        if (t.companyId && String(t.companyId) !== callerCompanyId) {
+          throw new AppError(403, 'FORBIDDEN', 'Company can only assign trainers from their own company.');
+        }
+      } else if (t.trainerType === 'PLACEMENT_COORDINATOR' || t.trainerType === 'PLACEMENT_HEAD') {
+        throw new AppError(403, 'FORBIDDEN', 'Company recruiters cannot assign internal university staff as trainers.');
+      }
+    } else if (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
+      if (t.trainerType === 'PLACEMENT_COORDINATOR' || t.trainerType === 'PLACEMENT_HEAD') {
+        if (t.userId) {
+          const userDoc = await User.findById(t.userId).lean();
+          if (!userDoc || (userDoc.roleId !== ROLE_IDS.PLACEMENT_COORDINATOR && userDoc.roleId !== ROLE_IDS.PLACEMENT_HEAD && userDoc.roleId !== ROLE_IDS.SUPER_ADMIN)) {
+            throw new AppError(400, 'INVALID_INPUT', 'Assigned internal trainer must be a valid placement coordinator or head.');
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -50,8 +109,20 @@ export async function createWorkshop(inputData, auth) {
     throw new AppError(403, 'FORBIDDEN', 'Students cannot create workshops.');
   }
 
-  if (auth.roleId === ROLE_IDS.COMPANY) {
-    throw new AppError(403, 'FORBIDDEN', 'Companies cannot create workshops directly.');
+  if (isCompanyUser(auth)) {
+    const companyId = await getCompanyIdForAuth(auth);
+    inputData.companyId = companyId;
+    if (!inputData.ownershipType || (inputData.ownershipType === 'DEPARTMENT' && !inputData.departmentId)) {
+      inputData.ownershipType = 'CENTRAL_PLACEMENT_CELL';
+      delete inputData.departmentId;
+    }
+  } else {
+    // Verify department scope
+    await assertDepartmentScope(auth, inputData.departmentId, inputData.ownershipType || 'DEPARTMENT');
+  }
+
+  if (inputData.trainers) {
+    await assertTrainersScope(inputData.trainers, auth, inputData.companyId);
   }
 
   // Validate start date is provided and valid
@@ -64,10 +135,13 @@ export async function createWorkshop(inputData, auth) {
     throw new AppError(400, 'INVALID_INPUT', 'Invalid workshop startAt date provided.');
   }
 
-  // Verify department scope
-  await assertDepartmentScope(auth, inputData.departmentId, inputData.ownershipType || 'DEPARTMENT');
+  const isCompany = isCompanyUser(auth);
+  // Placement cell, placement head, coordinators, and admins do not need approval
+  // and their workshops are automatically published upon creation.
+  // ONLY company-created workshops require approval (created in DRAFT, isPublished = false).
+  const autoPublish = !isCompany && inputData.approvalStatus !== 'DRAFT';
 
-  return executeWorkshopTransaction(async (session) => {
+  const result = await executeWorkshopTransaction(async (session) => {
     // Generate WS-YYYY-XXXX with IST year
     const workshopId = await generateWorkshopId(startAt, { session });
 
@@ -76,8 +150,9 @@ export async function createWorkshop(inputData, auth) {
       workshopId,
       createdBy: auth.userId,
       coordinatorId: inputData.coordinatorId || (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR ? auth.userId : undefined),
-      approvalStatus: 'DRAFT',
-      isPublished: false,
+      approvalStatus: autoPublish ? 'APPROVED' : 'DRAFT',
+      isPublished: autoPublish,
+      publishVersion: autoPublish ? 1 : 0,
       lifecycleStatus: 'SCHEDULED'
     };
 
@@ -97,14 +172,45 @@ export async function createWorkshop(inputData, auth) {
           mode: createdWorkshop.mode,
           ownershipType: createdWorkshop.ownershipType,
           startAt: createdWorkshop.startAt,
-          endAt: createdWorkshop.endAt
+          endAt: createdWorkshop.endAt,
+          approvalStatus: createdWorkshop.approvalStatus,
+          isPublished: createdWorkshop.isPublished
         }
       },
       session
     );
 
-    return createdWorkshop.toObject();
+    if (autoPublish) {
+      await logWorkshopAudit(
+        {
+          workshopId: createdWorkshop._id,
+          action: 'WORKSHOP_PUBLISHED',
+          entityType: 'WORKSHOP',
+          entityId: createdWorkshop.workshopId,
+          changedBy: auth.userId,
+          oldValue: { isPublished: false },
+          newValue: { isPublished: true }
+        },
+        session
+      );
+    }
+
+    const populated = await Workshop.findById(createdWorkshop._id)
+      .populate('departmentId', 'name code')
+      .populate('companyId', 'companyName')
+      .session(session)
+      .lean();
+
+    return populated || createdWorkshop.toObject();
   });
+
+  if (autoPublish && result?._id) {
+    dispatchWorkshopPublished(result._id).catch((err) => {
+      console.error('dispatchWorkshopPublished failed in createWorkshop:', err.message);
+    });
+  }
+
+  return result;
 }
 
 /**
@@ -123,28 +229,71 @@ export async function getWorkshopById(id, auth) {
   const isObjectId = mongoose.Types.ObjectId.isValid(id);
   const workshop = await Workshop.findOne(
     isObjectId ? { $or: [{ _id: id }, { workshopId: id }] } : { workshopId: id }
-  ).lean();
+  )
+    .populate('departmentId', 'name code')
+    .populate('companyId', 'companyName')
+    .populate('targetAudience.departmentRules.departmentId', 'name code')
+    .populate('coordinatorId', 'email employeeId')
+    .lean();
 
   if (!workshop) {
     throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
+  }
+
+  // Company scoping: Companies can ONLY view their own company's workshops
+  if (isCompanyUser(auth)) {
+    const isOwn = await isCompanyOwnWorkshop(workshop, auth);
+    if (!isOwn) {
+      throw new AppError(403, 'FORBIDDEN', 'Company can only view and manage their own workshops.');
+    }
   }
 
   // Scoped read authorization:
   // Students and external users can ONLY view published & approved workshops
   const isPublishedAndApproved = workshop.isPublished && workshop.approvalStatus === 'APPROVED';
 
-  if (!isPublishedAndApproved) {
-    if (auth.roleId === ROLE_IDS.STUDENT || auth.userType === 'STUDENT') {
+  let isStudentRegistered = false;
+  if (auth.roleId === ROLE_IDS.STUDENT || auth.userType === 'STUDENT') {
+    if (!isPublishedAndApproved) {
       throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
     }
+    const student = await Student.findOne({ userId: auth.userId }).lean();
+    if (student) {
+      const activeReg = await WorkshopRegistration.exists({
+        workshopId: workshop._id,
+        studentId: student._id,
+        activeRegistrationKey: 'ACTIVE'
+      });
+      isStudentRegistered = Boolean(activeReg);
+      if (!isStudentRegistered) {
+        if (workshop.lifecycleStatus === 'CANCELLED') {
+          throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
+        }
+        if (!isStudentEligibleForCohort(workshop.targetAudience, student)) {
+          throw new AppError(403, 'INELIGIBLE_COHORT', 'You are not eligible for this workshop based on your department, course, or semester.');
+        }
+      }
+    }
+  }
+
+  if (!isPublishedAndApproved) {
 
     if (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
-      const coordDept = await getCoordinatorDepartment(auth);
+      let coordDept = null;
+      try {
+        coordDept = await getCoordinatorDepartment(auth);
+      } catch {
+        // Coordinator profile or department may not be configured
+      }
       const isCreator = String(workshop.createdBy) === String(auth.userId);
-      const isCoordinator = workshop.coordinatorId && String(workshop.coordinatorId) === String(auth.userId);
-      const isDeptMatch = coordDept && workshop.departmentId && String(workshop.departmentId) === String(coordDept.departmentId);
+      const coordinatorRefId = workshop.coordinatorId?._id || workshop.coordinatorId;
+      const isCoordinator = coordinatorRefId && String(coordinatorRefId) === String(auth.userId);
+      const workshopDeptId = workshop.departmentId?._id || workshop.departmentId;
+      const isDeptMatch = coordDept && workshopDeptId && String(workshopDeptId) === String(coordDept.departmentId);
+      const isTargetDeptMatch = coordDept && Array.isArray(workshop.targetAudience?.departmentRules) &&
+        workshop.targetAudience.departmentRules.some((r) => String(r.departmentId?._id || r.departmentId) === String(coordDept.departmentId));
 
-      if (!isCreator && !isCoordinator && !isDeptMatch) {
+      if (!isCreator && !isCoordinator && !isDeptMatch && !isTargetDeptMatch) {
         throw new AppError(403, 'FORBIDDEN', 'You are not authorized to view unpublished workshops outside your department.');
       }
     }
@@ -161,7 +310,8 @@ export async function getWorkshopById(id, auth) {
   return {
     ...workshop,
     enrolledCount,
-    seatsRemaining
+    seatsRemaining,
+    ...(auth.roleId === ROLE_IDS.STUDENT || auth.userType === 'STUDENT' ? { isRegistered: isStudentRegistered } : {})
   };
 }
 
@@ -190,10 +340,13 @@ export async function listWorkshops(query = {}, auth) {
     isPublished,
     startDateFrom,
     startDateTo,
-    myRegistrationsOnly
+    myRegistrationsOnly,
+    hasPendingEdit,
+    includeCancelled
   } = query;
 
   const mongoQuery = {};
+  let studentDoc = null;
 
   // Role scoping
   if (auth.roleId === ROLE_IDS.STUDENT || auth.userType === 'STUDENT') {
@@ -201,11 +354,12 @@ export async function listWorkshops(query = {}, auth) {
     mongoQuery.isPublished = true;
     mongoQuery.approvalStatus = 'APPROVED';
 
+    studentDoc = await Student.findOne({ userId: auth.userId }).lean();
+
     if (myRegistrationsOnly) {
-      const student = await Student.findOne({ userId: auth.userId }).lean();
-      if (student) {
+      if (studentDoc) {
         const myRegs = await WorkshopRegistration.find({
-          studentId: student._id,
+          studentId: studentDoc._id,
           activeRegistrationKey: 'ACTIVE'
         }).select('workshopId').lean();
         const registeredWorkshopIds = myRegs.map((r) => r.workshopId);
@@ -215,18 +369,42 @@ export async function listWorkshops(query = {}, auth) {
       }
     } else {
       mongoQuery.lifecycleStatus = { $ne: 'CANCELLED' };
+      if (studentDoc && studentDoc.departmentId) {
+        mongoQuery.$and = mongoQuery.$and || [];
+        mongoQuery.$and.push({
+          $or: [
+            { 'targetAudience.isAllDepartments': true },
+            { 'targetAudience.departmentRules.departmentId': studentDoc.departmentId }
+          ]
+        });
+      }
     }
   } else if (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
-    const coordDept = await getCoordinatorDepartment(auth);
-    // Coordinators see all published workshops plus unpublished ones from their department or created by them
+    let coordDept = null;
+    try {
+      coordDept = await getCoordinatorDepartment(auth);
+    } catch {
+      // Coordinator may not have department assigned yet or inactive
+    }
+    // Coordinators see all published workshops plus unpublished ones from their department or created by them or targeted to their department
     if (coordDept) {
       mongoQuery.$or = [
         { isPublished: true, approvalStatus: 'APPROVED' },
         { departmentId: coordDept.departmentId },
+        { 'targetAudience.departmentRules.departmentId': coordDept.departmentId },
+        { createdBy: auth.userId },
+        { coordinatorId: auth.userId }
+      ];
+    } else {
+      mongoQuery.$or = [
+        { isPublished: true, approvalStatus: 'APPROVED' },
         { createdBy: auth.userId },
         { coordinatorId: auth.userId }
       ];
     }
+  } else if (isCompanyUser(auth)) {
+    const companyCondition = await getCompanyWorkshopQueryCondition(auth);
+    mongoQuery.$or = companyCondition.$or;
   }
 
   // Additional explicit filters
@@ -240,7 +418,15 @@ export async function listWorkshops(query = {}, auth) {
     mongoQuery.ownershipType = ownershipType;
   }
   if (departmentId && mongoose.Types.ObjectId.isValid(departmentId)) {
-    mongoQuery.departmentId = new mongoose.Types.ObjectId(departmentId);
+    const deptObjId = new mongoose.Types.ObjectId(departmentId);
+    const deptFilter = {
+      $or: [
+        { departmentId: deptObjId },
+        { 'targetAudience.departmentRules.departmentId': deptObjId }
+      ]
+    };
+    mongoQuery.$and = mongoQuery.$and || [];
+    mongoQuery.$and.push(deptFilter);
   }
   if (approvalStatus && auth.roleId !== ROLE_IDS.STUDENT) {
     mongoQuery.approvalStatus = approvalStatus;
@@ -253,6 +439,9 @@ export async function listWorkshops(query = {}, auth) {
     } else {
       mongoQuery.lifecycleStatus = lifecycleStatus;
     }
+  } else if (!includeCancelled || (includeCancelled !== true && includeCancelled !== 'true')) {
+    // By default, cancelled workshops do not appear in normal active listings
+    mongoQuery.lifecycleStatus = { $ne: 'CANCELLED' };
   }
   if (typeof isPublished === 'boolean' && auth.roleId !== ROLE_IDS.STUDENT) {
     mongoQuery.isPublished = isPublished;
@@ -261,6 +450,9 @@ export async function listWorkshops(query = {}, auth) {
     mongoQuery.startAt = {};
     if (startDateFrom) mongoQuery.startAt.$gte = new Date(startDateFrom);
     if (startDateTo) mongoQuery.startAt.$lte = new Date(startDateTo);
+  }
+  if ((hasPendingEdit === true || hasPendingEdit === 'true') && auth.roleId !== ROLE_IDS.STUDENT) {
+    mongoQuery['pendingEdit.status'] = 'PENDING';
   }
 
   if (search) {
@@ -277,6 +469,9 @@ export async function listWorkshops(query = {}, auth) {
 
   const [items, total] = await Promise.all([
     Workshop.find(mongoQuery)
+      .populate('departmentId', 'name code')
+      .populate('companyId', 'companyName')
+      .populate('targetAudience.departmentRules.departmentId', 'name code')
       .sort({ startAt: -1, _id: -1 })
       .skip(skip)
       .limit(limitNum)
@@ -284,11 +479,25 @@ export async function listWorkshops(query = {}, auth) {
     Workshop.countDocuments(mongoQuery)
   ]);
 
-  // Enrich with enrolledCount and seatsRemaining
-  const workshopIds = items.map((w) => w._id);
-  const activeRegCounts = await WorkshopRegistration.aggregate([
-    { $match: { workshopId: { $in: workshopIds }, activeRegistrationKey: 'ACTIVE' } },
-    { $group: { _id: '$workshopId', count: { $sum: 1 } } }
+  let eligibleItems = items;
+  if ((auth.roleId === ROLE_IDS.STUDENT || auth.userType === 'STUDENT') && studentDoc && !myRegistrationsOnly) {
+    eligibleItems = items.filter((w) => isStudentEligibleForCohort(w.targetAudience, studentDoc));
+  }
+
+  // Enrich with enrolledCount, seatsRemaining, and isRegistered
+  const workshopIds = eligibleItems.map((w) => w._id);
+  const [activeRegCounts, studentRegistrations] = await Promise.all([
+    WorkshopRegistration.aggregate([
+      { $match: { workshopId: { $in: workshopIds }, activeRegistrationKey: 'ACTIVE' } },
+      { $group: { _id: '$workshopId', count: { $sum: 1 } } }
+    ]),
+    (auth.roleId === ROLE_IDS.STUDENT || auth.userType === 'STUDENT') && studentDoc && workshopIds.length > 0
+      ? WorkshopRegistration.find({
+          studentId: studentDoc._id,
+          workshopId: { $in: workshopIds },
+          activeRegistrationKey: 'ACTIVE'
+        }).select('workshopId').lean()
+      : Promise.resolve([])
   ]);
 
   const countMap = new Map();
@@ -296,21 +505,29 @@ export async function listWorkshops(query = {}, auth) {
     countMap.set(String(entry._id), entry.count);
   }
 
-  const enrichedWorkshops = items.map((w) => {
+  const studentRegisteredSet = new Set(
+    (studentRegistrations || []).map((r) => String(r.workshopId))
+  );
+
+  const enrichedWorkshops = eligibleItems.map((w) => {
     const enrolledCount = countMap.get(String(w._id)) || 0;
+    const isRegistered = studentRegisteredSet.has(String(w._id));
     return {
       ...w,
       enrolledCount,
-      seatsRemaining: Math.max(0, w.maxParticipants - enrolledCount)
+      seatsRemaining: Math.max(0, w.maxParticipants - enrolledCount),
+      ...(auth.roleId === ROLE_IDS.STUDENT || auth.userType === 'STUDENT' ? { isRegistered } : {})
     };
   });
 
+  const effectiveTotal = (auth.roleId === ROLE_IDS.STUDENT || auth.userType === 'STUDENT') && !myRegistrationsOnly ? eligibleItems.length : total;
+
   return {
     workshops: enrichedWorkshops,
-    total,
+    total: effectiveTotal,
     page: pageNum,
     limit: limitNum,
-    totalPages: Math.ceil(total / limitNum) || 1
+    totalPages: Math.ceil(effectiveTotal / limitNum) || 1
   };
 }
 
@@ -334,49 +551,170 @@ export async function updateWorkshop(id, updateData, auth) {
   }
 
   // Scope check
-  await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType);
+  await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType, workshop);
 
   if (workshop.lifecycleStatus === 'CANCELLED' || workshop.lifecycleStatus === 'COMPLETED') {
     throw new AppError(400, 'INVALID_LIFECYCLE_STATE', `Cannot update workshop in ${workshop.lifecycleStatus} status.`);
   }
 
-  // Published Immutability Rules:
-  // Once published, core structural fields cannot be modified
-  if (workshop.isPublished) {
-    if (updateData.workshopId && updateData.workshopId !== workshop.workshopId) {
-      throw new AppError(400, 'IMMUTABLE_FIELD_MODIFICATION', 'Cannot modify workshopId of a published workshop.');
+  // Optimistic concurrency protection
+  if (updateData.expectedUpdatedAt) {
+    const currentMs = new Date(workshop.updatedAt).getTime();
+    const expectedMs = new Date(updateData.expectedUpdatedAt).getTime();
+    if (!Number.isNaN(expectedMs) && !Number.isNaN(currentMs) && Math.abs(currentMs - expectedMs) > 1000) {
+      throw new AppError(409, 'STALE_DATA_CONFLICT', 'Workshop has been modified by another transaction. Please reload the latest data and try again.');
     }
-    if (updateData.ownershipType && updateData.ownershipType !== workshop.ownershipType) {
+  }
+
+  // Sanitize updateData - strip protected/forged/lifecycle properties
+  const sanitizedUpdate = { ...updateData };
+  delete sanitizedUpdate.expectedUpdatedAt;
+  delete sanitizedUpdate._id;
+  delete sanitizedUpdate.id;
+  delete sanitizedUpdate.workshopId;
+  delete sanitizedUpdate.approvalStatus;
+  delete sanitizedUpdate.isPublished;
+  delete sanitizedUpdate.lifecycleStatus;
+  delete sanitizedUpdate.createdBy;
+  delete sanitizedUpdate.companyId;
+  delete sanitizedUpdate.enrolledCount;
+  delete sanitizedUpdate.seatsRemaining;
+  delete sanitizedUpdate.attendedCount;
+  delete sanitizedUpdate.completedCount;
+  delete sanitizedUpdate.createdAt;
+  delete sanitizedUpdate.updatedAt;
+
+  // Capacity protection: Cannot reduce maxParticipants below active registered count
+  if (sanitizedUpdate.maxParticipants !== undefined) {
+    const activeEnrolledCount = await WorkshopRegistration.countDocuments({
+      workshopId: workshop._id,
+      activeRegistrationKey: 'ACTIVE'
+    });
+    if (sanitizedUpdate.maxParticipants < activeEnrolledCount) {
+      throw new AppError(
+        400,
+        'CAPACITY_BELOW_ENROLLED',
+        `Cannot reduce maxParticipants (${sanitizedUpdate.maxParticipants}) below the number of active registrations (${activeEnrolledCount}).`
+      );
+    }
+  }
+
+  // Session deletion protection: Cannot remove session IDs with marked attendance
+  if (Array.isArray(sanitizedUpdate.sessions)) {
+    const existingSessionIds = (workshop.sessions || []).map((s) => s.sessionId);
+    const incomingSessionIds = new Set(sanitizedUpdate.sessions.map((s) => s.sessionId));
+    const removedSessionIds = existingSessionIds.filter((sid) => !incomingSessionIds.has(sid));
+
+    if (removedSessionIds.length > 0) {
+      const attendanceCount = await WorkshopAttendance.countDocuments({
+        workshopId: workshop._id,
+        sessionId: { $in: removedSessionIds }
+      });
+      if (attendanceCount > 0) {
+        throw new AppError(
+          400,
+          'CANNOT_DELETE_SESSION_WITH_ATTENDANCE',
+          'Cannot remove sessions that already have attendance records marked.'
+        );
+      }
+    }
+  }
+
+  if (sanitizedUpdate.trainers) {
+    await assertTrainersScope(sanitizedUpdate.trainers, auth, workshop.companyId);
+  }
+
+  // Published Immutability Rules:
+  // Once published, structural ownership and targeting cannot be modified
+  if (workshop.isPublished) {
+    if (sanitizedUpdate.ownershipType && sanitizedUpdate.ownershipType !== workshop.ownershipType) {
       throw new AppError(400, 'IMMUTABLE_FIELD_MODIFICATION', 'Cannot modify ownershipType of a published workshop.');
     }
     if (
-      updateData.departmentId &&
-      String(updateData.departmentId) !== (workshop.departmentId ? String(workshop.departmentId) : '')
+      sanitizedUpdate.departmentId &&
+      String(sanitizedUpdate.departmentId) !== (workshop.departmentId ? String(workshop.departmentId._id || workshop.departmentId) : '')
     ) {
       throw new AppError(400, 'IMMUTABLE_FIELD_MODIFICATION', 'Cannot modify departmentId of a published workshop.');
     }
-    if (updateData.targetAudience) {
+    if (sanitizedUpdate.targetAudience) {
       const existingAudience = JSON.stringify(workshop.targetAudience);
-      const incomingAudience = JSON.stringify(updateData.targetAudience);
+      const incomingAudience = JSON.stringify(sanitizedUpdate.targetAudience);
       if (existingAudience !== incomingAudience) {
         throw new AppError(400, 'IMMUTABLE_FIELD_MODIFICATION', 'Cannot modify targetAudience of a published workshop.');
       }
     }
   }
 
-  return executeWorkshopTransaction(async (session) => {
-    const oldValue = {
-      title: workshop.title,
-      description: workshop.description,
-      venue: workshop.venue,
-      meetingLink: workshop.meetingLink,
-      maxParticipants: workshop.maxParticipants,
-      startAt: workshop.startAt,
-      endAt: workshop.endAt
-    };
+  const isCompany = isCompanyUser(auth);
 
-    // Apply allowed updates to Mongoose document
-    Object.assign(workshop, updateData);
+  // If company is editing an already approved or published workshop,
+  // the edit must be approved before taking effect!
+  if (isCompany && (workshop.approvalStatus === 'APPROVED' || workshop.isPublished)) {
+    const result = await executeWorkshopTransaction(async (session) => {
+      workshop.pendingEdit = {
+        status: 'PENDING',
+        proposedChanges: sanitizedUpdate,
+        submittedBy: auth.userId,
+        submittedAt: new Date(),
+        comment: updateData.editReason || updateData.comment || 'Company proposed updates to workshop details.',
+        reviewComment: null,
+        reviewedBy: null,
+        reviewedAt: null
+      };
+
+      await workshop.save({ session });
+
+      await logWorkshopAudit(
+        {
+          workshopId: workshop._id,
+          action: 'WORKSHOP_EDIT_SUBMITTED',
+          entityType: 'WORKSHOP',
+          entityId: workshop.workshopId,
+          changedBy: auth.userId,
+          reason: updateData.editReason || updateData.comment,
+          newValue: sanitizedUpdate
+        },
+        session
+      );
+
+      const populated = await Workshop.findById(workshop._id)
+        .populate('departmentId', 'name code')
+        .populate('companyId', 'companyName')
+        .session(session)
+        .lean();
+
+      return {
+        ...(populated || workshop.toObject()),
+        requiresApproval: true,
+        message: 'Workshop edit request submitted for administrative review.'
+      };
+    });
+
+    dispatchCompanyWorkshopUpdateForReview(workshop._id).catch((err) => {
+      console.error('dispatchCompanyWorkshopUpdateForReview failed:', err.message);
+    });
+
+    return result;
+  }
+
+  const oldValue = {
+    title: workshop.title,
+    description: workshop.description,
+    category: workshop.category,
+    mode: workshop.mode,
+    venue: workshop.venue,
+    meetingLink: workshop.meetingLink,
+    maxParticipants: workshop.maxParticipants,
+    startAt: workshop.startAt,
+    endAt: workshop.endAt,
+    registrationOpensAt: workshop.registrationOpensAt,
+    registrationDeadline: workshop.registrationDeadline,
+    certificateTemplateId: workshop.certificateTemplateId
+  };
+
+  const result = await executeWorkshopTransaction(async (session) => {
+    // Apply sanitized allowed updates to Mongoose document
+    Object.assign(workshop, sanitizedUpdate);
 
     await workshop.save({ session });
 
@@ -388,12 +726,251 @@ export async function updateWorkshop(id, updateData, auth) {
         entityId: workshop.workshopId,
         changedBy: auth.userId,
         oldValue,
-        newValue: updateData
+        newValue: sanitizedUpdate
       },
       session
     );
 
-    return workshop.toObject();
+    const populated = await Workshop.findById(workshop._id)
+      .populate('departmentId', 'name code')
+      .populate('companyId', 'companyName')
+      .session(session)
+      .lean();
+
+    return populated || workshop.toObject();
+  });
+
+  if (workshop.isPublished) {
+    dispatchWorkshopUpdateAnnouncement(workshop._id, {
+      oldValue,
+      changedFields: Object.keys(sanitizedUpdate)
+    }).catch((err) => {
+      console.error('dispatchWorkshopUpdateAnnouncement failed in updateWorkshop:', err.message);
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Determines whether a workshop is targeted to or owned by only a single department.
+ * Returns { isSingleDept: boolean, departmentId: string | null, count: number }
+ */
+export function getWorkshopDepartmentScope(workshop) {
+  if (workshop.targetAudience?.isAllDepartments) {
+    return { isSingleDept: false, departmentId: null, count: Infinity };
+  }
+
+  const deptIds = new Set();
+
+  if (workshop.departmentId) {
+    const dId = workshop.departmentId._id ? String(workshop.departmentId._id) : String(workshop.departmentId);
+    if (dId) deptIds.add(dId);
+  }
+
+  const rules = workshop.targetAudience?.departmentRules || [];
+  for (const rule of rules) {
+    if (rule.departmentId) {
+      const rId = rule.departmentId._id ? String(rule.departmentId._id) : String(rule.departmentId);
+      if (rId) deptIds.add(rId);
+    }
+  }
+
+  if (deptIds.size === 1) {
+    return {
+      isSingleDept: true,
+      departmentId: Array.from(deptIds)[0],
+      count: 1
+    };
+  }
+
+  return {
+    isSingleDept: false,
+    departmentId: null,
+    count: deptIds.size
+  };
+}
+
+/**
+ * Asserts authorization for reviewing (approving or rejecting) a company workshop edit request:
+ * - Super Admin and Placement Head can approve/reject any workshop edit.
+ * - Placement Coordinator can approve/reject ONLY if the workshop includes only ONE department
+ *   and that department matches the coordinator's assigned department.
+ */
+export async function assertEditReviewScope(auth, workshop) {
+  if (!auth || !auth.userId) {
+    throw new AppError(401, 'UNAUTHENTICATED', 'Authentication is required.');
+  }
+
+  if (auth.roleId === ROLE_IDS.SUPER_ADMIN || auth.roleId === ROLE_IDS.PLACEMENT_HEAD) {
+    return true;
+  }
+
+  if (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
+    const scope = getWorkshopDepartmentScope(workshop);
+    if (!scope.isSingleDept || !scope.departmentId) {
+      throw new AppError(
+        403,
+        'FORBIDDEN',
+        'Only the Placement Head can approve edits for workshops that include multiple departments or central placement cell.'
+      );
+    }
+
+    const coordDept = await getCoordinatorDepartment(auth);
+    if (!coordDept || String(coordDept.departmentId) !== String(scope.departmentId)) {
+      throw new AppError(
+        403,
+        'FORBIDDEN',
+        'You are only authorized to approve workshop edits for your assigned department.'
+      );
+    }
+
+    return true;
+  }
+
+  throw new AppError(403, 'FORBIDDEN', 'You do not have permission to approve or reject workshop edits.');
+}
+
+/**
+ * Approves a company's pending workshop edit request and merges proposed changes into the live workshop.
+ * Authorized for Placement Head, Super Admin, or Placement Coordinator (if single department).
+ *
+ * @param {string} id - Workshop _id
+ * @param {object} [options={}] - { comment }
+ * @param {object} auth
+ * @returns {Promise<object>}
+ */
+export async function approveWorkshopEdit(id, { comment } = {}, auth) {
+  if (!auth || !auth.userId) {
+    throw new AppError(401, 'UNAUTHENTICATED', 'Authentication is required.');
+  }
+
+  const workshop = await Workshop.findById(id);
+  if (!workshop) {
+    throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
+  }
+
+  await assertEditReviewScope(auth, workshop);
+
+  if (!workshop.pendingEdit || workshop.pendingEdit.status !== 'PENDING') {
+    throw new AppError(400, 'NO_PENDING_EDIT', 'This workshop does not have a pending edit request awaiting approval.');
+  }
+
+  const txResult = await executeWorkshopTransaction(async (session) => {
+    const proposed = workshop.pendingEdit.proposedChanges || {};
+
+    const oldValue = {};
+    for (const key of Object.keys(proposed)) {
+      oldValue[key] = workshop[key];
+      workshop[key] = proposed[key];
+    }
+
+    workshop.pendingEdit.status = 'APPROVED';
+    workshop.pendingEdit.reviewedBy = auth.userId;
+    workshop.pendingEdit.reviewedAt = new Date();
+    workshop.pendingEdit.reviewComment = comment ? comment.trim() : 'Approved';
+
+    await workshop.save({ session });
+
+    await logWorkshopAudit(
+      {
+        workshopId: workshop._id,
+        action: 'WORKSHOP_EDIT_APPROVED',
+        entityType: 'WORKSHOP',
+        entityId: workshop.workshopId,
+        changedBy: auth.userId,
+        reason: comment ? comment.trim() : undefined,
+        oldValue,
+        newValue: proposed
+      },
+      session
+    );
+
+    const populated = await Workshop.findById(workshop._id)
+      .populate('departmentId', 'name code')
+      .populate('companyId', 'companyName')
+      .session(session)
+      .lean();
+
+    return {
+      result: populated || workshop.toObject(),
+      oldValue,
+      proposed,
+      wasPublished: workshop.isPublished
+    };
+  });
+
+  if (txResult.wasPublished) {
+    dispatchWorkshopUpdateAnnouncement(workshop._id, {
+      oldValue: txResult.oldValue,
+      changedFields: Object.keys(txResult.proposed || {})
+    }).catch((err) => {
+      console.error('dispatchWorkshopUpdateAnnouncement failed in approveWorkshopEdit:', err.message);
+    });
+  }
+
+  return txResult.result;
+}
+
+/**
+ * Rejects a company's pending workshop edit request without modifying live workshop data.
+ * Requires mandatory rejection reason.
+ * Authorized for Placement Head, Super Admin, or Placement Coordinator (if single department).
+ *
+ * @param {string} id - Workshop _id
+ * @param {object} options - { reason }
+ * @param {object} auth
+ * @returns {Promise<object>}
+ */
+export async function rejectWorkshopEdit(id, { reason }, auth) {
+  if (!auth || !auth.userId) {
+    throw new AppError(401, 'UNAUTHENTICATED', 'Authentication is required.');
+  }
+
+  if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
+    throw new AppError(400, 'INVALID_INPUT', 'Rejection reason must be at least 5 characters.');
+  }
+
+  const workshop = await Workshop.findById(id);
+  if (!workshop) {
+    throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
+  }
+
+  await assertEditReviewScope(auth, workshop);
+
+  if (!workshop.pendingEdit || workshop.pendingEdit.status !== 'PENDING') {
+    throw new AppError(400, 'NO_PENDING_EDIT', 'This workshop does not have a pending edit request awaiting review.');
+  }
+
+  return executeWorkshopTransaction(async (session) => {
+    workshop.pendingEdit.status = 'REJECTED';
+    workshop.pendingEdit.reviewedBy = auth.userId;
+    workshop.pendingEdit.reviewedAt = new Date();
+    workshop.pendingEdit.reviewComment = reason.trim();
+
+    await workshop.save({ session });
+
+    await logWorkshopAudit(
+      {
+        workshopId: workshop._id,
+        action: 'WORKSHOP_EDIT_REJECTED',
+        entityType: 'WORKSHOP',
+        entityId: workshop.workshopId,
+        changedBy: auth.userId,
+        reason: reason.trim(),
+        oldValue: { pendingEditStatus: 'PENDING' },
+        newValue: { pendingEditStatus: 'REJECTED', reason: reason.trim() }
+      },
+      session
+    );
+
+    const populated = await Workshop.findById(workshop._id)
+      .populate('departmentId', 'name code')
+      .populate('companyId', 'companyName')
+      .session(session)
+      .lean();
+
+    return populated || workshop.toObject();
   });
 }
 
@@ -414,7 +991,7 @@ export async function submitWorkshopForApproval(id, auth) {
     throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
   }
 
-  await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType);
+  await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType, workshop);
 
   if (workshop.approvalStatus !== 'DRAFT' && workshop.approvalStatus !== 'REJECTED') {
     throw new AppError(
@@ -424,7 +1001,7 @@ export async function submitWorkshopForApproval(id, auth) {
     );
   }
 
-  return executeWorkshopTransaction(async (session) => {
+  const result = await executeWorkshopTransaction(async (session) => {
     const updated = await Workshop.findOneAndUpdate(
       { _id: id, approvalStatus: { $in: ['DRAFT', 'REJECTED'] } },
       { $set: { approvalStatus: 'PENDING_APPROVAL' } },
@@ -450,6 +1027,12 @@ export async function submitWorkshopForApproval(id, auth) {
 
     return updated.toObject();
   });
+
+  dispatchWorkshopSubmittedForApproval(result._id).catch((err) => {
+    console.error('dispatchWorkshopSubmittedForApproval failed in submitWorkshopForApproval:', err.message);
+  });
+
+  return result;
 }
 
 /**
@@ -592,12 +1175,16 @@ export async function publishWorkshop(id, auth) {
     throw new AppError(401, 'UNAUTHENTICATED', 'Authentication is required.');
   }
 
+  if (isCompanyUser(auth)) {
+    throw new AppError(403, 'FORBIDDEN', 'Companies cannot publish workshops.');
+  }
+
   const workshop = await Workshop.findById(id);
   if (!workshop) {
     throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
   }
 
-  await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType);
+  await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType, workshop);
 
   if (workshop.lifecycleStatus === 'CANCELLED') {
     throw new AppError(400, 'CANNOT_PUBLISH_CANCELLED', 'Cancelled workshops cannot be published.');
@@ -611,10 +1198,10 @@ export async function publishWorkshop(id, auth) {
     throw new AppError(400, 'ALREADY_PUBLISHED', 'Workshop is already published.');
   }
 
-  return executeWorkshopTransaction(async (session) => {
+  const result = await executeWorkshopTransaction(async (session) => {
     const updated = await Workshop.findOneAndUpdate(
       { _id: id, approvalStatus: 'APPROVED', isPublished: false, lifecycleStatus: { $ne: 'CANCELLED' } },
-      { $set: { isPublished: true } },
+      { $set: { isPublished: true }, $inc: { publishVersion: 1 } },
       { new: true, session }
     );
 
@@ -637,6 +1224,12 @@ export async function publishWorkshop(id, auth) {
 
     return updated.toObject();
   });
+
+  dispatchWorkshopPublished(result._id, result.publishVersion).catch((err) => {
+    console.error('dispatchWorkshopPublished failed in publishWorkshop:', err.message);
+  });
+
+  return result;
 }
 
 /**
@@ -664,7 +1257,7 @@ export async function cancelWorkshop(id, { reason }, auth) {
     throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
   }
 
-  await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType);
+  await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType, workshop);
 
   if (workshop.lifecycleStatus === 'CANCELLED') {
     throw new AppError(400, 'ALREADY_CANCELLED', 'Workshop is already cancelled.');
@@ -678,7 +1271,13 @@ export async function cancelWorkshop(id, { reason }, auth) {
     // 1. Update workshop lifecycle status and unpublish
     const updated = await Workshop.findOneAndUpdate(
       { _id: id, lifecycleStatus: { $ne: 'CANCELLED' } },
-      { $set: { lifecycleStatus: 'CANCELLED', isPublished: false } },
+      {
+        $set: {
+          lifecycleStatus: 'CANCELLED',
+          isPublished: false,
+          cancellationReason: reason.trim()
+        }
+      },
       { new: true, session }
     );
 
@@ -744,14 +1343,130 @@ export async function cancelWorkshop(id, { reason }, auth) {
 }
 
 /**
- * Hard deletes a DRAFT or REJECTED workshop.
- * Permitted only if the workshop has never been published and has ZERO registrations of any status.
+ * Hard deletes a DRAFT, REJECTED, or CANCELLED workshop.
+ * Permitted only if the workshop is in DRAFT, REJECTED, or CANCELLED status.
  * Preserves the audit trail with the workshop business identifier.
  *
  * @param {string} id
  * @param {object} auth
  * @returns {Promise<{ success: boolean, deletedWorkshopId: string }>}
  */
+
+/**
+ * Concludes and transitions a workshop to COMPLETED lifecycle status.
+ * Authoritative trigger for automatic certificate generation.
+ *
+ * Rules:
+ * - Allowed for Super Admin, Placement Head, Placement Coordinator (for department), or owning Company.
+ * - Workshop must be published, not CANCELLED, and not already COMPLETED.
+ * - Concludes attendance: recalculates final completion metrics for all registrations.
+ * - Automatically issues personalized certificates for all eligible candidates (attendance >= 75%).
+ * - Generates audit log.
+ *
+ * @param {string} id
+ * @param {object} auth
+ * @returns {Promise<{ workshop: object, issuance: object }>}
+ */
+export async function completeWorkshop(id, auth) {
+  if (!auth || !auth.userId) {
+    throw new AppError(401, 'UNAUTHENTICATED', 'Authentication is required.');
+  }
+
+  const workshop = await Workshop.findById(id);
+  if (!workshop) {
+    throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
+  }
+
+  await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType, workshop);
+
+  if (workshop.lifecycleStatus === 'CANCELLED') {
+    throw new AppError(400, 'INVALID_LIFECYCLE_STATE', 'Cancelled workshops cannot be completed.');
+  }
+
+  if (workshop.lifecycleStatus === 'COMPLETED') {
+    throw new AppError(400, 'ALREADY_COMPLETED', 'Workshop is already marked as completed.');
+  }
+
+  // 1. Transition lifecycle status to COMPLETED
+  const updated = await Workshop.findOneAndUpdate(
+    { _id: id, lifecycleStatus: { $nin: ['COMPLETED', 'CANCELLED'] } },
+    { $set: { lifecycleStatus: 'COMPLETED' } },
+    { new: true }
+  );
+
+  if (!updated) {
+    throw new AppError(409, 'CONCURRENT_TRANSITION_CONFLICT', 'Failed to complete workshop due to concurrent state change.');
+  }
+
+  // 2. Finalize attendance for all registered students
+  const registrations = await WorkshopRegistration.find({
+    workshopId: id,
+    status: { $in: ['REGISTERED', 'ATTENDED', 'COMPLETED'] }
+  });
+
+  for (const reg of registrations) {
+    const records = await WorkshopAttendance.find({ registrationId: reg._id });
+    const metrics = calculateRegistrationAttendance(workshop.sessions, records, true);
+    await WorkshopRegistration.updateOne(
+      { _id: reg._id },
+      {
+        $set: {
+          attendancePercentage: metrics.attendancePercentage,
+          completionStatus: metrics.completionStatus,
+          status: metrics.completionStatus === 'COMPLETED' ? 'COMPLETED' : 'ATTENDED'
+        }
+      }
+    );
+  }
+
+  // Update completed count on workshop document
+  const completedCount = await WorkshopRegistration.countDocuments({
+    workshopId: id,
+    completionStatus: 'COMPLETED'
+  });
+  await Workshop.updateOne({ _id: id }, { $set: { completedCount } });
+
+  // 3. Log audit trail
+  try {
+    await executeWorkshopTransaction(async (session) => {
+      await logWorkshopAudit(
+        {
+          workshopId: updated._id,
+          action: 'WORKSHOP_COMPLETED',
+          entityType: 'WORKSHOP',
+          entityId: updated.workshopId,
+          changedBy: auth.userId,
+          oldValue: { lifecycleStatus: workshop.lifecycleStatus },
+          newValue: { lifecycleStatus: 'COMPLETED', completedCount }
+        },
+        session
+      );
+    });
+  } catch (auditErr) {
+    console.warn('Workshop completion audit log failed:', auditErr.message);
+  }
+
+  // 4. Automatically trigger certificate issuance for eligible students
+  let issuanceResult = { success: true, issuedCount: 0, certificates: [] };
+  try {
+    issuanceResult = await issueCertificates({ workshopId: id }, auth);
+  } catch (issuanceErr) {
+    console.error('Automatic certificate issuance during completion failed:', issuanceErr.message);
+    issuanceResult = {
+      success: false,
+      error: issuanceErr.message,
+      issuedCount: 0,
+      certificates: []
+    };
+  }
+
+  return {
+    success: true,
+    workshop: updated.toObject(),
+    issuance: issuanceResult
+  };
+}
+
 export async function deleteWorkshop(id, auth) {
   if (!auth || !auth.userId) {
     throw new AppError(401, 'UNAUTHENTICATED', 'Authentication is required.');
@@ -762,31 +1477,39 @@ export async function deleteWorkshop(id, auth) {
     throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
   }
 
-  await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType);
+  await assertDepartmentScope(auth, workshop.departmentId, workshop.ownershipType, workshop);
 
-  // Must be DRAFT or REJECTED
-  if (workshop.approvalStatus !== 'DRAFT' && workshop.approvalStatus !== 'REJECTED') {
+  // Must be DRAFT, REJECTED, or CANCELLED
+  if (
+    workshop.approvalStatus !== 'DRAFT' &&
+    workshop.approvalStatus !== 'REJECTED' &&
+    workshop.lifecycleStatus !== 'CANCELLED'
+  ) {
     throw new AppError(
       400,
       'CANNOT_DELETE_ACTIVE_WORKSHOP',
-      `Cannot delete workshop with approvalStatus "${workshop.approvalStatus}". Only DRAFT or REJECTED workshops can be deleted.`
+      `Cannot delete workshop with approvalStatus "${workshop.approvalStatus}" and lifecycleStatus "${workshop.lifecycleStatus}". Only DRAFT, REJECTED, or CANCELLED workshops can be deleted.`
     );
   }
 
-  // Must NEVER have been published
-  if (workshop.isPublished) {
-    throw new AppError(400, 'CANNOT_DELETE_PUBLISHED_WORKSHOP', 'Published workshops cannot be deleted. Cancel the workshop instead.');
+  // Must not be actively published
+  if (workshop.isPublished && workshop.lifecycleStatus !== 'CANCELLED') {
+    throw new AppError(400, 'CANNOT_DELETE_PUBLISHED_WORKSHOP', 'Published workshops cannot be deleted. Cancel the workshop first.');
   }
 
   return executeWorkshopTransaction(async (session) => {
-    // Check if any registrations exist (including cancelled historical ones)
+    // Check if any registrations exist (only blocks deletion if not cancelled)
     const totalRegistrations = await WorkshopRegistration.countDocuments({ workshopId: id }).session(session);
-    if (totalRegistrations > 0) {
+    if (totalRegistrations > 0 && workshop.lifecycleStatus !== 'CANCELLED') {
       throw new AppError(
         400,
         'WORKSHOP_HAS_REGISTRATIONS',
         'Workshops with registration history cannot be deleted. Cancel the workshop instead.'
       );
+    }
+
+    if (workshop.lifecycleStatus === 'CANCELLED' && totalRegistrations > 0) {
+      await WorkshopRegistration.deleteMany({ workshopId: id }, { session });
     }
 
     const workshopBusinessId = workshop.workshopId;

@@ -11,7 +11,8 @@ export const CERTIFICATE_ELIGIBILITY_STATUSES = Object.freeze([
 export const CERTIFICATE_STATUSES = Object.freeze([
   'PENDING_ISSUANCE',
   'ISSUED',
-  'REVOKED'
+  'REVOKED',
+  'FAILED'
 ]);
 
 const workshopCertificateSchema = new Schema(
@@ -30,6 +31,11 @@ const workshopCertificateSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Student',
       required: true
+    },
+    recipientName: {
+      type: String,
+      trim: true,
+      default: ''
     },
     certificateNumber: {
       type: String,
@@ -53,6 +59,14 @@ const workshopCertificateSchema = new Schema(
       required: true,
       default: 'PENDING_ISSUANCE'
     },
+    attendancePercentage: {
+      type: Number,
+      default: 0
+    },
+    templateSnapshot: {
+      type: Schema.Types.Mixed,
+      default: null
+    },
     approvedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User'
@@ -64,6 +78,27 @@ const workshopCertificateSchema = new Schema(
       type: Date
     },
     fileUrl: {
+      type: String,
+      trim: true
+    },
+    certificateTemplateId: {
+      type: Schema.Types.ObjectId,
+      ref: 'WorkshopCertificateTemplate',
+      default: null
+    },
+    templateVersion: {
+      type: Number,
+      default: 1
+    },
+    qrCodeUrl: {
+      type: String,
+      trim: true
+    },
+    idempotencyKey: {
+      type: String,
+      trim: true
+    },
+    failureReason: {
       type: String,
       trim: true
     },
@@ -89,6 +124,9 @@ const workshopCertificateSchema = new Schema(
 workshopCertificateSchema.index({ certificateNumber: 1 }, { unique: true });
 workshopCertificateSchema.index({ verificationCode: 1 }, { unique: true });
 workshopCertificateSchema.index({ registrationId: 1 }, { unique: true });
-workshopCertificateSchema.index({ workshopId: 1, studentId: 1 });
+workshopCertificateSchema.index({ workshopId: 1, studentId: 1 }, { unique: true });
+workshopCertificateSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
+workshopCertificateSchema.index({ studentId: 1, certificateStatus: 1 });
+workshopCertificateSchema.index({ workshopId: 1, certificateStatus: 1 });
 
 export const WorkshopCertificate = model('WorkshopCertificate', workshopCertificateSchema);

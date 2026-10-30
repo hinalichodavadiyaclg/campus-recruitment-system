@@ -19,14 +19,28 @@ departmentRoutes.use(authenticate);
 
 departmentRoutes.get(
   '/',
-  authorizeAnyPermission(PERMISSION_IDS.DEPARTMENT_READ, PERMISSION_IDS.JOB_CREATE, PERMISSION_IDS.JOB_UPDATE),
+  authorizeAnyPermission(
+    PERMISSION_IDS.DEPARTMENT_READ,
+    PERMISSION_IDS.JOB_CREATE,
+    PERMISSION_IDS.JOB_UPDATE,
+    PERMISSION_IDS.WORKSHOP_CREATE,
+    PERMISSION_IDS.WORKSHOP_UPDATE,
+    PERMISSION_IDS.WORKSHOP_READ
+  ),
   validate(departmentsListSchema),
   asyncHandler(departmentController.list)
 );
 
 departmentRoutes.get(
   '/:id',
-  authorizeAnyPermission(PERMISSION_IDS.DEPARTMENT_READ, PERMISSION_IDS.JOB_CREATE, PERMISSION_IDS.JOB_UPDATE),
+  authorizeAnyPermission(
+    PERMISSION_IDS.DEPARTMENT_READ,
+    PERMISSION_IDS.JOB_CREATE,
+    PERMISSION_IDS.JOB_UPDATE,
+    PERMISSION_IDS.WORKSHOP_CREATE,
+    PERMISSION_IDS.WORKSHOP_UPDATE,
+    PERMISSION_IDS.WORKSHOP_READ
+  ),
   validate(userIdParamsSchema),
   asyncHandler(departmentController.getById)
 );

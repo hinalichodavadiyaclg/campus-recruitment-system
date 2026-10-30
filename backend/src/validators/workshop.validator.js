@@ -286,7 +286,9 @@ export const workshopCreateSchema = z.object({
       bannerUrl: z.string().trim().url('bannerUrl must be a valid URL.').max(1000).optional(),
       ownershipType: z.enum(WORKSHOP_OWNERSHIP_TYPES).default('DEPARTMENT'),
       departmentId: objectId.optional(),
+      companyId: objectId.optional(),
       coordinatorId: objectId.optional(),
+      approvalStatus: z.enum(['DRAFT', 'APPROVED']).optional(),
       maxParticipants: z.coerce
         .number()
         .int('maxParticipants must be an integer.')
@@ -300,7 +302,8 @@ export const workshopCreateSchema = z.object({
       meetingLink: z.string().trim().url('meetingLink must be a valid URL.').max(1000).optional(),
       trainers: z.array(trainerInputSchema).default([]),
       targetAudience: targetAudienceInputSchema.default({ isAllDepartments: false, departmentRules: [] }),
-      sessions: z.array(sessionInputSchema).min(1, 'Every workshop must have at least one session.')
+      sessions: z.array(sessionInputSchema).min(1, 'Every workshop must have at least one session.'),
+      certificateTemplateId: objectId.optional().nullable()
     })
     .strict()
     .superRefine((data, ctx) => {
@@ -443,6 +446,7 @@ export const workshopUpdateSchema = z.object({
       bannerUrl: z.string().trim().url().max(1000).optional().nullable(),
       ownershipType: z.enum(WORKSHOP_OWNERSHIP_TYPES).optional(),
       departmentId: objectId.optional().nullable(),
+      companyId: objectId.optional().nullable(),
       coordinatorId: objectId.optional().nullable(),
       maxParticipants: z.coerce.number().int().min(1).max(10000).optional(),
       startAt: z.coerce.date().optional(),
@@ -453,7 +457,9 @@ export const workshopUpdateSchema = z.object({
       meetingLink: z.string().trim().url().max(1000).optional().nullable(),
       trainers: z.array(trainerInputSchema).optional(),
       targetAudience: targetAudienceInputSchema.optional(),
-      sessions: z.array(sessionInputSchema).min(1).optional()
+      sessions: z.array(sessionInputSchema).min(1).optional(),
+      certificateTemplateId: objectId.optional().nullable(),
+      expectedUpdatedAt: z.coerce.date().optional()
     })
     .strict()
     .refine((data) => Object.keys(data).length > 0, {
@@ -539,7 +545,8 @@ export const workshopListQuerySchema = z.object({
       isPublished: strictBooleanQuery.optional(),
       startDateFrom: z.coerce.date().optional(),
       startDateTo: z.coerce.date().optional(),
-      myRegistrationsOnly: strictBooleanQuery.optional()
+      myRegistrationsOnly: strictBooleanQuery.optional(),
+      hasPendingEdit: strictBooleanQuery.optional()
     })
     .strict()
 });
@@ -569,6 +576,19 @@ export const workshopRejectSchema = z.object({
         .max(1000, 'Rejection reason cannot exceed 1000 characters.')
     })
     .strict(),
+  query: emptyQuery
+});
+
+
+export const workshopCompleteSchema = z.object({
+  params: z.object({ id: objectId }).strict(),
+  body: emptyBody,
+  query: emptyQuery
+});
+
+export const workshopTemplatePreviewSchema = z.object({
+  params: z.object({ id: objectId }).strict(),
+  body: emptyBody,
   query: emptyQuery
 });
 
@@ -637,7 +657,8 @@ export const workshopAttendanceSubmitSchema = z.object({
   body: z
     .object({
       attendees: z.array(attendeeItemSchema).min(1, 'Attendees array cannot be empty.'),
-      correctionReason: z.string().trim().min(5, 'Correction reason must be at least 5 characters.').max(500).optional()
+      correctionReason: z.string().trim().min(5, 'Correction reason must be at least 5 characters.').max(500).optional(),
+      remarks: z.string().trim().max(500).optional()
     })
     .strict()
     .superRefine((data, ctx) => {
@@ -706,9 +727,10 @@ export const workshopRosterQuerySchema = z.object({
   query: z
     .object({
       page: strictIntegerQuery({ min: 1, max: 10000, defaultValue: 1 }),
-      limit: strictIntegerQuery({ min: 1, max: 100, defaultValue: 20 }),
+      limit: strictIntegerQuery({ min: 1, max: 500, defaultValue: 20 }),
       status: z.enum(REGISTRATION_STATUSES).optional(),
-      search: z.string().trim().max(100).optional()
+      search: z.string().trim().max(100).optional(),
+      activeOnly: strictBooleanQuery.optional()
     })
     .strict()
 });
@@ -724,7 +746,7 @@ export const workshopAttendanceQuerySchema = z.object({
   query: z
     .object({
       page: strictIntegerQuery({ min: 1, max: 10000, defaultValue: 1 }),
-      limit: strictIntegerQuery({ min: 1, max: 100, defaultValue: 20 }),
+      limit: strictIntegerQuery({ min: 1, max: 500, defaultValue: 20 }),
       status: z.enum(ATTENDANCE_STATUSES).optional()
     })
     .strict()
@@ -736,7 +758,7 @@ export const workshopCertificateQuerySchema = z.object({
   query: z
     .object({
       page: strictIntegerQuery({ min: 1, max: 10000, defaultValue: 1 }),
-      limit: strictIntegerQuery({ min: 1, max: 100, defaultValue: 20 }),
+      limit: strictIntegerQuery({ min: 1, max: 500, defaultValue: 20 }),
       status: z.enum(CERTIFICATE_STATUSES).optional()
     })
     .strict()
@@ -748,7 +770,7 @@ export const workshopAuditLogQuerySchema = z.object({
   query: z
     .object({
       page: strictIntegerQuery({ min: 1, max: 10000, defaultValue: 1 }),
-      limit: strictIntegerQuery({ min: 1, max: 100, defaultValue: 20 }),
+      limit: strictIntegerQuery({ min: 1, max: 500, defaultValue: 20 }),
       action: z.string().trim().max(100).optional(),
       entityType: z.enum(AUDIT_ENTITY_TYPES).optional()
     })

@@ -52,7 +52,8 @@ export function getInitialWorkshopFormData(isCoordinator = false, coordinatorDep
     registrationDeadline: '',
     trainers: [],
     targetAudience: { isAllDepartments: false, departmentRules: [] },
-    sessions: []
+    sessions: [],
+    certificateTemplateId: ''
   };
 }
 
@@ -369,6 +370,23 @@ export function validateWorkshopForm(formData, { isCoordinator = false } = {}) {
 
       if (!t.trainerType) {
         errors[`trainer_${idx}_type`] = 'Trainer type is required.';
+      } else if (t.trainerType === 'COMPANY') {
+        const compId = typeof t.companyId === 'object' && t.companyId?._id ? String(t.companyId._id) : String(t.companyId || '').trim();
+        if (!compId) {
+          errors[`trainer_${idx}_companyId`] = 'Please select a company for this company trainer.';
+        } else if (!/^[a-fA-F0-9]{24}$/.test(compId)) {
+          errors[`trainer_${idx}_companyId`] = 'Invalid company selected.';
+        }
+      } else if (t.trainerType === 'EXTERNAL') {
+        const trimmedOrg = (t.organization || '').trim();
+        if (!trimmedOrg) {
+          errors[`trainer_${idx}_organization`] = 'Organization is required for external industry experts.';
+        }
+      } else if (t.trainerType === 'PLACEMENT_COORDINATOR' || t.trainerType === 'PLACEMENT_HEAD') {
+        const uid = typeof t.userId === 'object' && t.userId?._id ? String(t.userId._id) : String(t.userId || '').trim();
+        if (!uid && !isCoordinator) {
+          errors[`trainer_${idx}_userId`] = 'Internal placement staff account is required.';
+        }
       }
 
       if (t.designation && t.designation.trim().length > 100) {
@@ -463,4 +481,118 @@ export function validateWorkshopForm(formData, { isCoordinator = false } = {}) {
   }
 
   return errors;
+}
+
+/**
+ * Determines whether a user has permission to edit a workshop.
+ * Authoritative client-side mirror of backend authorization logic.
+ *
+ * @param {object} params
+ * @param {object} params.workshop - The workshop document/object
+ * @param {object} [params.user] - The authenticated user object
+ * @param {object} [params.role] - The user's active role object
+ * @param {function} [params.has] - Auth permission checker function (e.g., has('WORKSHOP_UPDATE'))
+ * @param {string} [params.coordinatorDeptId] - Resolved department ID for Placement Coordinator
+ * @returns {boolean}
+ */
+export function canUserEditWorkshop({ workshop, user, role, has, coordinatorDeptId }) {
+  if (!workshop) return false;
+
+  const isStudent = user?.userType === 'STUDENT' || role?.id === 'ROLE_STUDENT' || user?.roleId === 'ROLE_STUDENT';
+  if (isStudent) return false;
+
+  const hasUpdatePerm = typeof has === 'function' ? has('WORKSHOP_UPDATE') : true;
+  if (!hasUpdatePerm) return false;
+
+  // Cancelled or completed workshops cannot be updated
+  if (workshop.lifecycleStatus === 'CANCELLED' || workshop.lifecycleStatus === 'COMPLETED') {
+    return false;
+  }
+
+  const isPlacementHead =
+    role?.id === 'ROLE_PLACEMENT_HEAD' ||
+    role?.id === 'ROLE_SUPER_ADMIN' ||
+    user?.roleId === 'ROLE_PLACEMENT_HEAD' ||
+    user?.roleId === 'ROLE_SUPER_ADMIN';
+
+  if (isPlacementHead) return true;
+
+  const isCompany =
+    user?.userType === 'COMPANY' ||
+    role?.id === 'ROLE_COMPANY' ||
+    user?.roleId === 'ROLE_COMPANY';
+
+  if (isCompany) {
+    const callerCompanyId = String(user?.companyId?._id || user?.companyId || '');
+    const wsCompanyId = String(workshop.companyId?._id || workshop.companyId || '');
+    return Boolean(callerCompanyId && wsCompanyId && callerCompanyId === wsCompanyId);
+  }
+
+  const isCoordinator =
+    role?.id === 'ROLE_PLACEMENT_COORDINATOR' ||
+    user?.roleId === 'ROLE_PLACEMENT_COORDINATOR';
+
+  if (isCoordinator) {
+    if (workshop.ownershipType === 'CENTRAL_PLACEMENT_CELL') return false;
+    const wsDeptId = String(workshop.departmentId?._id || workshop.departmentId || '');
+    const targetDeptId = String(coordinatorDeptId || '');
+    return Boolean(targetDeptId && wsDeptId && targetDeptId === wsDeptId);
+  }
+
+  return false;
+}
+
+/**
+ * Determines whether a user can review (approve or reject) a pending workshop edit.
+ * - Placement Head / Super Admin can review any pending edit.
+ * - Placement Coordinator can review ONLY if workshop targets exactly one department matching their own.
+ *
+ * @param {object} params
+ * @param {object} params.workshop - The workshop document/object
+ * @param {object} [params.user] - The authenticated user object
+ * @param {object} [params.role] - The user's active role object
+ * @param {string} [params.coordinatorDeptId] - Resolved department ID for Placement Coordinator
+ * @returns {boolean}
+ */
+export function canUserReviewWorkshopEdit({ workshop, user, role, coordinatorDeptId }) {
+  if (!workshop || !workshop.pendingEdit || workshop.pendingEdit.status !== 'PENDING') {
+    return false;
+  }
+
+  const isPlacementHead =
+    role?.id === 'ROLE_PLACEMENT_HEAD' ||
+    role?.id === 'ROLE_SUPER_ADMIN' ||
+    user?.roleId === 'ROLE_PLACEMENT_HEAD' ||
+    user?.roleId === 'ROLE_SUPER_ADMIN';
+
+  if (isPlacementHead) return true;
+
+  const isCoordinator =
+    role?.id === 'ROLE_PLACEMENT_COORDINATOR' ||
+    user?.roleId === 'ROLE_PLACEMENT_COORDINATOR';
+
+  if (isCoordinator) {
+    if (workshop.targetAudience?.isAllDepartments) return false;
+
+    const deptIds = new Set();
+    if (workshop.departmentId) {
+      const dId = String(workshop.departmentId._id || workshop.departmentId);
+      if (dId) deptIds.add(dId);
+    }
+    const rules = workshop.targetAudience?.departmentRules || [];
+    for (const rule of rules) {
+      if (rule.departmentId) {
+        const rId = String(rule.departmentId._id || rule.departmentId);
+        if (rId) deptIds.add(rId);
+      }
+    }
+
+    if (deptIds.size === 1) {
+      const singleDeptId = Array.from(deptIds)[0];
+      return String(coordinatorDeptId || '') === singleDeptId;
+    }
+    return false;
+  }
+
+  return false;
 }

@@ -16,7 +16,8 @@ export function AttendanceSheetModal({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [roster, setRoster] = useState([]);
-  const [records, setRecords] = useState({}); // studentId -> { attendanceStatus, remarks }
+  const [records, setRecords] = useState({}); // studentId -> { attendanceStatus }
+  const [commonRemarks, setCommonRemarks] = useState('');
   const [hasExistingRecords, setHasExistingRecords] = useState(false);
   const [correctionReason, setCorrectionReason] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -30,10 +31,11 @@ export function AttendanceSheetModal({
       setLoading(true);
       setErrorMessage('');
       setCorrectionReason('');
+      setCommonRemarks('');
 
       Promise.all([
-        workshopService.getRoster(workshop._id, { limit: 200, status: 'REGISTERED' }),
-        workshopService.getSessionAttendance(workshop._id, session.sessionId, { limit: 200 })
+        workshopService.getRoster(workshop._id, { limit: 500, activeOnly: true }),
+        workshopService.getSessionAttendance(workshop._id, session.sessionId, { limit: 500 })
       ])
         .then(([rosterRes, attRes]) => {
           const registeredStudents = rosterRes.roster || [];
@@ -43,22 +45,28 @@ export function AttendanceSheetModal({
           setHasExistingRecords(existingAtt.length > 0);
 
           const recordMap = {};
+          let existingRemark = '';
           // Pre-populate with existing attendance
           existingAtt.forEach(rec => {
-            const sId = typeof rec.studentId === 'object' ? rec.studentId._id : rec.studentId;
-            recordMap[String(sId)] = {
-              attendanceStatus: rec.attendanceStatus || 'PRESENT',
-              remarks: rec.remarks || ''
+            const sId = String(rec.studentId?._id || rec.studentId);
+            recordMap[sId] = {
+              attendanceStatus: rec.attendanceStatus || 'PRESENT'
             };
+            if (!existingRemark && rec.remarks?.trim()) {
+              existingRemark = rec.remarks.trim();
+            }
           });
+
+          if (existingRemark) {
+            setCommonRemarks(existingRemark);
+          }
 
           // Default missing students to PRESENT for easy batch marking
           registeredStudents.forEach(reg => {
-            const sId = typeof reg.studentId === 'object' ? reg.studentId._id : reg.studentId;
-            if (!recordMap[String(sId)]) {
-              recordMap[String(sId)] = {
-                attendanceStatus: 'PRESENT',
-                remarks: ''
+            const sId = String(reg.studentId?._id || reg.studentId);
+            if (!recordMap[sId]) {
+              recordMap[sId] = {
+                attendanceStatus: 'PRESENT'
               };
             }
           });
@@ -84,23 +92,13 @@ export function AttendanceSheetModal({
     }));
   };
 
-  const handleRemarksChange = (studentId, remarks) => {
-    setRecords(prev => ({
-      ...prev,
-      [studentId]: {
-        ...(prev[studentId] || {}),
-        remarks
-      }
-    }));
-  };
-
   const handleMarkAll = (status) => {
     setRecords(prev => {
       const updated = { ...prev };
       roster.forEach(reg => {
-        const sId = typeof reg.studentId === 'object' ? reg.studentId._id : reg.studentId;
-        updated[String(sId)] = {
-          ...(updated[String(sId)] || {}),
+        const sId = String(reg.studentId?._id || reg.studentId);
+        updated[sId] = {
+          ...(updated[sId] || {}),
           attendanceStatus: status
         };
       });
@@ -119,14 +117,14 @@ export function AttendanceSheetModal({
 
     const attendees = [];
     roster.forEach(reg => {
-      const sId = typeof reg.studentId === 'object' ? reg.studentId._id : reg.studentId;
-      const rec = records[String(sId)];
+      const sId = String(reg.studentId?._id || reg.studentId);
+      const rec = records[sId];
       if (rec) {
         attendees.push({
-          registrationId: reg._id,
+          registrationId: String(reg._id),
           studentId: sId,
           attendanceStatus: rec.attendanceStatus,
-          remarks: rec.remarks?.trim() || undefined
+          remarks: commonRemarks.trim() || undefined
         });
       }
     });
@@ -140,7 +138,8 @@ export function AttendanceSheetModal({
     try {
       await workshopService.submitSessionAttendance(workshop._id, session.sessionId, {
         attendees,
-        correctionReason: hasExistingRecords ? correctionReason.trim() : undefined
+        correctionReason: hasExistingRecords ? correctionReason.trim() : undefined,
+        remarks: commonRemarks.trim() || undefined
       });
       toast?.('Session attendance recorded successfully.');
       onSaved?.();
@@ -166,7 +165,7 @@ export function AttendanceSheetModal({
               Workshop: <strong>{workshop?.title}</strong> ({workshop?.workshopId})
             </span>
             <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '2px' }}>
-              Session: <strong>{session?.sessionId}</strong> | Attendance Requirement: {session?.isAttendanceRequired !== false ? 'Mandatory (75%)' : 'Optional'}
+              Session: <strong>{session?.sessionId}</strong> | Attendance: {session?.isAttendanceRequired !== false ? 'Mandatory (75%)' : 'Optional'} | <strong>P</strong>: Present, <strong>A</strong>: Absent
             </div>
           </div>
           
@@ -179,12 +178,6 @@ export function AttendanceSheetModal({
             </button>
           </div>
         </div>
-
-        {hasExistingRecords && (
-          <div className="notice warn" style={{ marginBottom: '12px', fontSize: '0.85rem' }}>
-            <strong>Notice:</strong> Attendance for this session has already been recorded. Any modifications constitute an auditable correction and require a detailed reason.
-          </div>
-        )}
 
         {errorMessage && (
           <div className="notice error" style={{ marginBottom: '12px', fontSize: '0.85rem' }}>
@@ -206,22 +199,22 @@ export function AttendanceSheetModal({
                   <tr>
                     <th>Student Info</th>
                     <th>Roll / University ID</th>
-                    <th style={{ textAlign: 'center' }}>Status</th>
-                    <th>Remarks</th>
+                    <th style={{ textAlign: 'center', width: '160px' }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {roster.map(reg => {
                     const student = reg.studentId || {};
                     const sId = String(student._id || reg.studentId);
-                    const currentRec = records[sId] || { attendanceStatus: 'PRESENT', remarks: '' };
+                    const currentRec = records[sId] || { attendanceStatus: 'PRESENT' };
+                    const courseName = student.courseId?.name || student.courseName || student.branch || '';
 
                     return (
                       <tr key={reg._id}>
                         <td>
                           <strong>{student.firstName} {student.lastName}</strong>
                           <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--muted)' }}>
-                            {student.department} {student.semester ? `(Sem ${student.semester})` : ''}
+                            {courseName ? `${courseName}${student.semester ? ` (Sem ${student.semester})` : ''}` : (student.semester ? `Sem ${student.semester}` : '')}
                           </span>
                         </td>
                         <td>
@@ -230,41 +223,31 @@ export function AttendanceSheetModal({
                         <td style={{ textAlign: 'center' }}>
                           <div style={{ display: 'inline-flex', gap: '6px' }}>
                             {[
-                              { val: 'PRESENT', label: 'P', color: 'var(--green)', bg: '#dcfce7' },
-                              { val: 'ABSENT', label: 'A', color: 'var(--red)', bg: '#fee2e2' },
-                              { val: 'EXCUSED', label: 'E', color: 'var(--amber)', bg: '#fef3c7' }
+                              { val: 'PRESENT', label: 'P', color: 'var(--green)', bg: '#dcfce7', title: 'Present' },
+                              { val: 'ABSENT', label: 'A', color: 'var(--red)', bg: '#fee2e2', title: 'Absent' }
                             ].map(btn => (
                               <button
                                 key={btn.val}
                                 type="button"
                                 onClick={() => handleStatusChange(sId, btn.val)}
                                 style={{
-                                  width: '30px',
-                                  height: '30px',
+                                  width: '32px',
+                                  height: '32px',
                                   padding: 0,
                                   borderRadius: '6px',
                                   border: currentRec.attendanceStatus === btn.val ? `2px solid ${btn.color}` : '1px solid var(--line)',
                                   background: currentRec.attendanceStatus === btn.val ? btn.bg : '#ffffff',
                                   color: currentRec.attendanceStatus === btn.val ? btn.color : 'var(--muted)',
                                   fontWeight: 800,
-                                  fontSize: '0.8rem',
+                                  fontSize: '0.82rem',
                                   cursor: 'pointer'
                                 }}
-                                title={btn.val}
+                                title={btn.title}
                               >
                                 {btn.label}
                               </button>
                             ))}
                           </div>
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            placeholder="Optional remark"
-                            value={currentRec.remarks || ''}
-                            onChange={(e) => handleRemarksChange(sId, e.target.value)}
-                            style={{ height: '32px', fontSize: '0.82rem', padding: '4px 8px' }}
-                          />
                         </td>
                       </tr>
                     );
@@ -273,9 +256,24 @@ export function AttendanceSheetModal({
               </table>
             </div>
 
+            {/* Single common remark field below table */}
+            <div className="field" style={{ marginTop: '16px' }}>
+              <label htmlFor="session-common-remarks" style={{ fontWeight: 600 }}>
+                Remarks <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontWeight: 400 }}>(Optional)</span>
+              </label>
+              <input
+                id="session-common-remarks"
+                type="text"
+                placeholder="Enter remarks for this session..."
+                value={commonRemarks}
+                onChange={(e) => setCommonRemarks(e.target.value)}
+                maxLength={250}
+              />
+            </div>
+
             {hasExistingRecords && (
-              <div className="field" style={{ marginTop: '16px' }}>
-                <label htmlFor="corr-reason">
+              <div className="field" style={{ marginTop: '14px' }}>
+                <label htmlFor="corr-reason" style={{ fontWeight: 600 }}>
                   Correction Reason <span style={{ color: 'var(--red)' }}>*</span>
                 </label>
                 <input

@@ -208,6 +208,16 @@
   color: #b91c1c;
 }
 
+.notif-badge-workshop {
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.notif-icon-workshop {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
 .notif-badge-default {
   background: #f1f5f9;
   color: #475569;

@@ -167,32 +167,32 @@ test('2. Student role: Workshop item is visible in frontend and accessible on ba
   assert.equal(res.body.success, true);
 });
 
-test('3. Company Recruiter role: Workshop item is HIDDEN in frontend and BLOCKED on backend', async () => {
+test('3. Company Recruiter role: Workshop item is VISIBLE in frontend and accessible on backend scoped to own company', async () => {
   const companyRole = await Role.findById(ROLE_IDS.COMPANY).lean();
   assert.ok(companyRole, 'ROLE_COMPANY must exist');
   const companyPerms = new Set(companyRole.permissionIds || []);
 
-  assert.equal(companyPerms.has(PERMISSION_IDS.WORKSHOP_READ), false, 'Company must NOT hold WORKSHOP_READ');
+  assert.ok(companyPerms.has(PERMISSION_IDS.WORKSHOP_READ), 'Company must hold WORKSHOP_READ');
 
   const hasPerm = (p) => companyPerms.has(p);
   const recruitmentGroup = NAVIGATION_GROUPS.find((g) => g.id === 'group-recruitment');
   const workshopItem = recruitmentGroup.items.find((item) => item.id === 'nav-workshops');
 
-  assert.equal(canAccessNavItem(workshopItem, hasPerm), false, 'Company canAccessNavItem must return false');
+  assert.equal(canAccessNavItem(workshopItem, hasPerm), true, 'Company canAccessNavItem must return true');
 
   const visibleGroups = getVisibleNavGroups(NAVIGATION_GROUPS, hasPerm);
   const allVisibleItems = visibleGroups.flatMap((g) => g.items);
   const foundItem = allVisibleItems.find((item) => item.path === '/training-workshops');
-  assert.equal(foundItem, undefined, 'Training & Workshops must NOT appear in visible navigation for Company');
+  assert.ok(foundItem, 'Training & Workshops must appear in visible navigation for Company');
 
   const session = await createAuthenticatedSession(ROLE_IDS.COMPANY, 'COMPANY');
   const res = await request(app)
     .get('/api/workshops')
     .set('Authorization', `Bearer ${session.token}`);
 
-  assert.equal(res.status, 403, 'Company must receive 403 Forbidden when accessing /api/workshops');
-  assert.equal(res.body.success, false);
-  assert.equal(res.body.error?.code, 'FORBIDDEN');
+  assert.equal(res.status, 200, 'Company must be allowed to call GET /api/workshops');
+  assert.equal(res.body.success, true);
+  assert.ok(Array.isArray(res.body.data?.workshops), 'Must return workshops array');
 });
 
 test('4. Placement Coordinator role: Workshop item is visible in frontend and accessible on backend', async () => {

@@ -11,6 +11,7 @@ import { UserSession } from '../src/models/user-session.model.js';
 import { Student } from '../src/models/student.model.js';
 import { Department } from '../src/models/department.model.js';
 import { PlacementOfficer } from '../src/models/placement_officer.model.js';
+import { Company } from '../src/models/company.model.js';
 import { Workshop } from '../src/models/workshop.model.js';
 import { WorkshopRegistration } from '../src/models/workshop_registration.model.js';
 import { WorkshopAttendance } from '../src/models/workshop_attendance.model.js';
@@ -46,6 +47,7 @@ beforeEach(async () => {
   await WorkshopAuditLog.deleteMany({});
   await Student.deleteMany({});
   await UserSession.deleteMany({});
+  await Company.deleteMany({});
 
   departmentDoc = await Department.findOne({ code: 'CSE' });
   if (!departmentDoc) {
@@ -65,11 +67,25 @@ async function createAuthenticatedSession(roleId, userType = 'PLACEMENT', extraU
   const email = `test-${roleId.toLowerCase()}-${ts}@vvwu.edu.in`;
   const passwordHash = await hashPassword('Password!123456');
 
+  let companyId = extraUserData.companyId;
+  if (userType === 'COMPANY' && !companyId) {
+    const comp = await Company.create({
+      companyId: `COMP-${ts}`,
+      companyName: `Company_${ts}`,
+      industryType: 'IT',
+      hrRecruiterName: 'Recruiter',
+      email: `hr-${ts}@domain.com`,
+      yearEstablished: 2020
+    });
+    companyId = comp._id;
+  }
+
   const user = await User.create({
     email,
     passwordHash,
     userType,
     roleId,
+    companyId: userType === 'COMPANY' ? companyId : undefined,
     employeeId: userType === 'PLACEMENT' ? `EMP-${ts}` : undefined,
     universityId: userType === 'STUDENT' ? `U${ts}` : undefined,
     accountStatus: 'ACTIVE',
@@ -103,7 +119,7 @@ async function createAuthenticatedSession(roleId, userType = 'PLACEMENT', extraU
     isActive: true
   });
 
-  return { user, rawToken };
+  return { user, rawToken, companyId };
 }
 
 /**
@@ -169,7 +185,7 @@ test('2. POST /api/workshops - Unauthorized role (Student) is rejected with 403'
   assert.equal(response.body.error.code, 'FORBIDDEN');
 });
 
-test('3. POST /api/workshops - Authorized Coordinator creates workshop in DRAFT', async () => {
+test('3. POST /api/workshops - Placement Staff creates workshop automatically APPROVED and published', async () => {
   const { rawToken } = await createAuthenticatedSession(ROLE_IDS.PLACEMENT_COORDINATOR, 'PLACEMENT');
 
   const startAt = new Date(Date.now() + 86400000);
@@ -208,39 +224,46 @@ test('3. POST /api/workshops - Authorized Coordinator creates workshop in DRAFT'
   const data = response.body.data;
   assert.ok(data._id);
   assert.ok(data.workshopId.startsWith('WS-2026-'));
-  assert.equal(data.approvalStatus, 'DRAFT');
-  assert.equal(data.isPublished, false);
+  // Placement Cell / Head / Coordinator workshops are auto-approved and auto-published
+  assert.equal(data.approvalStatus, 'APPROVED');
+  assert.equal(data.isPublished, true);
 });
 
-test('4. Complete Lifecycle API Workflow - Submit, Approve, Publish, and Cancel', async () => {
-  const { rawToken: coordToken } = await createAuthenticatedSession(ROLE_IDS.PLACEMENT_COORDINATOR, 'PLACEMENT');
+test('4. Complete Lifecycle API Workflow - Company creates DRAFT, Submits, Placement Head Approves, Publishes, and Cancels', async () => {
+  const { rawToken: companyToken, companyId } = await createAuthenticatedSession(ROLE_IDS.COMPANY, 'COMPANY');
   const { rawToken: headToken } = await createAuthenticatedSession(ROLE_IDS.PLACEMENT_HEAD, 'PLACEMENT');
 
   const startAt = new Date(Date.now() + 86400000);
   const endAt = new Date(startAt.getTime() + 7200000);
   const deadline = new Date(startAt.getTime() - 3600000);
 
-  // 1. Create Workshop
+  // 1. Company creates workshop in DRAFT (strictly requires approval)
   const createRes = await request(app)
     .post('/api/workshops')
-    .set('Authorization', `Bearer ${coordToken}`)
+    .set('Authorization', `Bearer ${companyToken}`)
     .send({
-      title: 'Lifecycle Verification Workshop',
-      description: 'Testing complete API controller state machine.',
-      category: 'CAREER_PREP',
+      title: 'Company Innovation Masterclass',
+      description: 'Industry training proposal submitted by corporate partner.',
+      category: 'TECHNICAL',
       mode: 'ONLINE',
-      meetingLink: 'https://meet.google.com/lifecycle-test',
-      ownershipType: 'DEPARTMENT',
-      departmentId: String(departmentDoc._id),
+      ownershipType: 'CENTRAL_PLACEMENT_CELL',
+      meetingLink: 'https://meet.google.com/company-session',
       startAt: startAt.toISOString(),
       endAt: endAt.toISOString(),
       registrationDeadline: deadline.toISOString(),
       maxParticipants: 40,
+      trainers: [
+        {
+          trainerType: 'COMPANY',
+          companyId: String(companyId),
+          name: 'Tech Architect'
+        }
+      ],
       sessions: [
         {
           sessionId: 'SES-01',
           sessionNumber: 1,
-          title: 'Career Roadmap',
+          title: 'Enterprise Architecture',
           startAt: startAt.toISOString(),
           endAt: endAt.toISOString()
         }
@@ -248,43 +271,52 @@ test('4. Complete Lifecycle API Workflow - Submit, Approve, Publish, and Cancel'
     });
 
   assert.equal(createRes.status, 201);
-  const workshopId = createRes.body.data._id;
+  const workshop = createRes.body.data;
+  assert.equal(workshop.approvalStatus, 'DRAFT');
+  assert.equal(workshop.isPublished, false);
 
-  // 2. Submit for review (POST /api/workshops/:id/submit)
+  // 2. Company submits for review (POST /api/workshops/:id/submit)
   const submitRes = await request(app)
-    .post(`/api/workshops/${workshopId}/submit`)
-    .set('Authorization', `Bearer ${coordToken}`)
+    .post(`/api/workshops/${workshop._id}/submit`)
+    .set('Authorization', `Bearer ${companyToken}`)
     .send({});
 
   assert.equal(submitRes.status, 200);
   assert.equal(submitRes.body.data.approvalStatus, 'PENDING_APPROVAL');
 
-  // 3. Approve workshop (POST /api/workshops/:id/approve)
+  // 3. Placement Head approves workshop (POST /api/workshops/:id/approve)
   const approveRes = await request(app)
-    .post(`/api/workshops/${workshopId}/approve`)
+    .post(`/api/workshops/${workshop._id}/approve`)
     .set('Authorization', `Bearer ${headToken}`)
-    .send({ comment: 'Approved for university-wide rollout.' });
+    .send({ comment: 'Approved for campus distribution.' });
 
   assert.equal(approveRes.status, 200);
   assert.equal(approveRes.body.data.approvalStatus, 'APPROVED');
 
-  // 4. Publish workshop (POST /api/workshops/:id/publish)
+  // 4. Placement Head publishes workshop (POST /api/workshops/:id/publish)
   const publishRes = await request(app)
-    .post(`/api/workshops/${workshopId}/publish`)
-    .set('Authorization', `Bearer ${coordToken}`)
+    .post(`/api/workshops/${workshop._id}/publish`)
+    .set('Authorization', `Bearer ${headToken}`)
     .send({});
 
   assert.equal(publishRes.status, 200);
   assert.equal(publishRes.body.data.isPublished, true);
 
-  // 5. Cancel workshop with reason (POST /api/workshops/:id/cancel)
+  // 5. Placement Head cancels workshop with reason (POST /api/workshops/:id/cancel)
   const cancelRes = await request(app)
-    .post(`/api/workshops/${workshopId}/cancel`)
+    .post(`/api/workshops/${workshop._id}/cancel`)
     .set('Authorization', `Bearer ${headToken}`)
     .send({ reason: 'Speaker unavailable due to scheduling conflict.' });
 
   assert.equal(cancelRes.status, 200);
   assert.equal(cancelRes.body.data.lifecycleStatus, 'CANCELLED');
+  assert.equal(cancelRes.body.data.isPublished, false);
+
+  // Workshop document is preserved in database with CANCELLED lifecycleStatus
+  const exists = await Workshop.findById(workshop._id);
+  assert.ok(exists);
+  assert.equal(exists.lifecycleStatus, 'CANCELLED');
+  assert.equal(exists.isPublished, false);
 });
 
 test('5. Registration & Roster APIs - Student registers and cancels active booking', async () => {

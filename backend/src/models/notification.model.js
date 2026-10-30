@@ -20,6 +20,12 @@ const notificationSchema = new mongoose.Schema(
         'APPLICATION_RECEIVED',
         'APPLICATION_STATUS_CHANGED',
         'APPLICATION_WITHDRAWN',
+        'WORKSHOP_SUBMITTED_FOR_APPROVAL',
+        'WORKSHOP_EDIT_SUBMITTED',
+        'WORKSHOP_PUBLISHED',
+        'WORKSHOP_UPDATED',
+        'WORKSHOP_CERTIFICATE_ISSUED',
+        'WORKSHOP_CERTIFICATE_REVOKED',
         'SYSTEM'
       ],
       default: 'SYSTEM'
@@ -38,7 +44,7 @@ const notificationSchema = new mongoose.Schema(
     },
     relatedResourceType: {
       type: String,
-      enum: ['JOB', 'APPLICATION', 'SYSTEM'],
+      enum: ['JOB', 'APPLICATION', 'WORKSHOP', 'SYSTEM'],
       default: 'SYSTEM'
     },
     relatedResourceId: {

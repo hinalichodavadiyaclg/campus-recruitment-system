@@ -4,10 +4,12 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { workshopService } from '../../services/workshop.service.js';
 import { departmentService } from '../../services/department.service.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
-import { WorkshopModal, WORKSHOP_CATEGORIES, WORKSHOP_MODES } from '../../components/workshops/WorkshopModal.jsx';
+import { WorkshopModal, WORKSHOP_CATEGORIES, WORKSHOP_MODES, canUserEditWorkshop, canUserReviewWorkshopEdit } from '../../components/workshops/WorkshopModal.jsx';
 import { WorkshopReasonModal } from '../../components/workshops/WorkshopReasonModal.jsx';
 import { PrintableCertificateModal } from '../../components/workshops/PrintableCertificateModal.jsx';
 import { ConfirmModal } from '../../components/common/ConfirmModal.jsx';
+import { CompanyCertificateTemplateModal } from '../../components/workshops/CompanyCertificateTemplateModal.jsx';
+import { getAssetUrl } from '../../services/api.js';
 import {
   WorkshopsIcon,
   PlusIcon,
@@ -21,15 +23,43 @@ import {
   ShieldIcon
 } from '../../components/common/Icons.jsx';
 
+export function formatWorkshopDate(startAt, endAt) {
+  if (!startAt) return '—';
+  const startStr = new Date(startAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+  if (!endAt) return startStr;
+  const endStr = new Date(endAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+  if (startStr === endStr) {
+    return startStr;
+  }
+  return `${startStr} – ${endStr}`;
+}
+
+export function formatStudentWorkshopDate(startAt, endAt) {
+  if (!startAt) return '—';
+  const startDate = new Date(startAt);
+  const startDay = startDate.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium' });
+  const startTime = startDate.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', timeStyle: 'short' });
+
+  if (!endAt) return `${startDay}, ${startTime}`;
+
+  const endDate = new Date(endAt);
+  const endDay = endDate.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium' });
+
+  if (startDay === endDay) {
+    return `${startDay}, ${startTime}`;
+  }
+  return `${startDay} – ${endDay}`;
+}
+
 export function WorkshopsPage() {
   const { user, role, has } = useAuth();
   const { toast } = useToast();
 
   const isStudent = user?.userType === 'STUDENT' || role?.id === 'ROLE_STUDENT' || user?.roleId === 'ROLE_STUDENT';
+  const isCompany = user?.userType === 'COMPANY' || role?.id === 'ROLE_COMPANY' || user?.roleId === 'ROLE_COMPANY';
   const isPlacementHead = role?.id === 'ROLE_PLACEMENT_HEAD' || role?.id === 'ROLE_SUPER_ADMIN' || user?.roleId === 'ROLE_PLACEMENT_HEAD' || user?.roleId === 'ROLE_SUPER_ADMIN';
   const isCoordinator = role?.id === 'ROLE_PLACEMENT_COORDINATOR' || user?.roleId === 'ROLE_PLACEMENT_COORDINATOR';
-  const coordinatorDeptId = user?.departmentId;
-
   // Active Tab:
   // For student: 'browse', 'my-registrations', 'my-certificates'
   // For staff: 'dashboard', 'manage', 'approval-queue', 'certificates'
@@ -44,6 +74,53 @@ export function WorkshopsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  const coordinatorDeptId = useMemo(() => {
+    if (!isCoordinator) return null;
+    const raw = user?.departmentId?._id || user?.departmentId || user?.department?._id || user?.department;
+    if (!raw) return null;
+    const str = typeof raw === 'object' && raw._id ? String(raw._id) : String(raw);
+    if (/^[a-fA-F0-9]{24}$/.test(str)) return str;
+    const found = (departments || []).find(d => d.name?.toLowerCase() === str.toLowerCase() || d.code?.toLowerCase() === str.toLowerCase());
+    return found ? String(found._id) : null;
+  }, [isCoordinator, user, departments]);
+
+  // Template Management State
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [companyTemplates, setCompanyTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+
+  const loadCompanyTemplates = async () => {
+    setTemplatesLoading(true);
+    try {
+      const data = await workshopService.getTemplates();
+      setCompanyTemplates(data || []);
+    } catch (err) {
+      toast(err.message || 'Failed to load templates.');
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
+  const handleDownloadCertificate = async (certId, certNumber) => {
+    try {
+      await workshopService.downloadCertificate(certId, certNumber);
+      toast('Certificate downloaded successfully.');
+    } catch (err) {
+      toast(err.message || 'Failed to download certificate.');
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId) => {
+    if (!window.confirm('Are you sure you want to delete this certificate template?')) return;
+    try {
+      await workshopService.deleteTemplate(templateId);
+      toast('Template deleted successfully.');
+      await loadCompanyTemplates();
+    } catch (err) {
+      toast(err.message || 'Failed to delete template.');
+    }
+  };
+
   // Filter out any cancelled or unpublished workshops in student browse mode
   const studentVisibleWorkshops = useMemo(() => {
     if (isStudent && activeTab === 'browse') {
@@ -54,13 +131,17 @@ export function WorkshopsPage() {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [selectedDepartment, setSelectedDepartment] = useState(() => {
-    if (isCoordinator && coordinatorDeptId) return String(coordinatorDeptId);
-    return '';
-  });
+  const [selectedDepartment, setSelectedDepartment] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedMode, setSelectedMode] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+
+  // Automatically select coordinator's department once loaded
+  useEffect(() => {
+    if (isCoordinator && coordinatorDeptId && !selectedDepartment) {
+      setSelectedDepartment(String(coordinatorDeptId));
+    }
+  }, [isCoordinator, coordinatorDeptId]);
 
   // Modals state
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -108,10 +189,12 @@ export function WorkshopsPage() {
       if (selectedCategory) params.category = selectedCategory;
       if (selectedMode) params.mode = selectedMode;
 
-      if (isCoordinator && coordinatorDeptId) {
-        params.departmentId = String(coordinatorDeptId);
-      } else if (selectedDepartment) {
-        params.departmentId = selectedDepartment;
+      if (selectedDepartment) {
+        if (selectedDepartment === 'CENTRAL') {
+          params.ownershipType = 'CENTRAL_PLACEMENT_CELL';
+        } else {
+          params.departmentId = selectedDepartment;
+        }
       }
 
       if (isStudent) {
@@ -124,7 +207,11 @@ export function WorkshopsPage() {
       } else {
         // Staff tab overrides
         if (activeTab === 'approval-queue') {
-          params.approvalStatus = 'PENDING_APPROVAL';
+          if (isPlacementHead) {
+            params.approvalStatus = 'PENDING_APPROVAL';
+          } else if (isCoordinator) {
+            params.hasPendingEdit = true;
+          }
         } else if (selectedStatus) {
           if (['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED'].includes(selectedStatus)) {
             params.approvalStatus = selectedStatus;
@@ -152,19 +239,39 @@ export function WorkshopsPage() {
   };
 
   useEffect(() => {
-    loadWorkshops();
+    if (activeTab === 'templates') {
+      loadCompanyTemplates();
+    } else {
+      loadWorkshops();
+    }
   }, [activeTab, currentPage, search, selectedDepartment, selectedCategory, selectedMode, selectedStatus]);
 
   // Handle Create or Update
-  const handleSaveWorkshop = async (payload) => {
+  const handleSaveWorkshop = async (payload, actionType = 'submit') => {
     setIsProcessing(true);
     try {
       if (editingWorkshop) {
-        await workshopService.updateWorkshop(editingWorkshop._id, payload);
-        toast('Workshop details updated successfully.');
+        const updateRes = await workshopService.updateWorkshop(editingWorkshop._id, payload);
+        if (updateRes?.requiresApproval) {
+          toast('Workshop edit request submitted for administrative review.');
+        } else if (actionType === 'submit' && (editingWorkshop.approvalStatus === 'DRAFT' || editingWorkshop.approvalStatus === 'REJECTED')) {
+          await workshopService.submitForApproval(editingWorkshop._id);
+          toast('Workshop updated and submitted for review successfully.');
+        } else {
+          toast(actionType === 'draft' ? 'Workshop draft saved successfully.' : 'Workshop details updated successfully.');
+        }
       } else {
-        await workshopService.createWorkshop(payload);
-        toast('New workshop draft created successfully.');
+        const created = await workshopService.createWorkshop(payload);
+        if (actionType === 'submit') {
+          if (isCompany && created?._id) {
+            await workshopService.submitForApproval(created._id);
+            toast('Workshop submitted for review successfully.');
+          } else {
+            toast('Workshop created and submitted successfully.');
+          }
+        } else {
+          toast('Workshop saved as draft successfully.');
+        }
       }
       setCreateModalOpen(false);
       setEditingWorkshop(null);
@@ -235,6 +342,36 @@ export function WorkshopsPage() {
     });
   };
 
+  const handleApproveEdit = (w) => {
+    setConfirmModalState({
+      isOpen: true,
+      title: 'Approve Workshop Changes?',
+      message: `Do you want to approve the company's proposed changes for "${w.title}"? The live workshop details will be updated immediately.`,
+      danger: false,
+      onConfirm: async () => {
+        try {
+          await workshopService.approveWorkshopEdit(w._id, 'Approved');
+          toast(`Changes for "${w.title}" approved.`);
+          setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+          await loadWorkshops();
+        } catch (err) {
+          toast(err.message || 'Approval failed.');
+        }
+      }
+    });
+  };
+
+  const openRejectEditModal = (w) => {
+    setReasonModalState({
+      isOpen: true,
+      actionType: 'reject-edit',
+      targetId: w._id,
+      title: `Reject Changes — ${w.workshopId}`,
+      message: `Please specify the mandatory reason for rejecting the company's proposed changes for "${w.title}". Live workshop details will remain unchanged.`,
+      confirmLabel: 'Reject Changes'
+    });
+  };
+
   const openRejectModal = (w) => {
     setReasonModalState({
       isOpen: true,
@@ -251,17 +388,18 @@ export function WorkshopsPage() {
       isOpen: true,
       actionType: 'cancel',
       targetId: w._id,
-      title: `Cancel Workshop — ${w.workshopId}`,
-      message: `Cancelling "${w.title}" will notify participants and cascade cancellation to all active student registrations. Provide a mandatory reason:`,
-      confirmLabel: 'Cancel Workshop'
+      title: `Cancel & Delete Workshop — ${w.workshopId}`,
+      message: `Cancelling "${w.title}" will delete this workshop from the portal and cancel any active registrations. Provide a cancellation reason:`,
+      confirmLabel: 'Cancel & Delete Workshop'
     });
   };
 
   const handleDelete = (w) => {
+    const isCancelled = w.lifecycleStatus === 'CANCELLED';
     setConfirmModalState({
       isOpen: true,
-      title: 'Delete Workshop Draft?',
-      message: `Are you sure you want to permanently delete draft "${w.title}" (${w.workshopId})? This action cannot be undone.`,
+      title: isCancelled ? 'Delete Cancelled Workshop?' : 'Delete Workshop Draft?',
+      message: `Are you sure you want to permanently delete "${w.title}" (${w.workshopId})? This action cannot be undone.`,
       danger: true,
       onConfirm: async () => {
         try {
@@ -288,6 +426,12 @@ export function WorkshopsPage() {
           await workshopService.registerStudent(w._id);
           toast(`Successfully registered for "${w.title}"!`);
           setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+          setWorkshops(prev => prev.map(item => item._id === w._id ? {
+            ...item,
+            isRegistered: true,
+            enrolledCount: (item.enrolledCount || 0) + 1,
+            seatsRemaining: Math.max(0, (item.seatsRemaining || 1) - 1)
+          } : item));
           await loadWorkshops();
         } catch (err) {
           toast(err.message || 'Registration failed.');
@@ -307,6 +451,12 @@ export function WorkshopsPage() {
           await workshopService.cancelRegistration(w._id, 'Student cancelled registration');
           toast(`Your registration for "${w.title}" has been cancelled.`);
           setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+          setWorkshops(prev => prev.map(item => item._id === w._id ? {
+            ...item,
+            isRegistered: false,
+            enrolledCount: Math.max(0, (item.enrolledCount || 1) - 1),
+            seatsRemaining: (item.seatsRemaining || 0) + 1
+          } : item));
           await loadWorkshops();
         } catch (err) {
           toast(err.message || 'Cancellation failed.');
@@ -321,9 +471,12 @@ export function WorkshopsPage() {
     if (actionType === 'reject') {
       await workshopService.rejectWorkshop(targetId, reason);
       toast('Workshop has been rejected.');
+    } else if (actionType === 'reject-edit') {
+      await workshopService.rejectWorkshopEdit(targetId, reason);
+      toast('Workshop proposed changes rejected.');
     } else if (actionType === 'cancel') {
       await workshopService.cancelWorkshop(targetId, reason);
-      toast('Workshop has been cancelled.');
+      toast('Workshop has been cancelled and deleted.');
     }
     setReasonModalState(prev => ({ ...prev, isOpen: false }));
     await loadWorkshops();
@@ -359,7 +512,13 @@ export function WorkshopsPage() {
   return (
     <PortalLayout
       title="Training & Workshops"
-      subtitle={isStudent ? 'Browse interactive bootcamps, technical training, and track your attendance & verified certificates.' : 'Manage campus training programs, student rosters, session attendance, and digital certifications.'}
+      subtitle={
+        isStudent
+          ? 'Browse interactive bootcamps, technical training, and track your attendance & verified certificates.'
+          : isCompany
+          ? 'Manage and track your company training programs, student rosters, and session attendance.'
+          : 'Manage campus training programs, student rosters, session attendance, and digital certifications.'
+      }
       actions={!isStudent ? headerActions : null}
       currentPath="/training-workshops"
     >
@@ -395,11 +554,13 @@ export function WorkshopsPage() {
           ) : (
             <>
               {[
-                { id: 'dashboard', label: 'Workshop Dashboard' },
-                { id: 'manage', label: 'Manage Workshops' },
-                ...(isPlacementHead ? [
-                  { id: 'approval-queue', label: 'Approval Queue' },
-                  { id: 'certificates', label: 'Certifications' }
+                { id: 'dashboard', label: isCompany ? 'Company Overview' : 'Workshop Dashboard' },
+                { id: 'manage', label: isCompany ? 'My Company Workshops' : 'Manage Workshops' },
+                ...(isCompany || isPlacementHead ? [
+                  { id: 'templates', label: 'Certificate Templates' }
+                ] : []),
+                ...(isPlacementHead || isCoordinator ? [
+                  { id: 'approval-queue', label: 'Approval Queue' }
                 ] : [])
               ].map(tab => (
                 <button
@@ -453,7 +614,7 @@ export function WorkshopsPage() {
                 <h3>Quick Management Actions</h3>
                 <div className="quick-list" style={{ marginTop: '14px' }}>
                   <a href="#/training-workshops" onClick={() => setActiveTab('manage')}>
-                    <span>Manage all scheduled programs</span>
+                    <span>{isCompany ? 'Manage your scheduled company programs' : 'Manage all scheduled programs'}</span>
                     <strong>View List →</strong>
                   </a>
                   {isPlacementHead && (
@@ -470,25 +631,134 @@ export function WorkshopsPage() {
               </div>
 
               <div className="card">
-                <h3>Upcoming Workshops Overview</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0 }}>Upcoming Workshops Overview</h3>
+                  {workshops.length > 5 && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      style={{ fontSize: '0.8rem', padding: '4px 8px' }}
+                      onClick={() => setActiveTab('manage')}
+                    >
+                      View All ({totalCount || workshops.length}) →
+                    </button>
+                  )}
+                </div>
                 <div style={{ marginTop: '12px' }}>
-                  {workshops.slice(0, 3).map(w => (
-                    <div key={w._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <div>
-                        <strong>{w.title}</strong>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
-                          {new Date(w.startAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })} | {w.mode}
+                  {workshops.slice(0, 10).map((w) => {
+                    const sessionCount = Array.isArray(w.sessions) ? w.sessions.length : 0;
+
+                    return (
+                      <div
+                        key={w._id}
+                        className="clickable-row"
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 8px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', borderRadius: '6px' }}
+                        onClick={() => { window.location.hash = `#/training-workshops/${w._id}`; }}
+                      >
+                        <div>
+                          <strong>{w.title}</strong>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                            <span style={{ fontWeight: 600, color: '#334155' }}>
+                              {sessionCount} {sessionCount === 1 ? 'Session' : 'Sessions'}
+                            </span> • {formatWorkshopDate(w.startAt, w.endAt)} | {w.mode}
+                          </div>
                         </div>
+                        <span className={`badge ${w.isPublished ? 'published' : String(w.approvalStatus).toLowerCase()}`}>
+                          {w.isPublished ? 'Published' : w.approvalStatus}
+                        </span>
                       </div>
-                      <span className={`badge ${w.isPublished ? 'published' : String(w.approvalStatus).toLowerCase()}`}>
-                        {w.isPublished ? 'Published' : w.approvalStatus}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {workshops.length === 0 && <p className="empty">No upcoming workshops scheduled.</p>}
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* CERTIFICATE TEMPLATES TAB (Company & Placement Head) */}
+        {!isStudent && activeTab === 'templates' && (
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Certificate Templates</h3>
+              </div>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setTemplateModalOpen(true)}
+              >
+                <PlusIcon size={16} /> Upload Template
+              </button>
+            </div>
+
+            {templatesLoading ? (
+              <div className="card loading" style={{ textAlign: 'center', padding: '36px' }}>Loading certificate templates…</div>
+            ) : companyTemplates.length === 0 ? (
+              <div className="card empty" style={{ textAlign: 'center', padding: '48px 24px' }}>
+                <ShieldIcon size={48} style={{ color: 'var(--muted)', margin: '0 auto 12px' }} />
+                <h3>No certificate templates found</h3>
+                <p>Upload a custom certificate background with your company branding and signatory details.</p>
+              </div>
+            ) : (
+              <div className="cards-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px' }}>
+                {companyTemplates.map(template => (
+                  <div key={template._id} className="card workshop-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px' }}>
+                    <div>
+                      {template.backgroundUrl ? (
+                        <img
+                          src={getAssetUrl(template.backgroundUrl)}
+                          alt={template.name}
+                          style={{
+                            width: '100%',
+                            height: '160px',
+                            objectFit: 'contain',
+                            background: '#f8fafc',
+                            borderRadius: '6px',
+                            border: '1px solid var(--line)',
+                            marginBottom: '12px'
+                          }}
+                        />
+                      ) : (
+                        <div style={{ width: '100%', height: '140px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px', color: 'var(--muted)' }}>
+                          No Preview Available
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span className="badge badge-info">{template.orientation || 'LANDSCAPE'}</span>
+                        <span className="badge neutral">v{template.version || 1}</span>
+                      </div>
+
+                      <h4 style={{ margin: '0 0 6px', fontSize: '1.05rem', color: '#102e5f' }}>
+                        {template.name}
+                      </h4>
+
+                      {template.signatoryName && (
+                        <div style={{ fontSize: '0.82rem', color: 'var(--muted)', marginBottom: '4px' }}>
+                          <strong>Signatory:</strong> {template.signatoryName} {template.signatoryTitle ? `(${template.signatoryTitle})` : ''}
+                        </div>
+                      )}
+
+                      {template.isDefault && (
+                        <span className="badge published" style={{ marginTop: '4px' }}>Default Template</span>
+                      )}
+                    </div>
+
+                    <div style={{ borderTop: '1px solid var(--line)', paddingTop: '12px', marginTop: '14px', display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        className="danger"
+                        style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                        onClick={() => handleDeleteTemplate(template._id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -503,16 +773,22 @@ export function WorkshopsPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
 
-            {!isCoordinator && (
+            {!isCompany && (
               <select
                 id="ws-filter-department"
-                style={{ width: '200px' }}
+                style={{ width: '220px' }}
                 value={selectedDepartment}
-                onChange={(e) => setSelectedDepartment(e.target.value)}
+                onChange={(e) => {
+                  setSelectedDepartment(e.target.value);
+                  setCurrentPage(1);
+                }}
               >
-                <option value="">All Departments</option>
+                <option value="">All Workshops</option>
+                <option value="CENTRAL">Central Placement Cell</option>
                 {departments.map((d) => (
-                  <option key={d._id} value={d._id}>{d.name} ({d.code})</option>
+                  <option key={d._id} value={d._id}>
+                    {d.name} ({d.code}){isCoordinator && String(d._id) === String(coordinatorDeptId) ? ' — My Department' : ''}
+                  </option>
                 ))}
               </select>
             )}
@@ -570,7 +846,7 @@ export function WorkshopsPage() {
                   <tr>
                     <th>Workshop ID</th>
                     <th>Program Title</th>
-                    <th>Department</th>
+                    <th>Sessions</th>
                     <th>Mode & Dates</th>
                     <th style={{ textAlign: 'center' }}>Enrolled / Capacity</th>
                     <th>Approval Status</th>
@@ -586,15 +862,29 @@ export function WorkshopsPage() {
                   ) : workshops.length > 0 ? (
                     workshops.map((w) => {
                       const isCreator = String(w.createdBy) === String(user?.userId);
-                      const canEdit = !w.isPublished && (w.approvalStatus === 'DRAFT' || w.approvalStatus === 'REJECTED');
+                      const canEdit = canUserEditWorkshop({ workshop: w, user, role, has, coordinatorDeptId });
+                      const canReviewEdit = canUserReviewWorkshopEdit({ workshop: w, user, role, coordinatorDeptId });
                       const canSubmit = w.approvalStatus === 'DRAFT' && has('WORKSHOP_UPDATE');
                       const canApprove = w.approvalStatus === 'PENDING_APPROVAL' && has('WORKSHOP_APPROVE');
                       const canPublish = w.approvalStatus === 'APPROVED' && !w.isPublished && w.lifecycleStatus !== 'CANCELLED' && has('WORKSHOP_PUBLISH');
                       const canCancel = w.isPublished && w.lifecycleStatus !== 'CANCELLED' && has('WORKSHOP_CANCEL');
-                      const canDelete = !w.isPublished && (w.approvalStatus === 'DRAFT' || w.approvalStatus === 'REJECTED') && has('WORKSHOP_DELETE');
+                      const canDelete =
+                        (!w.isPublished || w.lifecycleStatus === 'CANCELLED') &&
+                        (w.approvalStatus === 'DRAFT' || w.approvalStatus === 'REJECTED' || w.lifecycleStatus === 'CANCELLED') &&
+                        has('WORKSHOP_DELETE');
 
                       return (
-                        <tr key={w._id}>
+                        <tr
+                          key={w._id}
+                          className="clickable-row"
+                          onClick={(e) => {
+                            if (e.target.closest('button, a, input, select, textarea, .actions')) {
+                              return;
+                            }
+                            window.location.hash = `#/training-workshops/${w._id}`;
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td>
                             <span className="badge badge-info">{w.workshopId}</span>
                           </td>
@@ -604,6 +894,7 @@ export function WorkshopsPage() {
                               style={{ color: 'inherit', textDecoration: 'none' }}
                               onMouseEnter={(e) => (e.target.style.textDecoration = 'underline')}
                               onMouseLeave={(e) => (e.target.style.textDecoration = 'none')}
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <strong>{w.title}</strong>
                             </a>
@@ -612,16 +903,22 @@ export function WorkshopsPage() {
                             </span>
                           </td>
                           <td>
-                            {w.ownershipType === 'CENTRAL_PLACEMENT_CELL' ? (
-                              <span className="badge neutral">Central Placement Cell</span>
-                            ) : (
-                              <span>{w.departmentId?.name || 'Department'}</span>
-                            )}
+                            <span
+                              className="badge neutral"
+                              style={{ minWidth: '24px', justifyContent: 'center' }}
+                              title={
+                                Array.isArray(w.sessions) && w.sessions.length > 0
+                                  ? w.sessions.map((s, idx) => `${s.sessionId || `Session ${idx + 1}`}: ${s.title}`).join('\n')
+                                  : 'No sessions defined'
+                              }
+                            >
+                              {Array.isArray(w.sessions) ? w.sessions.length : 0}
+                            </span>
                           </td>
                           <td>
                             <span className={`badge mode-${String(w.mode).toLowerCase()}`}>{w.mode}</span>
-                            <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--muted)', marginTop: '2px' }}>
-                              {new Date(w.startAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                            <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--muted)', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                              {formatWorkshopDate(w.startAt, w.endAt)}
                             </span>
                           </td>
                           <td style={{ textAlign: 'center' }}>
@@ -634,6 +931,15 @@ export function WorkshopsPage() {
                             <span className={`badge ${String(w.approvalStatus).toLowerCase()}`}>
                               {w.approvalStatus}
                             </span>
+                            {w.pendingEdit?.status === 'PENDING' && (
+                              <span
+                                className="badge warning"
+                                style={{ display: 'inline-block', marginTop: '4px', fontSize: '0.72rem' }}
+                                title="Company proposed changes awaiting review"
+                              >
+                                Edit Pending
+                              </span>
+                            )}
                           </td>
                           <td>
                             <span className={`badge ${
@@ -651,7 +957,7 @@ export function WorkshopsPage() {
                             </span>
                           </td>
                           <td>
-                            <div className="actions" style={{ display: 'flex', gap: '6px' }}>
+                            <div className="actions" style={{ display: 'flex', gap: '6px' }} onClick={(e) => e.stopPropagation()}>
                               <a
                                 href={`#/training-workshops/${w._id}`}
                                 className="link-button"
@@ -701,6 +1007,27 @@ export function WorkshopsPage() {
                                     onClick={() => openRejectModal(w)}
                                   >
                                     Reject
+                                  </button>
+                                </>
+                              )}
+
+                              {canReviewEdit && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="link-button"
+                                    style={{ color: 'var(--green)' }}
+                                    onClick={() => handleApproveEdit(w)}
+                                  >
+                                    Approve Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="link-button"
+                                    style={{ color: 'var(--red)' }}
+                                    onClick={() => openRejectEditModal(w)}
+                                  >
+                                    Reject Edit
                                   </button>
                                 </>
                               )}
@@ -794,41 +1121,60 @@ export function WorkshopsPage() {
                 <p>Check back later or adjust your search filters to find exciting upcoming training sessions.</p>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+              <div
+                className="cards-grid-4"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                  gap: '16px'
+                }}
+              >
                 {studentVisibleWorkshops.map((w) => {
                   const isFull = (w.seatsRemaining || 0) <= 0;
                   const isClosed = w.registrationDeadline && new Date() > new Date(w.registrationDeadline);
-                  const isRegistered = activeTab === 'my-registrations';
+                  const isRegistered = Boolean(w.isRegistered) || activeTab === 'my-registrations';
 
                   return (
-                    <div key={w._id} className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div
+                      key={w._id}
+                      className="card workshop-card"
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        padding: '16px'
+                      }}
+                    >
                       <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                          <span className={`badge mode-${String(w.mode).toLowerCase()}`}>{w.mode}</span>
-                          <span className="badge neutral">{w.category}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '6px', flexWrap: 'wrap' }}>
+                          <span className={`badge mode-${String(w.mode).toLowerCase()}`} style={{ fontSize: '0.65rem' }}>{w.mode}</span>
+                          <span className="badge neutral" style={{ fontSize: '0.65rem' }}>
+                            {Array.isArray(w.sessions) ? w.sessions.length : 0} {(w.sessions?.length || 0) === 1 ? 'Session' : 'Sessions'}
+                          </span>
+                          <span className="badge neutral" style={{ fontSize: '0.65rem' }}>{w.category}</span>
                         </div>
 
-                        <h3 style={{ fontSize: '1.15rem', color: '#102e5f', margin: '0 0 8px' }}>
+                        <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#102e5f', margin: '0 0 8px', lineHeight: 1.35, wordBreak: 'break-word' }}>
                           <a href={`#/training-workshops/${w._id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                             {w.title}
                           </a>
                         </h3>
 
-                        <p style={{ fontSize: '0.86rem', color: 'var(--muted)', lineHeight: 1.5, margin: '0 0 16px', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        <p style={{ fontSize: '0.82rem', color: 'var(--muted)', lineHeight: 1.45, margin: '0 0 12px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                           {w.description}
                         </p>
 
-                        <div style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '8px' }}>
-                          <strong>Date:</strong> {new Date(w.startAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}
+                        <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: '6px', wordBreak: 'break-word' }}>
+                          <strong>Date:</strong> {formatStudentWorkshopDate(w.startAt, w.endAt)}
                         </div>
 
-                        <div style={{ fontSize: '0.8rem', color: '#475569', marginBottom: '12px' }}>
-                          <strong>Location:</strong> {w.mode === 'ONLINE' ? 'Virtual (Link upon registration)' : (w.venue || 'Campus Venue')}
+                        <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: '12px', wordBreak: 'break-word' }}>
+                          <strong>Location:</strong> {w.mode === 'ONLINE' ? 'Virtual' : (w.venue || 'Campus Venue')}
                         </div>
 
                         {/* Capacity meter */}
-                        <div style={{ background: '#f1f5f9', borderRadius: '8px', padding: '10px', marginBottom: '16px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '4px' }}>
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 10px', marginBottom: '14px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '4px' }}>
                             <span>Seats Remaining:</span>
                             <strong style={{ color: isFull ? 'var(--red)' : 'var(--green)' }}>
                               {isFull ? 'FULL' : `${w.seatsRemaining} / ${w.maxParticipants}`}
@@ -847,26 +1193,88 @@ export function WorkshopsPage() {
                       </div>
 
                       {/* Card Action */}
-                      <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <a href={`#/training-workshops/${w._id}`} className="link-button">
+                      <div style={{
+                        borderTop: '1px solid #f1f5f9',
+                        paddingTop: '12px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        <a
+                          href={`#/training-workshops/${w._id}`}
+                          className="link-button"
+                          style={{ fontSize: '0.76rem', whiteSpace: 'nowrap', flexShrink: 0 }}
+                        >
                           Program Details →
                         </a>
 
                         {isRegistered ? (
-                          <button
-                            type="button"
-                            className="danger"
-                            style={{ padding: '6px 14px', fontSize: '0.82rem' }}
-                            onClick={() => handleStudentCancelRegistration(w)}
-                          >
-                            Cancel Seat
-                          </button>
+                          activeTab === 'my-registrations' ? (
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                              <button
+                                type="button"
+                                className="primary"
+                                disabled
+                                style={{
+                                  padding: '5px 10px',
+                                  fontSize: '0.75rem',
+                                  whiteSpace: 'nowrap',
+                                  cursor: 'default',
+                                  background: 'var(--green)',
+                                  color: '#fff',
+                                  opacity: 1,
+                                  borderRadius: '8px',
+                                  border: 'none',
+                                  fontWeight: 750
+                                }}
+                              >
+                                Registered
+                              </button>
+                              <button
+                                type="button"
+                                className="danger"
+                                style={{ padding: '5px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap', borderRadius: '8px' }}
+                                onClick={() => handleStudentCancelRegistration(w)}
+                              >
+                                Cancel Seat
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="primary"
+                              disabled
+                              style={{
+                                padding: '5px 11px',
+                                fontSize: '0.75rem',
+                                whiteSpace: 'nowrap',
+                                cursor: 'default',
+                                background: 'var(--green)',
+                                color: '#fff',
+                                opacity: 1,
+                                borderRadius: '8px',
+                                border: 'none',
+                                fontWeight: 750,
+                                flexShrink: 0
+                              }}
+                            >
+                              Registered
+                            </button>
+                          )
                         ) : (
                           <button
                             type="button"
                             className="primary"
                             disabled={isFull || isClosed}
-                            style={{ padding: '6px 14px', fontSize: '0.82rem' }}
+                            style={{
+                              padding: '5px 11px',
+                              fontSize: '0.75rem',
+                              whiteSpace: 'nowrap',
+                              borderRadius: '8px',
+                              fontWeight: 750,
+                              flexShrink: 0
+                            }}
                             onClick={() => handleStudentRegister(w)}
                           >
                             {isFull ? 'Full' : isClosed ? 'Closed' : 'Register Now'}
@@ -891,37 +1299,64 @@ export function WorkshopsPage() {
                 <p>Attend at least 75% of mandatory workshop sessions to earn official verified certificates.</p>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+              <div
+                className="cards-grid-4"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                  gap: '16px'
+                }}
+              >
                 {myCertificates.map(cert => (
-                  <div key={cert._id} className="card" style={{ borderLeft: '4px solid var(--teal)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <span className="badge badge-info">{cert.certificateNumber}</span>
-                      <span className="badge published">VERIFIED</span>
+                  <div
+                    key={cert._id}
+                    className="card workshop-card"
+                    style={{
+                      borderLeft: '4px solid var(--teal)',
+                      padding: '16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '6px', flexWrap: 'wrap' }}>
+                        <span className="badge badge-info" style={{ fontSize: '0.65rem' }}>{cert.certificateNumber}</span>
+                        <span className="badge published" style={{ fontSize: '0.65rem' }}>VERIFIED</span>
+                      </div>
+
+                      <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#102e5f', margin: '6px 0', wordBreak: 'break-word', lineHeight: 1.35 }}>
+                        {cert.workshopId?.title || 'Workshop Program'}
+                      </h3>
+
+                      <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '0 0 14px' }}>
+                        Issued: {new Date(cert.issuedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                      </p>
                     </div>
 
-                    <h3 style={{ fontSize: '1.1rem', color: '#102e5f', margin: '6px 0' }}>
-                      {cert.workshopId?.title || 'Workshop Program'}
-                    </h3>
-
-                    <p style={{ fontSize: '0.82rem', color: 'var(--muted)', margin: '0 0 14px' }}>
-                      Issued: {new Date(cert.issuedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
-                    </p>
-
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
                       <button
                         className="primary"
                         type="button"
-                        style={{ padding: '6px 12px', fontSize: '0.82rem' }}
+                        style={{ padding: '5px 10px', fontSize: '0.78rem' }}
                         onClick={() => setViewingCertificate(cert)}
                       >
                         View & Print
+                      </button>
+                      <button
+                        className="ghost"
+                        type="button"
+                        style={{ padding: '5px 10px', fontSize: '0.78rem' }}
+                        onClick={() => handleDownloadCertificate(cert._id, cert.certificateNumber)}
+                      >
+                        Download PDF
                       </button>
                       <a
                         href={`#/verify-certificate/${cert.verificationCode}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="secondary"
-                        style={{ padding: '6px 12px', fontSize: '0.82rem', textDecoration: 'none' }}
+                        style={{ padding: '5px 10px', fontSize: '0.78rem', textDecoration: 'none' }}
                       >
                         Public Link
                       </a>
@@ -971,6 +1406,14 @@ export function WorkshopsPage() {
         isOpen={Boolean(viewingCertificate)}
         certificate={viewingCertificate}
         onClose={() => setViewingCertificate(null)}
+        onDownload={(cert) => handleDownloadCertificate(cert._id, cert.certificateNumber)}
+      />
+
+      {/* COMPANY CERTIFICATE TEMPLATE MODAL */}
+      <CompanyCertificateTemplateModal
+        isOpen={templateModalOpen}
+        onClose={() => setTemplateModalOpen(false)}
+        onSaved={loadCompanyTemplates}
       />
     </PortalLayout>
   );

@@ -821,6 +821,31 @@ a { color: inherit; text-decoration: none; }
   gap: 16px;
 }
 
+.cards-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+.workshop-card {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.workshop-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(16, 46, 95, 0.07);
+}
+
 .metric {
   padding: 18px;
   background: #fff;
@@ -964,6 +989,16 @@ a { color: inherit; text-decoration: none; }
 
 .data-table tr:last-child td {
   border: 0;
+}
+
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.clickable-row:hover,
+.clickable-row:hover td {
+  background-color: #f8fafc;
 }
 
 .data-table .actions {
@@ -1342,4 +1377,10 @@ a { color: inherit; text-decoration: none; }
   .button-group { width: 100%; }
   .button-group button { flex: 1; }
   .detail-grid .definition-list div { grid-template-columns: 1fr; gap: 4px; }
+}
+
+@media (max-width: 640px) {
+  .cards-grid-4 {
+    grid-template-columns: 1fr !important;
+  }
 }

@@ -6,13 +6,18 @@ import { WorkshopCertificate } from '../models/workshop_certificate.model.js';
 import { ROLE_IDS } from '../utils/access-constants.js';
 import { AppError } from '../utils/app-error.js';
 import { executeWorkshopTransaction, logWorkshopAudit } from './workshop-audit.service.js';
+import {
+  isCompanyUser,
+  isCompanyOwnWorkshop,
+  getCompanyIdForAuth
+} from '../utils/company-workshop-scope.js';
 
 /**
  * Calculates attendance metrics and completion status for a workshop registration.
  *
  * Rules:
  * - Missing records count as absent.
- * - Only PRESENT counts toward the attended count; EXCUSED does NOT count.
+ * - Only PRESENT counts toward the attended count.
  * - If no sessions are marked as required, all workshop sessions are required.
  * - Completion threshold is >= 75.0% of required sessions attended as PRESENT.
  *
@@ -83,7 +88,7 @@ export function calculateRegistrationAttendance(workshopSessions, attendanceReco
  * @param {object} auth
  * @returns {Promise<{ updatedCount: number, recordedCount: number }>}
  */
-export async function submitSessionAttendance({ workshopId, sessionId, attendees, correctionReason }, auth) {
+export async function submitSessionAttendance({ workshopId, sessionId, attendees, correctionReason, remarks }, auth) {
   if (!auth || !auth.userId) {
     throw new AppError(401, 'UNAUTHENTICATED', 'Authentication is required.');
   }
@@ -108,24 +113,54 @@ export async function submitSessionAttendance({ workshopId, sessionId, attendees
     throw new AppError(404, 'SESSION_NOT_FOUND', `Session "${sessionId}" not found in workshop.`);
   }
 
+  if (isCompanyUser(auth)) {
+    const isOwn = await isCompanyOwnWorkshop(workshop, auth);
+    if (!isOwn) {
+      throw new AppError(403, 'FORBIDDEN', 'Company can only view and manage their own workshops.');
+    }
+  }
+
   // Strict Trainer Assignment Authorization (Zero Coordinator Bypass)
-  // Super Admin possesses permission for administrative overrides; for all others,
-  // the authenticated user must be an internal trainer assigned to this specific session.
-  if (auth.roleId !== ROLE_IDS.SUPER_ADMIN) {
-    const internalTrainerIds = (workshop.trainers || [])
-      .filter((t) => t.userId && String(t.userId) === String(auth.userId))
-      .map((t) => String(t._id));
-
-    const isAssignedToSession = internalTrainerIds.some((trainerSubId) =>
-      Array.isArray(targetSession.trainerIds) && targetSession.trainerIds.includes(trainerSubId)
-    );
-
-    if (!isAssignedToSession) {
-      throw new AppError(
-        403,
-        'NOT_ASSIGNED_SESSION_TRAINER',
-        'You are not assigned as a trainer for this workshop session.'
+  // Super Admin and Placement Head possess administrative permission to mark attendance for all workshops;
+  // for all others, the authenticated user must be an assigned trainer for this specific session or company creator/trainer.
+  const isAdminOrHead = auth.roleId === ROLE_IDS.SUPER_ADMIN || auth.roleId === ROLE_IDS.PLACEMENT_HEAD;
+  if (!isAdminOrHead) {
+    if (isCompanyUser(auth)) {
+      const companyId = await getCompanyIdForAuth(auth);
+      const isCreator = workshop.createdBy && String(workshop.createdBy) === String(auth.userId);
+      const isSessionCompanyTrainer = (workshop.trainers || []).some(
+        (t) =>
+          t.trainerType === 'COMPANY' &&
+          t.companyId &&
+          String(t.companyId) === String(companyId) &&
+          Array.isArray(targetSession.trainerIds) &&
+          targetSession.trainerIds.includes(String(t._id))
       );
+
+      const hasSpecificTrainers = Array.isArray(targetSession.trainerIds) && targetSession.trainerIds.length > 0;
+      if (hasSpecificTrainers && !isSessionCompanyTrainer && !isCreator) {
+        throw new AppError(
+          403,
+          'NOT_ASSIGNED_SESSION_TRAINER',
+          'You are not assigned as a trainer for this workshop session.'
+        );
+      }
+    } else {
+      const internalTrainerIds = (workshop.trainers || [])
+        .filter((t) => t.userId && String(t.userId) === String(auth.userId))
+        .map((t) => String(t._id));
+
+      const isAssignedToSession = internalTrainerIds.some((trainerSubId) =>
+        Array.isArray(targetSession.trainerIds) && targetSession.trainerIds.includes(trainerSubId)
+      );
+
+      if (!isAssignedToSession) {
+        throw new AppError(
+          403,
+          'NOT_ASSIGNED_SESSION_TRAINER',
+          'You are not assigned as a trainer for this workshop session.'
+        );
+      }
     }
   }
 
@@ -201,11 +236,15 @@ export async function submitSessionAttendance({ workshopId, sessionId, attendees
 
       const existingRecord = existingMap.get(String(attendee.registrationId));
 
+      const attendeeRemark = (attendee.remarks !== undefined && attendee.remarks !== null)
+        ? attendee.remarks.trim()
+        : (remarks ? remarks.trim() : undefined);
+
       if (existingRecord) {
         // Attendance Correction
         const oldStatus = existingRecord.attendanceStatus;
         existingRecord.attendanceStatus = attendee.attendanceStatus;
-        existingRecord.remarks = attendee.remarks ? attendee.remarks.trim() : undefined;
+        existingRecord.remarks = attendeeRemark;
         existingRecord.updatedBy = auth.userId;
         await existingRecord.save({ session });
         updatedCount++;
@@ -221,7 +260,7 @@ export async function submitSessionAttendance({ workshopId, sessionId, attendees
             changedBy: auth.userId,
             reason: correctionReason.trim(),
             oldValue: { attendanceStatus: oldStatus },
-            newValue: { attendanceStatus: attendee.attendanceStatus, remarks: attendee.remarks }
+            newValue: { attendanceStatus: attendee.attendanceStatus, remarks: attendeeRemark }
           },
           session
         );
@@ -235,7 +274,7 @@ export async function submitSessionAttendance({ workshopId, sessionId, attendees
               registrationId: regDoc._id,
               studentId: regDoc.studentId,
               attendanceStatus: attendee.attendanceStatus,
-              remarks: attendee.remarks ? attendee.remarks.trim() : undefined,
+              remarks: attendeeRemark,
               markedBy: auth.userId,
               markedAt: now
             }
@@ -253,7 +292,7 @@ export async function submitSessionAttendance({ workshopId, sessionId, attendees
             entityType: 'ATTENDANCE',
             entityId: `${attendee.registrationId}_${sessionId}`,
             changedBy: auth.userId,
-            newValue: { attendanceStatus: attendee.attendanceStatus, remarks: attendee.remarks }
+            newValue: { attendanceStatus: attendee.attendanceStatus, remarks: attendeeRemark }
           },
           session
         );
@@ -328,6 +367,13 @@ export async function getSessionAttendance({ workshopId, sessionId, page = 1, li
     throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
   }
 
+  if (isCompanyUser(auth)) {
+    const isOwn = await isCompanyOwnWorkshop(workshop, auth);
+    if (!isOwn) {
+      throw new AppError(403, 'FORBIDDEN', 'Company can only view and manage their own workshops.');
+    }
+  }
+
   const sessionExists = (workshop.sessions || []).some((s) => s.sessionId === sessionId);
   if (!sessionExists) {
     throw new AppError(404, 'SESSION_NOT_FOUND', `Session "${sessionId}" not found.`);
@@ -339,7 +385,7 @@ export async function getSessionAttendance({ workshopId, sessionId, page = 1, li
   }
 
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+  const limitNum = Math.min(500, Math.max(1, parseInt(limit, 10) || 20));
   const skip = (pageNum - 1) * limitNum;
 
   const [records, total] = await Promise.all([
@@ -347,7 +393,11 @@ export async function getSessionAttendance({ workshopId, sessionId, page = 1, li
       .sort({ markedAt: -1, _id: -1 })
       .skip(skip)
       .limit(limitNum)
-      .populate('studentId', 'firstName lastName universityId email branch department semester')
+      .populate({
+        path: 'studentId',
+        select: 'firstName lastName universityId email branch department courseId semester',
+        populate: { path: 'courseId', select: 'name code' }
+      })
       .populate('markedBy', 'firstName lastName email employeeId')
       .lean(),
     WorkshopAttendance.countDocuments(query)

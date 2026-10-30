@@ -5,6 +5,7 @@ import { User } from '../models/user.model.js';
 import { ROLE_IDS, PERMISSION_IDS } from '../utils/access-constants.js';
 import { AppError } from '../utils/app-error.js';
 import { getCoordinatorDepartment } from '../utils/department-scope.js';
+import { isCompanyUser, isCompanyOwnWorkshop } from '../utils/company-workshop-scope.js';
 
 /**
  * Checks whether an error signifies that MongoDB does not support multi-document transactions
@@ -213,6 +214,13 @@ export async function getWorkshopAuditTrail({ workshopId, page = 1, limit = 20, 
       throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'Workshop not found.');
     }
   } else {
+    if (isCompanyUser(auth)) {
+      const isOwn = await isCompanyOwnWorkshop(workshop, auth);
+      if (!isOwn) {
+        throw new AppError(403, 'FORBIDDEN', 'Company can only view and manage their own workshops.');
+      }
+    }
+
     // Check Coordinator department scope
     const coordDept = await getCoordinatorDepartment(auth);
     if (coordDept) {

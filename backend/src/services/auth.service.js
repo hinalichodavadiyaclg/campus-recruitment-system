@@ -138,7 +138,13 @@ export async function authenticateSession(rawToken) {
   }
   await assertAccountCanAuthenticate(user);
   await UserSession.updateOne({ _id: session._id, isActive: true }, { lastActivityAt: now });
-  return { userId: user._id, sessionId: session._id, roleId: user.roleId, userType: user.userType };
+  return {
+    userId: user._id,
+    sessionId: session._id,
+    roleId: user.roleId,
+    userType: user.userType,
+    companyId: user.companyId ? String(user.companyId) : undefined
+  };
 }
 
 export async function logout(sessionId) {
