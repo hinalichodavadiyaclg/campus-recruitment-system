@@ -32,25 +32,61 @@ export function FilteredStudentRecordsPage() {
   const [search, setSearch] = useState(queryParams.get('search') || '');
   const [departmentFilter, setDepartmentFilter] = useState(() => {
     if (isCoordinator && coordinatorDeptId) return String(coordinatorDeptId);
-    return '';
+    return String(queryParams.get('departmentId') || queryParams.get('department') || '');
   });
-  const [courseFilter, setCourseFilter] = useState('');
+  const [courseFilter, setCourseFilter] = useState(() => {
+    return String(queryParams.get('courseId') || queryParams.get('course') || '');
+  });
   const [semesterFilter, setSemesterFilter] = useState(queryParams.get('semester') || '');
   const [minCgpaFilter, setMinCgpaFilter] = useState(queryParams.get('cgpa') || queryParams.get('minCgpa') || '');
   const [backlogFilter, setBacklogFilter] = useState(queryParams.get('backlogs') || '');
-
-  useEffect(() => {
-    if (!isCoordinator && (window.location.hash.includes('course') || window.location.hash.includes('department'))) {
-      const cleanHash = window.location.hash.split('?')[0];
-      window.history.replaceState(null, '', cleanHash);
-    }
-  }, [isCoordinator]);
 
   useEffect(() => {
     if (isCoordinator && coordinatorDeptId && departmentFilter !== String(coordinatorDeptId)) {
       setDepartmentFilter(String(coordinatorDeptId));
     }
   }, [isCoordinator, coordinatorDeptId, departmentFilter]);
+
+  // Synchronize on hash changes (e.g. redirected from Course or Department page)
+  useEffect(() => {
+    const applyHashParams = () => {
+      const params = getHashQueryParams();
+      const courseParam = params.get('courseId') || params.get('course');
+      const deptParam = params.get('departmentId') || params.get('department');
+
+      if (courseParam) {
+        const matchedCourse = coursesList.find(
+          (c) =>
+            String(c._id) === String(courseParam) ||
+            String(c.code || '').toLowerCase() === String(courseParam).toLowerCase() ||
+            String(c.name || '').toLowerCase() === String(courseParam).toLowerCase()
+        );
+        const resolvedCourseId = matchedCourse ? String(matchedCourse._id) : String(courseParam);
+        setCourseFilter(resolvedCourseId);
+
+        if (!isCoordinator && matchedCourse?.departmentId) {
+          const deptId = matchedCourse.departmentId._id
+            ? String(matchedCourse.departmentId._id)
+            : String(matchedCourse.departmentId);
+          setDepartmentFilter((prev) => prev || deptId);
+        }
+      }
+      if (!isCoordinator) {
+        if (deptParam) {
+          const matchedDept = departmentsList.find(
+            (d) =>
+              String(d._id) === String(deptParam) ||
+              String(d.code || '').toLowerCase() === String(deptParam).toLowerCase() ||
+              String(d.name || '').toLowerCase() === String(deptParam).toLowerCase()
+          );
+          setDepartmentFilter(matchedDept ? String(matchedDept._id) : String(deptParam));
+        }
+      }
+    };
+
+    window.addEventListener('hashchange', applyHashParams);
+    return () => window.removeEventListener('hashchange', applyHashParams);
+  }, [isCoordinator, coursesList, departmentsList]);
 
   const [students, setStudents] = useState([]);
   const [departmentsList, setDepartmentsList] = useState([]);
@@ -75,6 +111,41 @@ export function FilteredStudentRecordsPage() {
       setStudents(studentsData.items || []);
       setDepartmentsList(resolvedDepts);
       setCoursesList(resolvedCourses);
+
+      // Auto-populate and normalize department & course filters from URL
+      if (!isCoordinator) {
+        const activeCourseParam = queryParams.get('courseId') || queryParams.get('course') || courseFilter;
+        if (activeCourseParam) {
+          const matchedCourse = resolvedCourses.find(
+            (c) =>
+              String(c._id) === String(activeCourseParam) ||
+              String(c.code || '').toLowerCase() === String(activeCourseParam).toLowerCase() ||
+              String(c.name || '').toLowerCase() === String(activeCourseParam).toLowerCase()
+          );
+          if (matchedCourse) {
+            setCourseFilter(String(matchedCourse._id));
+            if (!queryParams.get('departmentId') && !queryParams.get('department') && matchedCourse.departmentId) {
+              const deptId = matchedCourse.departmentId._id
+                ? String(matchedCourse.departmentId._id)
+                : String(matchedCourse.departmentId);
+              setDepartmentFilter((prev) => prev || deptId);
+            }
+          }
+        }
+
+        const activeDeptParam = queryParams.get('departmentId') || queryParams.get('department') || departmentFilter;
+        if (activeDeptParam) {
+          const matchedDept = resolvedDepts.find(
+            (d) =>
+              String(d._id) === String(activeDeptParam) ||
+              String(d.code || '').toLowerCase() === String(activeDeptParam).toLowerCase() ||
+              String(d.name || '').toLowerCase() === String(activeDeptParam).toLowerCase()
+          );
+          if (matchedDept) {
+            setDepartmentFilter(String(matchedDept._id));
+          }
+        }
+      }
     } catch (err) {
       toast(err.message || 'Failed to load student records.');
     } finally {

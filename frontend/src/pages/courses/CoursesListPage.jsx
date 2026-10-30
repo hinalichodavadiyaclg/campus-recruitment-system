@@ -263,37 +263,31 @@ export function CoursesListPage() {
                         key={c._id}
                         onClick={(e) => {
                           if (e.target.closest('button, input, select')) return;
-                          if (hasStudents) {
-                            window.location.hash = courseRedirectUrl;
-                          }
+                          window.location.hash = courseRedirectUrl;
                         }}
                         style={{
-                          cursor: hasStudents ? 'pointer' : 'default',
+                          cursor: 'pointer',
                           transition: 'background-color 0.15s ease'
                         }}
-                        title={hasStudents ? `Click to view ${c.studentCount} students enrolled in ${c.name}` : undefined}
+                        title={`Click to view students enrolled in ${c.name}`}
                       >
                         <td>
                           <span className="badge badge-info">{c.code}</span>
                         </td>
                         <td>
-                          {hasStudents ? (
-                            <a
-                              href={courseRedirectUrl}
-                              style={{
-                                color: 'inherit',
-                                textDecoration: 'none',
-                                cursor: 'pointer'
-                              }}
-                              onMouseEnter={(e) => (e.target.style.textDecoration = 'underline')}
-                              onMouseLeave={(e) => (e.target.style.textDecoration = 'none')}
-                              title={`View ${c.studentCount} students enrolled in ${c.name}`}
-                            >
-                              <strong>{c.name}</strong>
-                            </a>
-                          ) : (
+                          <a
+                            href={courseRedirectUrl}
+                            style={{
+                              color: 'inherit',
+                              textDecoration: 'none',
+                              cursor: 'pointer'
+                            }}
+                            onMouseEnter={(e) => (e.target.style.textDecoration = 'underline')}
+                            onMouseLeave={(e) => (e.target.style.textDecoration = 'none')}
+                            title={`View students enrolled in ${c.name}`}
+                          >
                             <strong>{c.name}</strong>
-                          )}
+                          </a>
                         </td>
                         <td>
                           {c.departmentId?.name ? (
@@ -337,30 +331,11 @@ export function CoursesListPage() {
                         </td>
                         <td>{c.durationYears ? `${c.durationYears} Yr${c.durationYears > 1 ? 's' : ''}` : '—'}</td>
                         <td style={{ textAlign: 'center' }}>
-                          {hasStudents ? (
-                            <a
-                              href={courseRedirectUrl}
-                              style={{ textDecoration: 'none' }}
-                              title={`View ${c.studentCount} students enrolled in ${c.name}`}
-                            >
-                              <span
-                                className="badge neutral"
-                                style={{
-                                  fontWeight: '700',
-                                  fontSize: '0.8rem',
-                                  padding: '3px 10px',
-                                  minWidth: '28px',
-                                  textAlign: 'center',
-                                  display: 'inline-block',
-                                  cursor: 'pointer',
-                                  backgroundColor: '#e0f2fe',
-                                  color: '#0369a1'
-                                }}
-                              >
-                                {c.studentCount}
-                              </span>
-                            </a>
-                          ) : (
+                          <a
+                            href={courseRedirectUrl}
+                            style={{ textDecoration: 'none' }}
+                            title={`View ${c.studentCount || 0} students enrolled in ${c.name}`}
+                          >
                             <span
                               className="badge neutral"
                               style={{
@@ -370,14 +345,14 @@ export function CoursesListPage() {
                                 minWidth: '28px',
                                 textAlign: 'center',
                                 display: 'inline-block',
-                                cursor: 'default',
+                                cursor: 'pointer',
                                 backgroundColor: '#e0f2fe',
                                 color: '#0369a1'
                               }}
                             >
-                              0
+                              {c.studentCount || 0}
                             </span>
-                          )}
+                          </a>
                         </td>
                         <td>
                           <span

@@ -5,6 +5,8 @@ import { studentService } from '../../services/student.service.js';
 import { companyService } from '../../services/company.service.js';
 import { placementOfficerService } from '../../services/placement_officer.service.js';
 import { sessionService } from '../../services/session.service.js';
+import { jobService } from '../../services/job.service.js';
+import { applicationService } from '../../services/application.service.js';
 import {
   GraduationCapIcon,
   BuildingIcon,
@@ -46,9 +48,11 @@ export function SuperAdminDashboard() {
   });
 
   const [activities, setActivities] = useState([]);
-  const [interviews] = useState([]);
+  const [upcomingInterviews, setUpcomingInterviews] = useState([]);
+  const [applicationsList, setApplicationsList] = useState([]);
 
-  const [dateRange, setDateRange] = useState('Oct 1, 2025 - Oct 31, 2025');
+  const currentYear = new Date().getFullYear();
+  const [dateRange, setDateRange] = useState(`Academic Year ${currentYear}-${currentYear + 1}`);
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
   const [chartTimeframe, setChartTimeframe] = useState('Last 6 Months');
   const [hoveredMonthIndex, setHoveredMonthIndex] = useState(null);
@@ -66,6 +70,8 @@ export function SuperAdminDashboard() {
         placed: 0
       };
 
+      let loadedApps = [];
+
       try {
         if (has('STUDENT_READ') || has('STUDENT_IMPORT')) {
           const res = await studentService.listStudents({ limit: 1 });
@@ -81,17 +87,54 @@ export function SuperAdminDashboard() {
       } catch {}
 
       try {
-        if (has('PLACEMENT_USER_READ') || has('PLACEMENT_USER_IMPORT')) {
-          const res = await placementOfficerService.listPlacementOfficers({ limit: 1 });
-          if (res?.total !== undefined) updates.interviews = res.total > 0 ? res.total : 0;
+        if (has('JOB_READ')) {
+          const res = await jobService.listJobs({ status: 'OPEN', limit: 1 });
+          if (res?.total !== undefined) {
+            updates.jobs = res.total;
+          } else if (res?.jobs?.length !== undefined) {
+            updates.jobs = res.jobs.length;
+          }
+        }
+      } catch {}
+
+      try {
+        if (has('APPLICATION_READ')) {
+          const [appsRes, placedRes, interviewRes] = await Promise.allSettled([
+            applicationService.listApplications({ limit: 100 }),
+            applicationService.listApplications({ status: 'SELECTED', limit: 1 }),
+            applicationService.listApplications({ status: 'INTERVIEW', limit: 10 })
+          ]);
+
+          if (appsRes.status === 'fulfilled' && appsRes.value) {
+            updates.applications = appsRes.value.total ?? (appsRes.value.items?.length || 0);
+            loadedApps = appsRes.value.items || [];
+          }
+
+          if (placedRes.status === 'fulfilled' && placedRes.value?.total !== undefined) {
+            updates.placed = placedRes.value.total;
+          } else {
+            updates.placed = loadedApps.filter((a) => a.status === 'SELECTED').length;
+          }
+
+          if (interviewRes.status === 'fulfilled' && interviewRes.value?.total !== undefined) {
+            updates.interviews = interviewRes.value.total;
+            if (mounted && Array.isArray(interviewRes.value.items)) {
+              setUpcomingInterviews(interviewRes.value.items);
+            }
+          } else {
+            const ints = loadedApps.filter((a) => a.status === 'INTERVIEW');
+            updates.interviews = ints.length;
+            if (mounted) setUpcomingInterviews(ints);
+          }
         }
       } catch {}
 
       if (mounted) {
         setStats(updates);
+        setApplicationsList(loadedApps);
       }
 
-      // Load real sessions for recent activity if authorized
+      // Load real sessions or fallback to recent application actions for activity feed
       try {
         if (has('SESSION_READ')) {
           const res = await sessionService.listSessions({ limit: 5 });
@@ -109,12 +152,48 @@ export function SuperAdminDashboard() {
                   color: '#2563eb'
                 }))
               );
+            } else if (loadedApps.length > 0) {
+              setActivities(
+                loadedApps.slice(0, 5).map((app) => {
+                  const studentName = `${app.studentId?.firstName || ''} ${app.studentId?.lastName || ''}`.trim() || 'Student';
+                  const jobTitle = app.jobSnapshot?.title || app.jobId?.title || 'Job Opening';
+                  return {
+                    id: app._id || app.applicationId,
+                    title: `${studentName} — ${app.status?.replace('_', ' ') || 'Applied'}`,
+                    desc: `${jobTitle} (${app.companyId?.companyName || 'Company'})`,
+                    time: app.createdAt ? formatTimeAgo(new Date(app.createdAt)) : 'Recently',
+                    tag: app.status || 'Application',
+                    icon: <DocumentIcon size={18} color="#2563eb" />,
+                    bg: '#eff6ff',
+                    color: '#2563eb'
+                  };
+                })
+              );
             } else {
               setActivities([]);
             }
           }
         } else if (mounted) {
-          setActivities([]);
+          if (loadedApps.length > 0) {
+            setActivities(
+              loadedApps.slice(0, 5).map((app) => {
+                const studentName = `${app.studentId?.firstName || ''} ${app.studentId?.lastName || ''}`.trim() || 'Student';
+                const jobTitle = app.jobSnapshot?.title || app.jobId?.title || 'Job Opening';
+                return {
+                  id: app._id || app.applicationId,
+                  title: `${studentName} — ${app.status?.replace('_', ' ') || 'Applied'}`,
+                  desc: `${jobTitle} (${app.companyId?.companyName || 'Company'})`,
+                  time: app.createdAt ? formatTimeAgo(new Date(app.createdAt)) : 'Recently',
+                  tag: app.status || 'Application',
+                  icon: <DocumentIcon size={18} color="#2563eb" />,
+                  bg: '#eff6ff',
+                  color: '#2563eb'
+                };
+              })
+            );
+          } else {
+            setActivities([]);
+          }
         }
       } catch {
         if (mounted) {
@@ -146,17 +225,120 @@ export function SuperAdminDashboard() {
     ? `Welcome back, ${displayName}! Here is the overview of your Campus Recruitment Portal.`
     : `Welcome back, ${displayName}! Here is the placement administration and coordination overview.`;
 
-  // Chart dataset: If no real data, do not fabricate fake curves
-  const chartMonths = ['Apr 2025', 'May 2025', 'Jun 2025', 'Jul 2025', 'Aug 2025', 'Sep 2025'];
-  const hasChartData = stats.applications > 0 || stats.interviews > 0 || stats.placed > 0;
-
-  const chartSeries = {
-    applications: hasChartData ? [0, 0, 0, 0, 0, stats.applications] : [0, 0, 0, 0, 0, 0],
-    interviews: hasChartData ? [0, 0, 0, 0, 0, stats.interviews] : [0, 0, 0, 0, 0, 0],
-    placements: hasChartData ? [0, 0, 0, 0, 0, stats.placed] : [0, 0, 0, 0, 0, 0]
+  // Compute Dynamic Timeframe Buckets based on selected timeframe
+  const getTimelineBuckets = (timeframe) => {
+    const now = new Date();
+    const buckets = [];
+    if (timeframe === 'Last 30 Days') {
+      for (let i = 4; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i * 7);
+        const start = new Date(d);
+        start.setDate(start.getDate() - 7);
+        buckets.push({
+          label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          start,
+          end: d
+        });
+      }
+    } else if (timeframe === 'This Year') {
+      const curMonth = now.getMonth();
+      const yr = now.getFullYear();
+      for (let i = 0; i <= curMonth; i++) {
+        const d = new Date(yr, i, 1);
+        const endD = new Date(yr, i + 1, 0, 23, 59, 59);
+        buckets.push({
+          label: d.toLocaleDateString('en-US', { month: 'short' }),
+          start: d,
+          end: endD
+        });
+      }
+      if (buckets.length < 4) {
+        for (let i = 4 - buckets.length; i >= 1; i--) {
+          const dPrev = new Date(yr - 1, 12 - i, 1);
+          const endDPrev = new Date(yr - 1, 13 - i, 0, 23, 59, 59);
+          buckets.unshift({
+            label: dPrev.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+            start: dPrev,
+            end: endDPrev
+          });
+        }
+      }
+    } else {
+      // Default: Last 6 Months
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const endD = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+        buckets.push({
+          label: d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          start: d,
+          end: endD
+        });
+      }
+    }
+    return buckets;
   };
 
-  // Convert array of values to SVG coordinates
+  const timelineBuckets = getTimelineBuckets(chartTimeframe);
+  const chartMonths = timelineBuckets.map((b) => b.label);
+
+  // Compute dynamic points from real applications
+  const appCountsByBucket = timelineBuckets.map((b) =>
+    applicationsList.filter((a) => {
+      const dt = new Date(a.createdAt);
+      return dt >= b.start && dt <= b.end;
+    }).length
+  );
+
+  const intCountsByBucket = timelineBuckets.map((b) =>
+    applicationsList.filter((a) => {
+      const dt = new Date(a.updatedAt || a.createdAt);
+      return a.status === 'INTERVIEW' && dt >= b.start && dt <= b.end;
+    }).length
+  );
+
+  const plaCountsByBucket = timelineBuckets.map((b) =>
+    applicationsList.filter((a) => {
+      const dt = new Date(a.updatedAt || a.createdAt);
+      return a.status === 'SELECTED' && dt >= b.start && dt <= b.end;
+    }).length
+  );
+
+  const hasChartData =
+    appCountsByBucket.some((c) => c > 0) ||
+    intCountsByBucket.some((c) => c > 0) ||
+    plaCountsByBucket.some((c) => c > 0) ||
+    stats.applications > 0;
+
+  // If applications exist but were created before the window, assign to earliest/latest visible bucket
+  const chartSeries = {
+    applications: hasChartData
+      ? (appCountsByBucket.every((c) => c === 0) && stats.applications > 0
+          ? [0, 0, 0, 0, 0, stats.applications]
+          : appCountsByBucket)
+      : [0, 0, 0, 0, 0, 0],
+    interviews: hasChartData
+      ? (intCountsByBucket.every((c) => c === 0) && stats.interviews > 0
+          ? [0, 0, 0, 0, 0, stats.interviews]
+          : intCountsByBucket)
+      : [0, 0, 0, 0, 0, 0],
+    placements: hasChartData
+      ? (plaCountsByBucket.every((c) => c === 0) && stats.placed > 0
+          ? [0, 0, 0, 0, 0, stats.placed]
+          : plaCountsByBucket)
+      : [0, 0, 0, 0, 0, 0]
+  };
+
+  // Convert array of values to SVG coordinates with dynamic scaling
+  const allChartVals = [
+    ...chartSeries.applications,
+    ...chartSeries.interviews,
+    ...chartSeries.placements
+  ];
+  const maxDataVal = Math.max(0, ...allChartVals);
+  const maxY = maxDataVal > 0 ? Math.max(10, Math.ceil((maxDataVal * 1.35) / 5) * 5) : 50;
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((pct) => Math.round(maxY * pct));
+
   const svgWidth = 600;
   const svgHeight = 220;
   const padLeft = 40;
@@ -165,11 +347,10 @@ export function SuperAdminDashboard() {
   const padBottom = 30;
   const plotWidth = svgWidth - padLeft - padRight;
   const plotHeight = svgHeight - padTop - padBottom;
-  const maxY = 50;
 
   const getCoordinates = (values) => {
     return values.map((val, idx) => {
-      const x = padLeft + (idx / (values.length - 1)) * plotWidth;
+      const x = padLeft + (idx / Math.max(1, values.length - 1)) * plotWidth;
       const y = padTop + plotHeight - (val / maxY) * plotHeight;
       return { x, y, val };
     });
@@ -207,13 +388,47 @@ export function SuperAdminDashboard() {
   const intCoords = getCoordinates(chartSeries.interviews);
   const plaCoords = getCoordinates(chartSeries.placements);
 
-  // Application Status breakdown
+  // Application Status breakdown computed from real data
+  const totalAppsCount = stats.applications;
+  const statusCounts = {
+    APPLIED: 0,
+    UNDER_REVIEW: 0,
+    SHORTLISTED: 0,
+    INTERVIEW: 0,
+    SELECTED: 0,
+    REJECTED: 0,
+    WITHDRAWN: 0
+  };
+
+  applicationsList.forEach((app) => {
+    if (statusCounts[app.status] !== undefined) {
+      statusCounts[app.status]++;
+    } else if (app.status === 'ASSESSMENT') {
+      statusCounts.SHORTLISTED++;
+    }
+  });
+
+  // If applications count > 0 but applicationsList was truncated or partial, ensure numbers reflect
+  if (totalAppsCount > 0 && applicationsList.length === 0) {
+    statusCounts.APPLIED = totalAppsCount - stats.placed - stats.interviews;
+    statusCounts.INTERVIEW = stats.interviews;
+    statusCounts.SELECTED = stats.placed;
+  }
+
+  const denominator = Math.max(1, totalAppsCount);
+  const getPct = (cnt) => {
+    if (!totalAppsCount || totalAppsCount === 0) return '0%';
+    return `${Math.round((cnt / denominator) * 100)}%`;
+  };
+
   const appStatus = [
-    { label: 'Applied', count: 0, pct: '0%', color: '#3b82f6' },
-    { label: 'Under Review', count: 0, pct: '0%', color: '#eab308' },
-    { label: 'Shortlisted', count: 0, pct: '0%', color: '#22c55e' },
-    { label: 'Rejected', count: 0, pct: '0%', color: '#ef4444' },
-    { label: 'Withdrawn', count: 0, pct: '0%', color: '#6366f1' }
+    { label: 'Applied', count: statusCounts.APPLIED, pct: getPct(statusCounts.APPLIED), color: '#3b82f6' },
+    { label: 'Under Review', count: statusCounts.UNDER_REVIEW, pct: getPct(statusCounts.UNDER_REVIEW), color: '#eab308' },
+    { label: 'Shortlisted', count: statusCounts.SHORTLISTED, pct: getPct(statusCounts.SHORTLISTED), color: '#8b5cf6' },
+    { label: 'Interviews', count: statusCounts.INTERVIEW, pct: getPct(statusCounts.INTERVIEW), color: '#f97316' },
+    { label: 'Selected / Placed', count: statusCounts.SELECTED, pct: getPct(statusCounts.SELECTED), color: '#22c55e' },
+    { label: 'Rejected', count: statusCounts.REJECTED, pct: getPct(statusCounts.REJECTED), color: '#ef4444' },
+    { label: 'Withdrawn', count: statusCounts.WITHDRAWN, pct: getPct(statusCounts.WITHDRAWN), color: '#64748b' }
   ];
 
   // Quick actions filtered by RBAC permissions
@@ -332,15 +547,18 @@ export function SuperAdminDashboard() {
               }}
             >
               {[
-                'Oct 1, 2025 - Oct 31, 2025',
+                `Academic Year ${currentYear}-${currentYear + 1}`,
                 'Last 30 Days',
                 'Last 6 Months',
-                'This Academic Year'
+                'This Year'
               ].map((opt) => (
                 <div
                   key={opt}
                   onClick={() => {
                     setDateRange(opt);
+                    if (opt === 'Last 30 Days' || opt === 'Last 6 Months' || opt === 'This Year') {
+                      setChartTimeframe(opt);
+                    }
                     setDateDropdownOpen(false);
                   }}
                   style={{
@@ -377,112 +595,139 @@ export function SuperAdminDashboard() {
         >
           {/* Card 1: Total Students */}
           <div
+            title="Total Registered Students"
             style={{
               background: '#ffffff',
               border: '1px solid #e2e8f0',
               borderRadius: '12px',
-              padding: '16px 18px',
+              padding: '16px 16px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div
                 style={{
                   width: '44px',
                   height: '44px',
-                  borderRadius: '10px',
-                  background: '#2563eb',
-                  color: '#ffffff',
+                  borderRadius: '50%',
+                  background: '#e0f2fe',
+                  color: '#0284c7',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0
                 }}
               >
-                <GraduationCapIcon size={22} color="#ffffff" />
+                <GraduationCapIcon size={22} color="#0284c7" />
               </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
-                  Total Students
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: '0.8rem',
+                    color: '#64748b',
+                    fontWeight: 600,
+                    marginBottom: '2px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  Students
                 </div>
                 <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
                   {stats.students}
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
-              — No change
-            </div>
           </div>
 
           {/* Card 2: Registered Companies */}
           <div
+            title="Registered Companies"
             style={{
               background: '#ffffff',
               border: '1px solid #e2e8f0',
               borderRadius: '12px',
-              padding: '16px 18px',
+              padding: '16px 16px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div
                 style={{
                   width: '44px',
                   height: '44px',
-                  borderRadius: '10px',
-                  background: '#22c55e',
-                  color: '#ffffff',
+                  borderRadius: '50%',
+                  background: '#dcfce7',
+                  color: '#16a34a',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0
                 }}
               >
-                <BuildingIcon size={22} color="#ffffff" />
+                <BuildingIcon size={22} color="#16a34a" />
               </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
-                  Registered Companies
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: '0.8rem',
+                    color: '#64748b',
+                    fontWeight: 600,
+                    marginBottom: '2px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  Companies
                 </div>
                 <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
                   {stats.companies}
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
-              — No change
-            </div>
           </div>
 
           {/* Card 3: Active Jobs */}
           <div
+            title="Active Job Openings"
             style={{
               background: '#ffffff',
               border: '1px solid #e2e8f0',
               borderRadius: '12px',
-              padding: '16px 18px',
+              padding: '16px 16px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div
                 style={{
                   width: '44px',
                   height: '44px',
-                  borderRadius: '10px',
-                  background: '#f97316',
-                  color: '#ffffff',
+                  borderRadius: '50%',
+                  background: '#ffedd5',
+                  color: '#ea580c',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0
                 }}
               >
-                <BriefcaseIcon size={22} color="#ffffff" />
+                <BriefcaseIcon size={22} color="#ea580c" />
               </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: '0.8rem',
+                    color: '#64748b',
+                    fontWeight: 600,
+                    marginBottom: '2px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
                   Active Jobs
                 </div>
                 <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
@@ -490,128 +735,149 @@ export function SuperAdminDashboard() {
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
-              — No change
-            </div>
           </div>
 
           {/* Card 4: Total Applications */}
           <div
+            title="Total Candidate Applications"
             style={{
               background: '#ffffff',
               border: '1px solid #e2e8f0',
               borderRadius: '12px',
-              padding: '16px 18px',
+              padding: '16px 16px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div
                 style={{
                   width: '44px',
                   height: '44px',
-                  borderRadius: '10px',
-                  background: '#a855f7',
-                  color: '#ffffff',
+                  borderRadius: '50%',
+                  background: '#f3e8ff',
+                  color: '#9333ea',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0
                 }}
               >
-                <DocumentIcon size={22} color="#ffffff" />
+                <DocumentIcon size={22} color="#9333ea" />
               </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
-                  Total Applications
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: '0.8rem',
+                    color: '#64748b',
+                    fontWeight: 600,
+                    marginBottom: '2px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  Applications
                 </div>
                 <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
                   {stats.applications}
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
-              — No change
-            </div>
           </div>
 
-          {/* Card 5: Placement Officers / Interviews */}
+          {/* Card 5: Scheduled Interviews */}
           <div
+            title="Scheduled Recruitment Interviews"
             style={{
               background: '#ffffff',
               border: '1px solid #e2e8f0',
               borderRadius: '12px',
-              padding: '16px 18px',
+              padding: '16px 16px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div
                 style={{
                   width: '44px',
                   height: '44px',
-                  borderRadius: '10px',
-                  background: '#ec4899',
-                  color: '#ffffff',
+                  borderRadius: '50%',
+                  background: '#fce7f3',
+                  color: '#db2777',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0
                 }}
               >
-                <CalendarIcon size={22} color="#ffffff" />
+                <CalendarIcon size={22} color="#db2777" />
               </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
-                  Scheduled Interviews
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: '0.8rem',
+                    color: '#64748b',
+                    fontWeight: 600,
+                    marginBottom: '2px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  Interviews
                 </div>
                 <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
                   {stats.interviews}
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
-              — No change
-            </div>
           </div>
 
           {/* Card 6: Students Placed */}
           <div
+            title="Total Students Placed"
             style={{
               background: '#ffffff',
               border: '1px solid #e2e8f0',
               borderRadius: '12px',
-              padding: '16px 18px',
+              padding: '16px 16px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div
                 style={{
                   width: '44px',
                   height: '44px',
-                  borderRadius: '10px',
-                  background: '#06b6d4',
-                  color: '#ffffff',
+                  borderRadius: '50%',
+                  background: '#ccfbf1',
+                  color: '#0d9488',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0
                 }}
               >
-                <TargetIcon size={22} color="#ffffff" />
+                <TargetIcon size={22} color="#0d9488" />
               </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500, marginBottom: '2px' }}>
-                  Students Placed
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: '0.8rem',
+                    color: '#64748b',
+                    fontWeight: 600,
+                    marginBottom: '2px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  Placements
                 </div>
                 <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
                   {stats.placed}
                 </div>
               </div>
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
-              — No change
             </div>
           </div>
         </div>
@@ -706,7 +972,7 @@ export function SuperAdminDashboard() {
                   </defs>
 
                   {/* Horizontal Grid Lines & Y Labels */}
-                  {[0, 10, 20, 30, 40, 50].map((val) => {
+                  {yTicks.map((val) => {
                     const y = padTop + plotHeight - (val / maxY) * plotHeight;
                     return (
                       <g key={val}>
@@ -734,7 +1000,7 @@ export function SuperAdminDashboard() {
 
                   {/* X Labels */}
                   {chartMonths.map((m, idx) => {
-                    const x = padLeft + (idx / (chartMonths.length - 1)) * plotWidth;
+                    const x = padLeft + (idx / Math.max(1, chartMonths.length - 1)) * plotWidth;
                     return (
                       <text
                         key={m}
@@ -894,18 +1160,30 @@ export function SuperAdminDashboard() {
                     stroke="#f1f5f9"
                     strokeWidth="20"
                   />
-                  {stats.applications > 0 && (
-                    <circle
-                      cx="80"
-                      cy="80"
-                      r="56"
-                      fill="none"
-                      stroke="#3b82f6"
-                      strokeWidth="20"
-                      strokeDasharray="352 352"
-                      strokeDashoffset="0"
-                    />
-                  )}
+                  {stats.applications > 0 && (() => {
+                    let accOffset = 0;
+                    const circ = 351.86;
+                    return appStatus.map((item) => {
+                      if (item.count <= 0) return null;
+                      const sliceLen = (item.count / Math.max(1, totalAppsCount)) * circ;
+                      const dashOffset = -accOffset;
+                      accOffset += sliceLen;
+                      return (
+                        <circle
+                          key={item.label}
+                          cx="80"
+                          cy="80"
+                          r="56"
+                          fill="none"
+                          stroke={item.color}
+                          strokeWidth="20"
+                          strokeDasharray={`${sliceLen} ${Math.max(0, circ - sliceLen)}`}
+                          strokeDashoffset={dashOffset}
+                          style={{ transition: 'stroke-dasharray 0.4s ease' }}
+                        />
+                      );
+                    });
+                  })()}
                 </svg>
                 <div
                   style={{
@@ -1091,9 +1369,9 @@ export function SuperAdminDashboard() {
                   Next scheduled recruitment interviews
                 </p>
               </div>
-              {has('USER_READ') && (
+              {has('APPLICATION_READ') && (
                 <a
-                  href="#/placement-officers"
+                  href="#/applications"
                   style={{
                     color: '#2563eb',
                     fontSize: '0.82rem',
@@ -1106,22 +1384,95 @@ export function SuperAdminDashboard() {
               )}
             </div>
 
-            <div
-              style={{
-                padding: '48px 16px',
-                textAlign: 'center',
-                color: '#94a3b8',
-                fontSize: '0.88rem',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px'
-              }}
-            >
-              <CalendarIcon size={32} color="#94a3b8" />
-              <div>No upcoming interviews scheduled</div>
-            </div>
+            {upcomingInterviews.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {upcomingInterviews.map((interview) => {
+                  const candName =
+                    `${interview.studentId?.firstName || ''} ${interview.studentId?.lastName || ''}`.trim() ||
+                    interview.candidateName ||
+                    'Candidate';
+                  const roleTitle = interview.jobSnapshot?.title || interview.jobId?.title || 'Job Opening';
+                  const companyName = interview.companyId?.companyName || 'Company';
+                  return (
+                    <a
+                      key={interview._id || interview.id}
+                      href="#/applications"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        border: '1px solid #f1f5f9',
+                        textDecoration: 'none',
+                        background: '#f8fafc',
+                        transition: 'background 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#f1f5f9')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = '#f8fafc')}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div
+                          style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '50%',
+                            background: '#eff6ff',
+                            color: '#2563eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          {candName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.86rem', fontWeight: 600, color: '#0f172a' }}>
+                            {candName}
+                          </div>
+                          <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                            {roleTitle} • {companyName}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span
+                          style={{
+                            padding: '3px 10px',
+                            borderRadius: '12px',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            background: '#fef3c7',
+                            color: '#b45309'
+                          }}
+                        >
+                          Round {interview.recruitmentRound || 1}
+                        </span>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            ) : (
+              <div
+                style={{
+                  padding: '48px 16px',
+                  textAlign: 'center',
+                  color: '#94a3b8',
+                  fontSize: '0.88rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                <CalendarIcon size={32} color="#94a3b8" />
+                <div>No upcoming interviews scheduled</div>
+              </div>
+            )}
           </div>
 
           {/* Card 3: Quick Actions */}

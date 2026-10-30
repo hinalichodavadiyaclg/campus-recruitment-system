@@ -82,33 +82,37 @@ export function UsersListPage() {
   const [coursesList, setCoursesList] = useState([]);
   const [studentDepartmentFilter, setStudentDepartmentFilter] = useState(() => {
     if (isCoordinator && coordinatorDeptId) return String(coordinatorDeptId);
-    return '';
+    return String(initialParams.get('departmentId') || initialParams.get('department') || '');
   });
-  const [studentCourseFilter, setStudentCourseFilter] = useState('');
-  const [studentSemesterFilter, setStudentSemesterFilter] = useState('');
-  const [studentMinCgpaFilter, setStudentMinCgpaFilter] = useState('');
-  const [studentBacklogFilter, setStudentBacklogFilter] = useState('');
+  const [studentCourseFilter, setStudentCourseFilter] = useState(() => {
+    return String(initialParams.get('courseId') || initialParams.get('course') || '');
+  });
+  const [studentSemesterFilter, setStudentSemesterFilter] = useState(
+    initialParams.get('semester') || ''
+  );
+  const [studentMinCgpaFilter, setStudentMinCgpaFilter] = useState(
+    initialParams.get('cgpa') || initialParams.get('minCgpa') || ''
+  );
+  const [studentBacklogFilter, setStudentBacklogFilter] = useState(
+    initialParams.get('backlogs') || ''
+  );
 
   useEffect(() => {
-    if (!isCoordinator && (window.location.hash.includes('course') || window.location.hash.includes('department'))) {
-      setStudentDepartmentFilter('');
-      setStudentCourseFilter('');
-      const cleanHash = window.location.hash.split('?')[0];
-      window.history.replaceState(null, '', `${cleanHash}?tab=students`);
+    if (isCoordinator) {
+      const targetDeptId = coordinatorDeptId || (departmentsList.length === 1 ? String(departmentsList[0]._id) : null);
+      if (targetDeptId && studentDepartmentFilter !== String(targetDeptId)) {
+        setStudentDepartmentFilter(String(targetDeptId));
+      }
     }
-  }, [isCoordinator]);
+  }, [isCoordinator, coordinatorDeptId, departmentsList, studentDepartmentFilter]);
 
-  useEffect(() => {
-    if (isCoordinator && coordinatorDeptId && studentDepartmentFilter !== String(coordinatorDeptId)) {
-      setStudentDepartmentFilter(String(coordinatorDeptId));
-    }
-  }, [isCoordinator, coordinatorDeptId, studentDepartmentFilter]);
-
-  // Synchronize on hash changes
+  // Synchronize on hash changes (e.g. redirected from Course or Department page)
   useEffect(() => {
     const applyHashParams = () => {
       const params = getHashQueryParams();
       const tabParam = params.get('tab');
+      const courseParam = params.get('courseId') || params.get('course');
+      const deptParam = params.get('departmentId') || params.get('department');
 
       if (tabParam) {
         if (isCoordinator && tabParam === 'placement') {
@@ -116,12 +120,48 @@ export function UsersListPage() {
         } else {
           setActiveTab(tabParam);
         }
+      } else if (courseParam || deptParam) {
+        setActiveTab('students');
+      }
+
+      if (courseParam) {
+        const matchedCourse = coursesList.find(
+          (c) =>
+            String(c._id) === String(courseParam) ||
+            String(c.code || '').toLowerCase() === String(courseParam).toLowerCase() ||
+            String(c.name || '').toLowerCase() === String(courseParam).toLowerCase()
+        );
+        const resolvedCourseId = matchedCourse ? String(matchedCourse._id) : String(courseParam);
+        setStudentCourseFilter(resolvedCourseId);
+
+        if (!isCoordinator && matchedCourse?.departmentId) {
+          const deptId = matchedCourse.departmentId._id
+            ? String(matchedCourse.departmentId._id)
+            : String(matchedCourse.departmentId);
+          setStudentDepartmentFilter((prev) => prev || deptId);
+        }
+      } else if (tabParam === 'students' && !params.has('courseId') && !params.has('course')) {
+        setStudentCourseFilter('');
+      }
+
+      if (!isCoordinator) {
+        if (deptParam) {
+          const matchedDept = departmentsList.find(
+            (d) =>
+              String(d._id) === String(deptParam) ||
+              String(d.code || '').toLowerCase() === String(deptParam).toLowerCase() ||
+              String(d.name || '').toLowerCase() === String(deptParam).toLowerCase()
+          );
+          setStudentDepartmentFilter(matchedDept ? String(matchedDept._id) : String(deptParam));
+        } else if (tabParam === 'students' && !params.has('departmentId') && !params.has('department') && !courseParam) {
+          setStudentDepartmentFilter('');
+        }
       }
     };
 
     window.addEventListener('hashchange', applyHashParams);
     return () => window.removeEventListener('hashchange', applyHashParams);
-  }, [isCoordinator]);
+  }, [isCoordinator, coursesList, departmentsList]);
 
   // Placement Role & Department filter
   const [officerRoleFilter, setOfficerRoleFilter] = useState('');
@@ -186,6 +226,41 @@ export function UsersListPage() {
       const resolvedCourses = coursesData.items || coursesData || [];
       setDepartmentsList(resolvedDepts);
       setCoursesList(resolvedCourses);
+
+      // Auto-populate and normalize department & course filters from URL
+      if (!isCoordinator) {
+        const activeCourseParam = initialParams.get('courseId') || initialParams.get('course') || studentCourseFilter;
+        if (activeCourseParam) {
+          const matchedCourse = resolvedCourses.find(
+            (c) =>
+              String(c._id) === String(activeCourseParam) ||
+              String(c.code || '').toLowerCase() === String(activeCourseParam).toLowerCase() ||
+              String(c.name || '').toLowerCase() === String(activeCourseParam).toLowerCase()
+          );
+          if (matchedCourse) {
+            setStudentCourseFilter(String(matchedCourse._id));
+            if (!initialParams.get('departmentId') && !initialParams.get('department') && matchedCourse.departmentId) {
+              const deptId = matchedCourse.departmentId._id
+                ? String(matchedCourse.departmentId._id)
+                : String(matchedCourse.departmentId);
+              setStudentDepartmentFilter((prev) => prev || deptId);
+            }
+          }
+        }
+
+        const activeDeptParam = initialParams.get('departmentId') || initialParams.get('department') || studentDepartmentFilter;
+        if (activeDeptParam) {
+          const matchedDept = resolvedDepts.find(
+            (d) =>
+              String(d._id) === String(activeDeptParam) ||
+              String(d.code || '').toLowerCase() === String(activeDeptParam).toLowerCase() ||
+              String(d.name || '').toLowerCase() === String(activeDeptParam).toLowerCase()
+          );
+          if (matchedDept) {
+            setStudentDepartmentFilter(String(matchedDept._id));
+          }
+        }
+      }
     } catch (err) {
       toast(err.message || 'Failed to load user management data');
     } finally {
@@ -612,7 +687,11 @@ export function UsersListPage() {
   return (
     <PortalLayout
       title="User Management"
-      subtitle="Manage domain profiles for Students, Companies, and Placement Officers."
+      subtitle={
+        isCoordinator
+          ? `Manage student profiles for ${currentUser?.departmentName || currentUser?.department || 'your department'} and participating company accounts.`
+          : 'Manage domain profiles for Students, Companies, and Placement Officers.'
+      }
       actions={headerActions}
       currentPath="/users"
     >
@@ -691,7 +770,7 @@ export function UsersListPage() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              {!isCoordinator && (
+              {!isCoordinator ? (
                 <div>
                   <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
                     Department
@@ -708,6 +787,26 @@ export function UsersListPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+              ) : (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-subtle)', marginBottom: '4px' }}>
+                    Department (Scoped)
+                  </label>
+                  <input
+                    id="student-filter-department-locked"
+                    readOnly
+                    disabled
+                    value={currentUser?.departmentName || currentUser?.department || departmentsList[0]?.name || 'Assigned Department'}
+                    title="As a Placement Coordinator, you are scoped to your assigned department."
+                    style={{
+                      backgroundColor: 'var(--bg-muted, #f1f5f9)',
+                      cursor: 'not-allowed',
+                      opacity: 0.9,
+                      fontWeight: 600,
+                      color: 'var(--text-main, #0f172a)'
+                    }}
+                  />
                 </div>
               )}
               <div>

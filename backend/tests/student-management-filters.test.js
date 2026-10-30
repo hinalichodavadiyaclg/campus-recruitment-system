@@ -345,4 +345,77 @@ describe('Student Management - Department and Course Filtering', () => {
     });
     assert.equal(broadCsStudents.length, 2);
   });
+
+  // Test 11: Filtering course by code or name
+  it('11. Resilient Course filtering: supports filtering by course code or course name', () => {
+    // By course code 'AI-DS'
+    const byCode = filterStudents({
+      students,
+      courseId: 'AI-DS',
+      departments,
+      courses
+    });
+    assert.equal(byCode.length, 1);
+    assert.equal(byCode[0].universityId, 'STU-001');
+
+    // By course name 'B.Tech AI & Data Science'
+    const byName = filterStudents({
+      students,
+      courseId: 'B.Tech AI & Data Science',
+      departments,
+      courses
+    });
+    assert.equal(byName.length, 1);
+    assert.equal(byName[0].universityId, 'STU-001');
+  });
+
+  // Test 12: Filtering department by code or name
+  it('12. Resilient Department filtering: supports filtering by department code or department name', () => {
+    // By dept code 'CSE'
+    const byDeptCode = filterStudents({
+      students,
+      departmentId: 'CSE',
+      departments,
+      courses
+    });
+    assert.equal(byDeptCode.length, 2);
+    assert.deepEqual(byDeptCode.map(s => s.universityId).sort(), ['STU-001', 'STU-002']);
+
+    // By dept name 'Mechanical Engineering'
+    const byDeptName = filterStudents({
+      students,
+      departmentId: 'Mechanical Engineering',
+      departments,
+      courses
+    });
+    assert.equal(byDeptName.length, 1);
+    assert.equal(byDeptName[0].universityId, 'STU-003');
+  });
+
+  // Test 13: Unlinked legacy student records with only branch/department strings
+  it('13. Unlinked legacy records: matches students when only branch and department strings exist', () => {
+    const legacyStudent = {
+      _id: 'legacy_1',
+      universityId: 'LEGACY-001',
+      firstName: 'Legacy',
+      lastName: 'Student',
+      email: 'legacy@univ.edu',
+      department: 'Computer Science & Engineering',
+      branch: 'B.Tech AI & Data Science',
+      semester: 6,
+      cgpa: 7.5,
+      backlogs: 0
+    };
+
+    const result = filterStudents({
+      students: [legacyStudent],
+      departmentId: 'dept_cs',
+      courseId: 'course_ai',
+      departments,
+      courses
+    });
+    assert.equal(result.length, 1);
+    assert.equal(result[0].universityId, 'LEGACY-001');
+  });
 });
+
