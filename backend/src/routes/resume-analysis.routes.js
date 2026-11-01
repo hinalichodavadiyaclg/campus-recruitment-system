@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/authenticate.js';
 import { authorizeAnyPermission } from '../middleware/authorize.js';
 import { PERMISSION_IDS } from '../utils/access-constants.js';
 import * as resumeController from '../controllers/resume-analysis.controller.js';
+import * as improvementController from '../controllers/resume-improvement.controller.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -44,6 +45,12 @@ resumeAnalysisRouter.get('/analyses/:analysisId', resumeController.getAnalysisBy
 
 // Trigger analysis for a resume
 resumeAnalysisRouter.post('/:id/analyze', resumeController.analyzeResume);
+
+// Trigger AI improvement for a resume
+resumeAnalysisRouter.post('/:id/improve', improvementController.createImprovement);
+
+// Get latest improvement draft for a resume
+resumeAnalysisRouter.get('/:id/improvements/latest', improvementController.getLatestForResume);
 
 // Get all analyses for a specific resume
 resumeAnalysisRouter.get('/:id/analyses', resumeController.getAnalysesForResume);

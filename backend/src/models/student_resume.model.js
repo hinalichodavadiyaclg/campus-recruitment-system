@@ -46,6 +46,19 @@ const studentResumeSchema = new Schema(
       default: true,
       index: true
     },
+    isAiImproved: {
+      type: Boolean,
+      default: false
+    },
+    improvementId: {
+      type: Schema.Types.ObjectId,
+      ref: 'ResumeImprovement',
+      default: null
+    },
+    docxUrl: {
+      type: String,
+      default: null
+    },
     extractedText: {
       type: String,
       default: ''

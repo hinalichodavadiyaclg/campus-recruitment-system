@@ -84,3 +84,4 @@ test('validateImprovedSection accepts authentic wording improvements without inv
   assert.ok(result.sourceEvidence.includes('Python'));
   assert.ok(result.sourceEvidence.includes('MySQL'));
 });
+

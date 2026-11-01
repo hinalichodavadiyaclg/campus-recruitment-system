@@ -16,7 +16,9 @@ import {
   BriefcaseIcon,
   ChartIcon,
   ExternalLinkIcon,
-  EyeIcon
+  EyeIcon,
+  EditIcon,
+  CheckIcon
 } from '../common/Icons.jsx';
 import './AiResumeAnalyzer.css';
 
@@ -53,6 +55,16 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
 
   const fileInputRef = useRef(null);
 
+  // Resume Improvement State
+  const [currentImprovement, setCurrentImprovement] = useState(null);
+  const [improving, setImproving] = useState(false);
+  const [showImprovementEditor, setShowImprovementEditor] = useState(false);
+  const [editingSectionKey, setEditingSectionKey] = useState(null);
+  const [manualDrafts, setManualDrafts] = useState({});
+  const [questionAnswers, setQuestionAnswers] = useState({});
+  const [generatingResume, setGeneratingResume] = useState(false);
+  const [generatedDownload, setGeneratedDownload] = useState(null);
+
   // Load all initial data
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -67,6 +79,17 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
 
       setActiveResume(activeRes);
       setResumeList(Array.isArray(allRes) ? allRes : []);
+
+      if (activeRes && activeRes._id) {
+        resumeAnalysisService.getLatestImprovementForResume(activeRes._id)
+          .then((imp) => {
+            setCurrentImprovement(imp);
+            if (imp?.generatedVersion?.pdfUrl) {
+              setGeneratedDownload(imp.generatedVersion);
+            }
+          })
+          .catch(() => {});
+      }
       setLatestAnalysis(latestAna);
       setSelectedReport(latestAna);
       setHistoryAnalyses(Array.isArray(allAna) ? allAna : []);
@@ -211,6 +234,77 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
       toast(err.message || 'Failed to compare selected analyses.');
     } finally {
       setComparing(false);
+    }
+  };
+
+  // Improvement Handlers
+  const handleStartImprovement = async () => {
+    if (!activeResume) {
+      toast('Please upload a resume first.');
+      return;
+    }
+    setImproving(true);
+    try {
+      const imp = await resumeAnalysisService.createImprovement(activeResume._id);
+      setCurrentImprovement(imp);
+      setShowImprovementEditor(true);
+      toast('AI resume improvement suggestions ready for your review.');
+    } catch (err) {
+      toast(err.message || 'Failed to generate resume improvements.');
+    } finally {
+      setImproving(false);
+    }
+  };
+
+  const handleUpdateSectionDecision = async (sectionKey, decision, editedContent = null) => {
+    if (!currentImprovement) return;
+    try {
+      const updated = await resumeAnalysisService.updateSectionDecision(
+        currentImprovement._id,
+        sectionKey,
+        { decision, editedContent }
+      );
+      setCurrentImprovement(updated);
+      setEditingSectionKey(null);
+      toast(`Section updated (${decision.toLowerCase()}).`);
+    } catch (err) {
+      toast(err.message || 'Failed to update section decision.');
+    }
+  };
+
+  const handleSaveQuestionAnswer = async (questionId) => {
+    if (!currentImprovement) return;
+    const answer = questionAnswers[questionId];
+    if (!answer || !answer.trim()) {
+      toast('Please enter your answer before saving.');
+      return;
+    }
+    try {
+      const updated = await resumeAnalysisService.answerQuestion(
+        currentImprovement._id,
+        questionId,
+        answer.trim()
+      );
+      setCurrentImprovement(updated);
+      toast('Answer saved successfully.');
+    } catch (err) {
+      toast(err.message || 'Failed to save answer.');
+    }
+  };
+
+  const handleGenerateApprovedResume = async () => {
+    if (!currentImprovement) return;
+    setGeneratingResume(true);
+    try {
+      const result = await resumeAnalysisService.generateApprovedResume(currentImprovement._id);
+      setGeneratedDownload(result.generatedVersion);
+      toast(`Improved resume generated successfully as Version v${result.generatedVersion.versionNumber}!`);
+      await loadData();
+      if (onResumeChange) onResumeChange(result.newResume);
+    } catch (err) {
+      toast(err.message || 'Failed to generate approved resume.');
+    } finally {
+      setGeneratingResume(false);
     }
   };
 
@@ -454,7 +548,295 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
         )}
       </article>
 
-      {/* SECTION C: LATEST ANALYSIS SUMMARY */}
+      {/* SECTION C: AI RESUME IMPROVEMENT */}
+      <article className="card" style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h3 style={{ margin: '0 0 6px', color: '#102e5f' }}>AI Resume Improvement</h3>
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.88rem', maxWidth: '640px' }}>
+              Make your resume more professional without changing your information.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {currentImprovement && (
+              <button
+                type="button"
+                className="secondary"
+                style={{ padding: '9px 18px', fontSize: '0.86rem' }}
+                onClick={() => setShowImprovementEditor(!showImprovementEditor)}
+              >
+                {showImprovementEditor ? 'Hide Editor ▲' : 'Review Suggestions ▼'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="primary"
+              style={{ padding: '9px 20px', fontSize: '0.86rem' }}
+              disabled={!activeResume || improving}
+              onClick={handleStartImprovement}
+            >
+              {improving ? 'Generating Suggestions…' : currentImprovement ? 'Regenerate Suggestions' : 'Improve My Resume'}
+            </button>
+          </div>
+        </div>
+
+        {/* Generated downloads banner if available */}
+        {generatedDownload && generatedDownload.pdfUrl && (
+          <div
+            style={{
+              marginTop: '16px',
+              padding: '14px 18px',
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <CheckCircleIcon size={20} style={{ color: '#16a34a' }} />
+              <div>
+                <strong style={{ fontSize: '0.9rem', color: '#166534' }}>
+                  Improved Resume (v{generatedDownload.versionNumber}) is Ready & Active
+                </strong>
+                <div style={{ fontSize: '0.78rem', color: '#15803d' }}>
+                  ATS-friendly single-column layout generated from your approved content.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <a
+                href={getAssetUrl(generatedDownload.pdfUrl)}
+                target="_blank"
+                rel="noreferrer"
+                download
+                className="primary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '7px 14px',
+                  fontSize: '0.82rem',
+                  textDecoration: 'none'
+                }}
+              >
+                <DownloadIcon size={14} /> Download PDF
+              </a>
+              {generatedDownload.docxUrl && (
+                <a
+                  href={getAssetUrl(generatedDownload.docxUrl)}
+                  target="_blank"
+                  rel="noreferrer"
+                  download
+                  className="secondary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '7px 14px',
+                    fontSize: '0.82rem',
+                    textDecoration: 'none'
+                  }}
+                >
+                  <DownloadIcon size={14} /> Download DOCX
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Side-by-Side Editor */}
+        {showImprovementEditor && currentImprovement && (
+          <div style={{ marginTop: '20px' }}>
+            {/* Optional Questions to strengthen resume */}
+            {currentImprovement.missingInformationQuestions?.length > 0 && (
+              <div
+                style={{
+                  padding: '14px 16px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  marginBottom: '18px'
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#102e5f', marginBottom: '6px' }}>
+                  Strengthen Your Resume (Optional Clarifications)
+                </div>
+                {currentImprovement.missingInformationQuestions.map((q) => (
+                  <div key={q.id} style={{ marginTop: '10px' }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                      {q.question}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        placeholder="e.g. Implemented frontend components and REST API integration"
+                        value={questionAnswers[q.id] !== undefined ? questionAnswers[q.id] : (q.studentAnswer || '')}
+                        onChange={(e) =>
+                          setQuestionAnswers({ ...questionAnswers, [q.id]: e.target.value })
+                        }
+                        style={{
+                          flex: 1,
+                          padding: '7px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--line)',
+                          fontSize: '0.82rem'
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="secondary"
+                        style={{ padding: '6px 14px', fontSize: '0.8rem' }}
+                        onClick={() => handleSaveQuestionAnswer(q.id)}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Sections List */}
+            {currentImprovement.sections?.map((sec) => {
+              const origStr = typeof sec.originalContent === 'string'
+                ? sec.originalContent
+                : JSON.stringify(sec.originalContent, null, 2);
+              const impStr = typeof sec.improvedContent === 'string'
+                ? sec.improvedContent
+                : JSON.stringify(sec.improvedContent, null, 2);
+              const isEditing = editingSectionKey === sec.sectionKey;
+
+              return (
+                <div key={sec.sectionKey} className="improvement-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <strong style={{ fontSize: '0.94rem', color: '#102e5f' }}>
+                        {sec.sectionTitle}
+                      </strong>
+                      <span className={`decision-badge ${sec.studentDecision.toLowerCase()}`}>
+                        {sec.studentDecision === 'ACCEPTED'
+                          ? 'Accepted'
+                          : sec.studentDecision === 'REJECTED'
+                          ? 'Kept Original'
+                          : sec.studentDecision === 'EDITED'
+                          ? 'Custom Edited'
+                          : 'Pending Review'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        type="button"
+                        className={sec.studentDecision === 'ACCEPTED' ? 'primary' : 'secondary'}
+                        style={{ padding: '5px 12px', fontSize: '0.78rem' }}
+                        onClick={() => handleUpdateSectionDecision(sec.sectionKey, 'ACCEPTED')}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        className={sec.studentDecision === 'EDITED' ? 'primary' : 'secondary'}
+                        style={{ padding: '5px 12px', fontSize: '0.78rem' }}
+                        onClick={() => {
+                          if (isEditing) {
+                            handleUpdateSectionDecision(sec.sectionKey, 'EDITED', manualDrafts[sec.sectionKey] || impStr);
+                          } else {
+                            setManualDrafts({ ...manualDrafts, [sec.sectionKey]: sec.studentEditedContent || impStr });
+                            setEditingSectionKey(sec.sectionKey);
+                          }
+                        }}
+                      >
+                        {isEditing ? 'Save Edit' : 'Edit'}
+                      </button>
+                      <button
+                        type="button"
+                        className={sec.studentDecision === 'REJECTED' ? 'primary' : 'secondary'}
+                        style={{ padding: '5px 12px', fontSize: '0.78rem' }}
+                        onClick={() => handleUpdateSectionDecision(sec.sectionKey, 'REJECTED')}
+                      >
+                        Keep Original
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="improvement-side-by-side">
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
+                        Original Content
+                      </div>
+                      <div className="diff-box original">
+                        {origStr}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0d9488', textTransform: 'uppercase', marginBottom: '4px' }}>
+                        AI Improved Content
+                      </div>
+                      {isEditing ? (
+                        <textarea
+                          rows={4}
+                          value={manualDrafts[sec.sectionKey] !== undefined ? manualDrafts[sec.sectionKey] : impStr}
+                          onChange={(e) =>
+                            setManualDrafts({ ...manualDrafts, [sec.sectionKey]: e.target.value })
+                          }
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            borderRadius: '6px',
+                            border: '1px solid #0d9488',
+                            fontSize: '0.85rem',
+                            fontFamily: 'inherit',
+                            lineHeight: 1.45
+                          }}
+                        />
+                      ) : (
+                        <div className="diff-box improved">
+                          {sec.studentDecision === 'EDITED' && sec.studentEditedContent ? sec.studentEditedContent : impStr}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '8px' }}>
+                    <strong>Why this is better:</strong> {sec.explanation}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Bottom Generate Action */}
+            <div style={{ marginTop: '20px', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <strong style={{ fontSize: '0.92rem', color: '#102e5f', display: 'block' }}>
+                  Ready to apply your changes?
+                </strong>
+                <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                  Generates an ATS-friendly single-column PDF and DOCX with your accepted improvements.
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="primary"
+                style={{ padding: '10px 24px', fontSize: '0.88rem' }}
+                disabled={generatingResume}
+                onClick={handleGenerateApprovedResume}
+              >
+                {generatingResume ? 'Generating Documents…' : 'Generate Improved Resume'}
+              </button>
+            </div>
+          </div>
+        )}
+      </article>
+
+      {/* SECTION D: LATEST ANALYSIS SUMMARY */}
       {currentReport && (
         <article className="card" style={{ padding: '22px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>

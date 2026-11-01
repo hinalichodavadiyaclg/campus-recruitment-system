@@ -62,6 +62,57 @@ export const resumeAnalysisService = {
   /**
    * Get eligible published jobs for matching
    */
-  getEligibleJobs: () => apiRequest('/api/student/resumes/eligible-jobs')
-};
+  getEligibleJobs: () => apiRequest('/api/student/resumes/eligible-jobs'),
 
+  /**
+   * Trigger AI resume improvement
+   */
+  createImprovement: (resumeId) =>
+    apiRequest(`/api/student/resumes/${resumeId}/improve`, {
+      method: 'POST'
+    }),
+
+  /**
+   * Get latest improvement for resume
+   */
+  getLatestImprovementForResume: (resumeId) =>
+    apiRequest(`/api/student/resumes/${resumeId}/improvements/latest`),
+
+  /**
+   * Get improvement by ID
+   */
+  getImprovementById: (improvementId) =>
+    apiRequest(`/api/student/resume-improvements/${improvementId}`),
+
+  /**
+   * Update section decision (ACCEPT / REJECT / EDIT)
+   */
+  updateSectionDecision: (improvementId, sectionKey, payload) =>
+    apiRequest(`/api/student/resume-improvements/${improvementId}/sections/${sectionKey}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    }),
+
+  /**
+   * Answer optional missing information question
+   */
+  answerQuestion: (improvementId, questionId, answer) =>
+    apiRequest(`/api/student/resume-improvements/${improvementId}/questions/${questionId}`, {
+      method: 'POST',
+      body: JSON.stringify({ answer })
+    }),
+
+  /**
+   * Generate approved resume (PDF + DOCX)
+   */
+  generateApprovedResume: (improvementId) =>
+    apiRequest(`/api/student/resume-improvements/${improvementId}/generate`, {
+      method: 'POST'
+    }),
+
+  /**
+   * Get improvement history
+   */
+  getImprovementHistory: () =>
+    apiRequest('/api/student/resume-improvements/history')
+};
