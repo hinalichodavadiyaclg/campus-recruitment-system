@@ -19,7 +19,7 @@ import {
 import './CompanyDashboard.css';
 
 export function CompanyDashboard() {
-  const { user } = useAuth();
+  const { user, has } = useAuth();
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,42 +37,57 @@ export function CompanyDashboard() {
     async function loadData() {
       try {
         setLoading(true);
+
+        const canReadJobs = has('JOB_READ');
+        const canReadApps = has('APPLICATION_READ');
+
         const [profileRes, jobsRes, appsRes, placedRes, interviewRes] = await Promise.allSettled([
           companyService.getMyProfile(),
-          jobService.listJobs({ limit: 5 }),
-          applicationService.listApplications({ limit: 50 }),
-          applicationService.listApplications({ status: 'SELECTED', limit: 1 }),
-          applicationService.listApplications({ status: 'INTERVIEW', limit: 10 })
+          canReadJobs ? jobService.listJobs({ limit: 5 }) : Promise.resolve({ jobs: [], total: 0 }),
+          canReadApps ? applicationService.listApplications({ limit: 50 }) : Promise.resolve({ items: [], total: 0 }),
+          canReadApps ? applicationService.listApplications({ status: 'SELECTED', limit: 1 }) : Promise.resolve({ items: [], total: 0 }),
+          canReadApps ? applicationService.listApplications({ status: 'INTERVIEW', limit: 10 }) : Promise.resolve({ items: [], total: 0 })
         ]);
 
         if (mounted) {
           if (profileRes.status === 'fulfilled') {
             setCompany(profileRes.value);
           }
-          if (jobsRes.status === 'fulfilled') {
+          if (canReadJobs && jobsRes.status === 'fulfilled') {
             const jList = jobsRes.value?.jobs || jobsRes.value?.items || [];
             setRecentJobs(jList);
             setJobPostingsCount(jobsRes.value?.total ?? jobsRes.value?.pagination?.total ?? jList.length);
+          } else {
+            setRecentJobs([]);
+            setJobPostingsCount(0);
           }
-          if (appsRes.status === 'fulfilled') {
+          if (canReadApps && appsRes.status === 'fulfilled') {
             const aList = appsRes.value?.items || [];
             setRecentApplications(aList.slice(0, 5));
             setApplicationsCount(appsRes.value?.total ?? aList.length);
+          } else {
+            setRecentApplications([]);
+            setApplicationsCount(0);
           }
-          if (placedRes.status === 'fulfilled') {
+          if (canReadApps && placedRes.status === 'fulfilled') {
             setPlacementsCount(placedRes.value?.total ?? 0);
-          } else if (appsRes.status === 'fulfilled') {
+          } else if (canReadApps && appsRes.status === 'fulfilled') {
             const placed = (appsRes.value?.items || []).filter((a) => a.status === 'SELECTED').length;
             setPlacementsCount(placed);
+          } else {
+            setPlacementsCount(0);
           }
-          if (interviewRes.status === 'fulfilled') {
+          if (canReadApps && interviewRes.status === 'fulfilled') {
             const intList = interviewRes.value?.items || [];
             setUpcomingInterviews(intList);
             setInterviewsCount(interviewRes.value?.total ?? intList.length);
-          } else if (appsRes.status === 'fulfilled') {
+          } else if (canReadApps && appsRes.status === 'fulfilled') {
             const intList = (appsRes.value?.items || []).filter((a) => a.status === 'INTERVIEW');
             setUpcomingInterviews(intList);
             setInterviewsCount(intList.length);
+          } else {
+            setUpcomingInterviews([]);
+            setInterviewsCount(0);
           }
         }
       } catch (_err) {
@@ -87,7 +102,7 @@ export function CompanyDashboard() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [has]);
 
   // Dynamic Greeting based on current time
   const currentHour = new Date().getHours();
@@ -266,217 +281,235 @@ export function CompanyDashboard() {
           </div>
         </div>
 
-        {/* 3. FOUR METRICS CARDS ROW */}
-        <div className="company-metrics-grid">
-          {/* Card 1: Job Postings */}
-          <a href="#/jobs" className="company-metric-card">
-            <div className="company-metric-left">
-              <div className="company-metric-icon-box blue">
-                <BriefcaseIcon size={22} color="#0284c7" />
-              </div>
-              <div className="company-metric-details">
-                <span className="company-metric-value">{jobPostingsCount}</span>
-                <span className="company-metric-label">Job Postings</span>
-              </div>
-            </div>
-            <div className="company-chevron-arrow">
-              <ChevronRightIcon size={18} />
-            </div>
-          </a>
+        {/* 3. METRICS CARDS ROW */}
+        {(has('JOB_READ') || has('APPLICATION_READ')) && (
+          <div className="company-metrics-grid">
+            {/* Card 1: Job Postings */}
+            {has('JOB_READ') && (
+              <a href="#/jobs" className="company-metric-card">
+                <div className="company-metric-left">
+                  <div className="company-metric-icon-box blue">
+                    <BriefcaseIcon size={22} color="#0284c7" />
+                  </div>
+                  <div className="company-metric-details">
+                    <span className="company-metric-value">{jobPostingsCount}</span>
+                    <span className="company-metric-label">Job Postings</span>
+                  </div>
+                </div>
+                <div className="company-chevron-arrow">
+                  <ChevronRightIcon size={18} />
+                </div>
+              </a>
+            )}
 
-          {/* Card 2: Applications */}
-          <a href="#/applications" className="company-metric-card">
-            <div className="company-metric-left">
-              <div className="company-metric-icon-box purple">
-                <DocumentIcon size={22} color="#9333ea" />
-              </div>
-              <div className="company-metric-details">
-                <span className="company-metric-value">{applicationsCount}</span>
-                <span className="company-metric-label">Applications</span>
-              </div>
-            </div>
-            <div className="company-chevron-arrow">
-              <ChevronRightIcon size={18} />
-            </div>
-          </a>
+            {/* Card 2: Applications */}
+            {has('APPLICATION_READ') && (
+              <a href="#/applications" className="company-metric-card">
+                <div className="company-metric-left">
+                  <div className="company-metric-icon-box purple">
+                    <DocumentIcon size={22} color="#9333ea" />
+                  </div>
+                  <div className="company-metric-details">
+                    <span className="company-metric-value">{applicationsCount}</span>
+                    <span className="company-metric-label">Applications</span>
+                  </div>
+                </div>
+                <div className="company-chevron-arrow">
+                  <ChevronRightIcon size={18} />
+                </div>
+              </a>
+            )}
 
-          {/* Card 3: Interviews */}
-          <a href="#/interviews" className="company-metric-card" title="Scheduled Interviews">
-            <div className="company-metric-left">
-              <div className="company-metric-icon-box green">
-                <CalendarIcon size={22} color="#16a34a" />
-              </div>
-              <div className="company-metric-details">
-                <span className="company-metric-value">{interviewsCount}</span>
-                <span className="company-metric-label">Interviews</span>
-              </div>
-            </div>
-            <div className="company-chevron-arrow">
-              <ChevronRightIcon size={18} />
-            </div>
-          </a>
+            {/* Card 3: Interviews */}
+            {has('APPLICATION_READ') && (
+              <a href="#/interviews" className="company-metric-card" title="Scheduled Interviews">
+                <div className="company-metric-left">
+                  <div className="company-metric-icon-box green">
+                    <CalendarIcon size={22} color="#16a34a" />
+                  </div>
+                  <div className="company-metric-details">
+                    <span className="company-metric-value">{interviewsCount}</span>
+                    <span className="company-metric-label">Interviews</span>
+                  </div>
+                </div>
+                <div className="company-chevron-arrow">
+                  <ChevronRightIcon size={18} />
+                </div>
+              </a>
+            )}
 
-          {/* Card 4: Placements */}
-          <a href="#/placements" className="company-metric-card">
-            <div className="company-metric-left">
-              <div className="company-metric-icon-box orange">
-                <AwardIcon size={22} color="#d97706" />
-              </div>
-              <div className="company-metric-details">
-                <span className="company-metric-value">{placementsCount}</span>
-                <span className="company-metric-label">Placements</span>
-              </div>
-            </div>
-            <div className="company-chevron-arrow">
-              <ChevronRightIcon size={18} />
-            </div>
-          </a>
-        </div>
+            {/* Card 4: Placements */}
+            {has('APPLICATION_READ') && (
+              <a href="#/placements" className="company-metric-card">
+                <div className="company-metric-left">
+                  <div className="company-metric-icon-box orange">
+                    <AwardIcon size={22} color="#d97706" />
+                  </div>
+                  <div className="company-metric-details">
+                    <span className="company-metric-value">{placementsCount}</span>
+                    <span className="company-metric-label">Placements</span>
+                  </div>
+                </div>
+                <div className="company-chevron-arrow">
+                  <ChevronRightIcon size={18} />
+                </div>
+              </a>
+            )}
+          </div>
+        )}
 
         {/* 4. MIDDLE TWO-COLUMN GRID: Recent Job Postings & Recent Applications */}
-        <div className="company-two-col-grid">
-          {/* Column 1: Recent Job Postings */}
-          <div className="company-section-col">
-            <div className="company-section-header">
-              <h3 className="company-section-title">Recent Job Postings</h3>
-              <a href="#/jobs" className="company-view-all-link">
-                <span>View All</span>
-                <span aria-hidden="true">→</span>
-              </a>
-            </div>
-            <div className="company-card-list">
-              {recentJobs.length > 0 ? (
-                recentJobs.map((job) => (
-                  <a key={job._id || job.id} href="#/jobs" className="company-list-row">
-                    <div className="company-list-left">
-                      <div className="company-avatar-circle">
-                        {(job.title || 'JB').slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="company-list-info">
-                        <span className="company-list-primary">{job.title}</span>
-                        <span className="company-list-secondary">
-                          <span>{job.jobType || 'Full Time'}</span>
-                          <span>{job.location || 'Remote'}</span>
-                        </span>
-                      </div>
-                    </div>
-                    <div className="company-list-right">
-                      <span className={`company-pill-badge ${job.status?.toLowerCase() || 'active'}`}>{job.status || 'Active'}</span>
-                      <div className="company-chevron-arrow">
-                        <ChevronRightIcon size={16} />
-                      </div>
-                    </div>
+        {(has('JOB_READ') || has('APPLICATION_READ')) && (
+          <div className="company-two-col-grid">
+            {/* Column 1: Recent Job Postings */}
+            {has('JOB_READ') && (
+              <div className="company-section-col">
+                <div className="company-section-header">
+                  <h3 className="company-section-title">Recent Job Postings</h3>
+                  <a href="#/jobs" className="company-view-all-link">
+                    <span>View All</span>
+                    <span aria-hidden="true">→</span>
                   </a>
-                ))
-              ) : (
-                <div className="company-empty-state">
-                  <div className="company-empty-icon">
-                    <BriefcaseIcon size={20} />
-                  </div>
-                  <p className="company-empty-title">No data found</p>
-                  <p className="company-empty-desc">No active job postings found. Create a new job opening to start recruiting.</p>
                 </div>
-              )}
-            </div>
-          </div>
+                <div className="company-card-list">
+                  {recentJobs.length > 0 ? (
+                    recentJobs.map((job) => (
+                      <a key={job._id || job.id} href="#/jobs" className="company-list-row">
+                        <div className="company-list-left">
+                          <div className="company-avatar-circle">
+                            {(job.title || 'JB').slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="company-list-info">
+                            <span className="company-list-primary">{job.title}</span>
+                            <span className="company-list-secondary">
+                              <span>{job.jobType || 'Full Time'}</span>
+                              <span>{job.location || 'Remote'}</span>
+                            </span>
+                          </div>
+                        </div>
+                        <div className="company-list-right">
+                          <span className={`company-pill-badge ${job.status?.toLowerCase() || 'active'}`}>{job.status || 'Active'}</span>
+                          <div className="company-chevron-arrow">
+                            <ChevronRightIcon size={16} />
+                          </div>
+                        </div>
+                      </a>
+                    ))
+                  ) : (
+                    <div className="company-empty-state">
+                      <div className="company-empty-icon">
+                        <BriefcaseIcon size={20} />
+                      </div>
+                      <p className="company-empty-title">No data found</p>
+                      <p className="company-empty-desc">No active job postings found. Create a new job opening to start recruiting.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-          {/* Column 2: Recent Applications */}
-          <div className="company-section-col">
-            <div className="company-section-header">
-              <h3 className="company-section-title">Recent Applications</h3>
-              <a href="#/applications" className="company-view-all-link">
-                <span>View All</span>
-                <span aria-hidden="true">→</span>
-              </a>
-            </div>
-            <div className="company-card-list">
-              {recentApplications.length > 0 ? (
-                recentApplications.map((app) => {
-                  const candName = `${app.studentId?.firstName || ''} ${app.studentId?.lastName || ''}`.trim() || app.candidateName || 'Candidate';
-                  const jobTitle = app.jobSnapshot?.title || app.jobId?.title || app.roleTitle || 'Applicant';
-                  return (
-                    <a key={app._id || app.id} href="#/applications" className="company-list-row">
-                      <div className="company-list-left">
-                        <div className="company-avatar-circle">
-                          {candName.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="company-list-info">
-                          <span className="company-list-primary">{candName}</span>
-                          <span className="company-list-secondary">{jobTitle}</span>
-                        </div>
-                      </div>
-                      <div className="company-list-right">
-                        <span className={`company-pill-badge ${app.status?.toLowerCase() || 'new'}`}>{app.status || 'New'}</span>
-                        <div className="company-chevron-arrow">
-                          <ChevronRightIcon size={16} />
-                        </div>
-                      </div>
-                    </a>
-                  );
-                })
-              ) : (
-                <div className="company-empty-state">
-                  <div className="company-empty-icon">
-                    <DocumentIcon size={20} />
-                  </div>
-                  <p className="company-empty-title">No data found</p>
-                  <p className="company-empty-desc">No candidate applications have been received yet.</p>
+            {/* Column 2: Recent Applications */}
+            {has('APPLICATION_READ') && (
+              <div className="company-section-col">
+                <div className="company-section-header">
+                  <h3 className="company-section-title">Recent Applications</h3>
+                  <a href="#/applications" className="company-view-all-link">
+                    <span>View All</span>
+                    <span aria-hidden="true">→</span>
+                  </a>
                 </div>
-              )}
-            </div>
+                <div className="company-card-list">
+                  {recentApplications.length > 0 ? (
+                    recentApplications.map((app) => {
+                      const candName = `${app.studentId?.firstName || ''} ${app.studentId?.lastName || ''}`.trim() || app.candidateName || 'Candidate';
+                      const jobTitle = app.jobSnapshot?.title || app.jobId?.title || app.roleTitle || 'Applicant';
+                      return (
+                        <a key={app._id || app.id} href="#/applications" className="company-list-row">
+                          <div className="company-list-left">
+                            <div className="company-avatar-circle">
+                              {candName.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="company-list-info">
+                              <span className="company-list-primary">{candName}</span>
+                              <span className="company-list-secondary">{jobTitle}</span>
+                            </div>
+                          </div>
+                          <div className="company-list-right">
+                            <span className={`company-pill-badge ${app.status?.toLowerCase() || 'new'}`}>{app.status || 'New'}</span>
+                            <div className="company-chevron-arrow">
+                              <ChevronRightIcon size={16} />
+                            </div>
+                          </div>
+                        </a>
+                      );
+                    })
+                  ) : (
+                    <div className="company-empty-state">
+                      <div className="company-empty-icon">
+                        <DocumentIcon size={20} />
+                      </div>
+                      <p className="company-empty-title">No data found</p>
+                      <p className="company-empty-desc">No candidate applications have been received yet.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {/* 5. BOTTOM TWO-COLUMN GRID: Upcoming Interviews & Quick Actions */}
         <div className="company-two-col-grid">
           {/* Column 1: Upcoming Interviews */}
-          <div className="company-section-col">
-            <div className="company-section-header">
-              <h3 className="company-section-title">Upcoming Interviews</h3>
-              <a href="#/applications" className="company-view-all-link">
-                <span>View All</span>
-                <span aria-hidden="true">→</span>
-              </a>
-            </div>
-            <div className="company-card-list">
-              {upcomingInterviews.length > 0 ? (
-                upcomingInterviews.map((interview) => {
-                  const candName =
-                    `${interview.studentId?.firstName || ''} ${interview.studentId?.lastName || ''}`.trim() ||
-                    interview.candidateName ||
-                    'Candidate';
-                  const roleTitle = interview.jobSnapshot?.title || interview.jobId?.title || interview.roleTitle || 'Applicant';
-                  return (
-                    <a key={interview._id || interview.id} href="#/applications" className="company-list-row">
-                      <div className="company-list-left">
-                        <div className="company-avatar-circle">
-                          {candName.slice(0, 2).toUpperCase()}
+          {has('APPLICATION_READ') && (
+            <div className="company-section-col">
+              <div className="company-section-header">
+                <h3 className="company-section-title">Upcoming Interviews</h3>
+                <a href="#/applications" className="company-view-all-link">
+                  <span>View All</span>
+                  <span aria-hidden="true">→</span>
+                </a>
+              </div>
+              <div className="company-card-list">
+                {upcomingInterviews.length > 0 ? (
+                  upcomingInterviews.map((interview) => {
+                    const candName =
+                      `${interview.studentId?.firstName || ''} ${interview.studentId?.lastName || ''}`.trim() ||
+                      interview.candidateName ||
+                      'Candidate';
+                    const roleTitle = interview.jobSnapshot?.title || interview.jobId?.title || interview.roleTitle || 'Applicant';
+                    return (
+                      <a key={interview._id || interview.id} href="#/applications" className="company-list-row">
+                        <div className="company-list-left">
+                          <div className="company-avatar-circle">
+                            {candName.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="company-list-info">
+                            <span className="company-list-primary">{candName}</span>
+                            <span className="company-list-secondary">{roleTitle} • Round {interview.recruitmentRound || 1}</span>
+                          </div>
                         </div>
-                        <div className="company-list-info">
-                          <span className="company-list-primary">{candName}</span>
-                          <span className="company-list-secondary">{roleTitle} • Round {interview.recruitmentRound || 1}</span>
+                        <div className="company-list-right">
+                          <span className="company-pill-badge online">Interview</span>
+                          <div className="company-chevron-arrow">
+                            <ChevronRightIcon size={16} />
+                          </div>
                         </div>
-                      </div>
-                      <div className="company-list-right">
-                        <span className="company-pill-badge online">Interview</span>
-                        <div className="company-chevron-arrow">
-                          <ChevronRightIcon size={16} />
-                        </div>
-                      </div>
-                    </a>
-                  );
-                })
-              ) : (
-                <div className="company-empty-state">
-                  <div className="company-empty-icon">
-                    <CalendarIcon size={20} />
+                      </a>
+                    );
+                  })
+                ) : (
+                  <div className="company-empty-state">
+                    <div className="company-empty-icon">
+                      <CalendarIcon size={20} />
+                    </div>
+                    <p className="company-empty-title">No data found</p>
+                    <p className="company-empty-desc">No candidate interviews are currently scheduled.</p>
                   </div>
-                  <p className="company-empty-title">No data found</p>
-                  <p className="company-empty-desc">No candidate interviews are currently scheduled.</p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Column 2: Quick Actions */}
           <div className="company-section-col">
@@ -485,40 +518,48 @@ export function CompanyDashboard() {
             </div>
             <div className="company-quick-actions-grid">
               {/* Action 1: Create Job Posting */}
-              <a href="#/jobs" className="company-action-card create-job">
-                <div className="company-action-top">
-                  <PlusIcon size={22} color="#2563eb" />
-                  <ChevronRightIcon size={16} />
-                </div>
-                <span className="company-action-label">Create Job Posting</span>
-              </a>
+              {has('JOB_CREATE') && (
+                <a href="#/jobs" className="company-action-card create-job">
+                  <div className="company-action-top">
+                    <PlusIcon size={22} color="#2563eb" />
+                    <ChevronRightIcon size={16} />
+                  </div>
+                  <span className="company-action-label">Create Job Posting</span>
+                </a>
+              )}
 
               {/* Action 2: View Applications */}
-              <a href="#/applications" className="company-action-card view-apps">
-                <div className="company-action-top">
-                  <DocumentIcon size={22} color="#9333ea" />
-                  <ChevronRightIcon size={16} />
-                </div>
-                <span className="company-action-label">View Applications</span>
-              </a>
+              {has('APPLICATION_READ') && (
+                <a href="#/applications" className="company-action-card view-apps">
+                  <div className="company-action-top">
+                    <DocumentIcon size={22} color="#9333ea" />
+                    <ChevronRightIcon size={16} />
+                  </div>
+                  <span className="company-action-label">View Applications</span>
+                </a>
+              )}
 
               {/* Action 3: Manage Interviews */}
-              <a href="#/applications?status=INTERVIEW" className="company-action-card manage-interviews">
-                <div className="company-action-top">
-                  <CalendarIcon size={22} color="#16a34a" />
-                  <ChevronRightIcon size={16} />
-                </div>
-                <span className="company-action-label">Manage Interviews</span>
-              </a>
+              {has('APPLICATION_READ') && (
+                <a href="#/applications?status=INTERVIEW" className="company-action-card manage-interviews">
+                  <div className="company-action-top">
+                    <CalendarIcon size={22} color="#16a34a" />
+                    <ChevronRightIcon size={16} />
+                  </div>
+                  <span className="company-action-label">Manage Interviews</span>
+                </a>
+              )}
 
               {/* Action 4: View Placements */}
-              <a href="#/applications?status=SELECTED" className="company-action-card view-placements">
-                <div className="company-action-top">
-                  <UsersIcon size={22} color="#d97706" />
-                  <ChevronRightIcon size={16} />
-                </div>
-                <span className="company-action-label">View Placements</span>
-              </a>
+              {has('APPLICATION_READ') && (
+                <a href="#/applications?status=SELECTED" className="company-action-card view-placements">
+                  <div className="company-action-top">
+                    <UsersIcon size={22} color="#d97706" />
+                    <ChevronRightIcon size={16} />
+                  </div>
+                  <span className="company-action-label">View Placements</span>
+                </a>
+              )}
             </div>
           </div>
         </div>

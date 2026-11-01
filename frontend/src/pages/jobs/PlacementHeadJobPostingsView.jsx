@@ -379,8 +379,16 @@ export function PlacementHeadJobPostingsView() {
             jobs={jobs}
             roleType="PLACEMENT_HEAD"
             onViewDetails={(j) => setSelectedJobForDetails(j)}
-            onSuspend={(j) => setSelectedJobForSuspend(j)}
-            onViewApplicants={handleViewApplicants}
+            onSuspend={has('JOB_MANAGE') ? (j) => setSelectedJobForSuspend(j) : undefined}
+            onViewApplicants={has('APPLICATION_READ') ? handleViewApplicants : undefined}
+            onEdit={
+              has('JOB_UPDATE')
+                ? (j) => {
+                    setSelectedJobForForm(j);
+                    setIsFormModalOpen(true);
+                  }
+                : undefined
+            }
           />
 
           {/* Pagination Controls */}
@@ -435,6 +443,15 @@ export function PlacementHeadJobPostingsView() {
             setSelectedJobForDetails(null);
             setSelectedJobForSuspend(j);
           }}
+          onEditClick={
+            has('JOB_UPDATE')
+              ? (j) => {
+                  setSelectedJobForDetails(null);
+                  setSelectedJobForForm(j);
+                  setIsFormModalOpen(true);
+                }
+              : undefined
+          }
         />
       )}
 

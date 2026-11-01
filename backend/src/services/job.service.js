@@ -5,7 +5,7 @@ import { Student } from '../models/student.model.js';
 import { ROLE_IDS } from '../utils/access-constants.js';
 import { AppError } from '../utils/app-error.js';
 import { executeWithJobIdRetry, getNextCandidateJobId } from '../utils/job-id.js';
-import { getCoordinatorDepartment } from '../utils/department-scope.js';
+import { getCoordinatorDepartment, getStudentDepartment } from '../utils/department-scope.js';
 import { findCompanyByUserId } from './company.service.js';
 import {
   dispatchJobPublishedNotifications,
@@ -13,26 +13,27 @@ import {
   dispatchJobStatusChangedNotifications
 } from './notification.service.js';
 
+function escapeRegex(str) {
+  return String(str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export async function createJob({ auth, body }) {
   let companyId;
 
   if (auth.userType === 'COMPANY' || auth.roleId === ROLE_IDS.COMPANY) {
     const company = await findCompanyByUserId(auth.userId);
     companyId = company._id;
-  } else if (
-    auth.roleId === ROLE_IDS.PLACEMENT_HEAD ||
-    auth.roleId === ROLE_IDS.SUPER_ADMIN
-  ) {
+  } else {
+    // Dynamic RBAC: Route middleware verifies PERMISSION_IDS.JOB_CREATE.
+    // Non-company authorized users (Admin, Head, Coordinator, etc.) create jobs on behalf of companies.
     if (!body.companyId) {
-      throw new AppError(400, 'COMPANY_ID_REQUIRED', 'companyId is required when creating a job posting as administrator.');
+      throw new AppError(400, 'COMPANY_ID_REQUIRED', 'companyId is required when creating a job posting on behalf of a company.');
     }
     const company = await Company.findById(body.companyId);
     if (!company) {
       throw new AppError(404, 'COMPANY_NOT_FOUND', 'Company profile not found.');
     }
     companyId = company._id;
-  } else {
-    throw new AppError(403, 'FORBIDDEN', 'You do not have permission to create job postings.');
   }
 
   const deadline = new Date(body.deadline);
@@ -89,6 +90,36 @@ export async function listJobs({ auth, query = {} }) {
     mongoQuery.status = 'OPEN';
     mongoQuery.isSuspended = false;
     mongoQuery.deadline = { $gte: new Date() };
+
+    // Scoped to jobs relevant to student's department or unrestricted jobs
+    try {
+      const studentScope = await getStudentDepartment(auth);
+      mongoQuery.$and = mongoQuery.$and || [];
+
+      // 1. Department restriction
+      if (studentScope?.departmentId) {
+        mongoQuery.$and.push({
+          $or: [
+            { eligibilityMode: 'ALL_STUDENTS' },
+            { 'eligibilityCriteria.allowedDepartmentIds': { $size: 0 } },
+            { 'eligibilityCriteria.allowedDepartmentIds': { $exists: false } },
+            { 'eligibilityCriteria.allowedDepartmentIds': null },
+            { 'eligibilityCriteria.allowedDepartmentIds': studentScope.departmentId }
+          ]
+        });
+      } else {
+        mongoQuery.$and.push({
+          $or: [
+            { eligibilityMode: 'ALL_STUDENTS' },
+            { 'eligibilityCriteria.allowedDepartmentIds': { $size: 0 } },
+            { 'eligibilityCriteria.allowedDepartmentIds': { $exists: false } },
+            { 'eligibilityCriteria.allowedDepartmentIds': null }
+          ]
+        });
+      }
+    } catch {
+      // Gracefully handle unprofiled student account
+    }
   } else if (auth.userType === 'COMPANY' || auth.roleId === ROLE_IDS.COMPANY) {
     // Companies see all their own jobs across all statuses, but cannot see other companies' jobs
     const company = await findCompanyByUserId(auth.userId);
@@ -115,15 +146,10 @@ export async function listJobs({ auth, query = {} }) {
     }
     if (query.companyId) mongoQuery.companyId = query.companyId;
     if (query.status) mongoQuery.status = query.status;
-  } else if (
-    auth.roleId === ROLE_IDS.PLACEMENT_HEAD ||
-    auth.roleId === ROLE_IDS.SUPER_ADMIN
-  ) {
-    // Placement Head & Super Admin oversee institution-wide jobs
+  } else {
+    // Fallback for any other user holding dynamic JOB_READ permission
     if (query.companyId) mongoQuery.companyId = query.companyId;
     if (query.status) mongoQuery.status = query.status;
-  } else {
-    throw new AppError(403, 'FORBIDDEN', 'You do not have permission to view job postings.');
   }
 
   if (query.jobType) {
@@ -153,19 +179,95 @@ export async function listJobs({ auth, query = {} }) {
     });
   }
   if (query.search && query.search.trim()) {
-    const regex = new RegExp(query.search.trim(), 'i');
+    const cleanSearch = escapeRegex(query.search.trim());
+    const regex = new RegExp(cleanSearch, 'i');
+    const matchingCompanyIds = await Company.find({
+      $or: [{ companyName: regex }, { industryType: regex }]
+    }).distinct('_id');
+
     mongoQuery.$and = mongoQuery.$and || [];
     mongoQuery.$and.push({
-      $or: [{ title: regex }, { jobId: regex }, { category: regex }]
+      $or: [
+        { title: regex },
+        { jobId: regex },
+        { category: regex },
+        { description: regex },
+        { location: regex },
+        { 'eligibilityCriteria.requiredSkills': regex },
+        { companyId: { $in: matchingCompanyIds } }
+      ]
     });
+  }
+
+  if (query.category && query.category.trim()) {
+    mongoQuery.category = new RegExp(`^${escapeRegex(query.category.trim())}$`, 'i');
+  }
+
+  if (query.location && query.location.trim()) {
+    mongoQuery.location = new RegExp(escapeRegex(query.location.trim()), 'i');
+  }
+
+  if (query.datePosted) {
+    const now = new Date();
+    let cutoff = null;
+    if (query.datePosted === '24h') {
+      cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    } else if (query.datePosted === '7d') {
+      cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (query.datePosted === '30d') {
+      cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+    if (cutoff) {
+      mongoQuery.createdAt = { $gte: cutoff };
+    }
+  }
+
+  if (query.closingSoon === true || query.closingSoon === 'true') {
+    const now = new Date();
+    const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    mongoQuery.deadline = { $gte: now, $lte: sevenDaysLater };
+  }
+
+  if (query.minSalary !== undefined && query.minSalary !== null && !isNaN(Number(query.minSalary))) {
+    const minVal = Number(query.minSalary);
+    if (minVal > 0) {
+      mongoQuery.$and = mongoQuery.$and || [];
+      mongoQuery.$and.push({
+        $or: [
+          {
+            'compensation.salaryFormat': 'PER_ANNUM',
+            $or: [
+              { 'compensation.salaryMax': { $gte: minVal } },
+              { 'compensation.salaryMin': { $gte: minVal } }
+            ]
+          },
+          {
+            'compensation.salaryFormat': { $in: ['PER_MONTH', 'STIPEND'] },
+            $or: [
+              { 'compensation.salaryMax': { $gte: minVal / 12 } },
+              { 'compensation.salaryMin': { $gte: minVal / 12 } }
+            ]
+          }
+        ]
+      });
+    }
+  }
+
+  let sortObj = { createdAt: -1 };
+  if (query.sortBy === 'deadline') {
+    sortObj = { deadline: 1 };
+  } else if (query.sortBy === 'vacancies') {
+    sortObj = { vacancies: -1 };
+  } else if (query.sortBy === 'salary') {
+    sortObj = { 'compensation.salaryMax': -1, 'compensation.salaryMin': -1 };
   }
 
   const [rawItems, total] = await Promise.all([
     Job.find(mongoQuery)
-      .sort({ createdAt: -1 })
+      .sort(sortObj)
       .skip(skip)
       .limit(limit)
-      .populate('companyId', 'companyName companyId officeAddress website industryType')
+      .populate('companyId', 'companyName companyId officeAddress website industryType logoUrl')
       .populate('eligibilityCriteria.allowedDepartmentIds', 'name code')
       .populate('eligibilityCriteria.allowedCourseIds', 'name code level'),
     Job.countDocuments(mongoQuery)
@@ -244,6 +346,25 @@ export async function getJobById({ auth, id }) {
     if (!isAvailable) {
       throw new AppError(404, 'JOB_NOT_FOUND', 'Job posting not found.');
     }
+
+    if (job.eligibilityMode === 'RESTRICTED') {
+      const studentScope = await getStudentDepartment(auth);
+
+      // Department restriction check
+      if (
+        Array.isArray(job.eligibilityCriteria?.allowedDepartmentIds) &&
+        job.eligibilityCriteria.allowedDepartmentIds.length > 0
+      ) {
+        const studentDeptIdStr = studentScope?.departmentId ? String(studentScope.departmentId) : null;
+        const allowedDeptIdStrs = job.eligibilityCriteria.allowedDepartmentIds.map((d) =>
+          String(d?._id || d)
+        );
+
+        if (!studentDeptIdStr || !allowedDeptIdStrs.includes(studentDeptIdStr)) {
+          throw new AppError(404, 'JOB_NOT_FOUND', 'Job posting not found.');
+        }
+      }
+    }
   } else if (auth.userType === 'COMPANY' || auth.roleId === ROLE_IDS.COMPANY) {
     const company = await findCompanyByUserId(auth.userId);
     const jobCompanyId = job.companyId?._id ? job.companyId._id : job.companyId;
@@ -273,11 +394,6 @@ export async function updateJob({ auth, id, body }) {
         'This job posting has been suspended by the Placement Cell and cannot be edited. Please contact the Placement Cell.'
       );
     }
-  } else if (
-    auth.roleId !== ROLE_IDS.PLACEMENT_HEAD &&
-    auth.roleId !== ROLE_IDS.SUPER_ADMIN
-  ) {
-    throw new AppError(403, 'FORBIDDEN', 'You do not have permission to update this job posting.');
   }
 
   if (body.deadline) {
@@ -342,11 +458,6 @@ export async function updateJobStatus({ auth, id, status, note }) {
         'This job posting has been suspended by the Placement Cell and cannot be modified.'
       );
     }
-  } else if (
-    auth.roleId !== ROLE_IDS.PLACEMENT_HEAD &&
-    auth.roleId !== ROLE_IDS.SUPER_ADMIN
-  ) {
-    throw new AppError(403, 'FORBIDDEN', 'You do not have permission to update job status.');
   }
 
   if (status === job.status) {
@@ -421,11 +532,6 @@ export async function reopenJob({ auth, id, newDeadline, vacancies, note }) {
         'This job posting has been suspended by the Placement Cell and cannot be reopened.'
       );
     }
-  } else if (
-    auth.roleId !== ROLE_IDS.PLACEMENT_HEAD &&
-    auth.roleId !== ROLE_IDS.SUPER_ADMIN
-  ) {
-    throw new AppError(403, 'FORBIDDEN', 'You do not have permission to reopen job postings.');
   }
 
   const parsedDeadline = new Date(newDeadline);
@@ -467,12 +573,7 @@ export async function suspendJob({ auth, id, isSuspended, suspensionReason }) {
     throw new AppError(404, 'JOB_NOT_FOUND', 'Job posting not found.');
   }
 
-  if (
-    auth.roleId !== ROLE_IDS.PLACEMENT_HEAD &&
-    auth.roleId !== ROLE_IDS.SUPER_ADMIN
-  ) {
-    throw new AppError(403, 'FORBIDDEN', 'Only the Placement Cell or Super Admin can suspend or restore job postings.');
-  }
+
 
   if (isSuspended) {
     job.isSuspended = true;
