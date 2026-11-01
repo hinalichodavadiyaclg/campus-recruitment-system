@@ -117,7 +117,7 @@ describe('Phase 1 Verification: Job & Application Foundations and Dynamic RBAC',
       assert.ok(headRole.permissionIds.includes(PERMISSION_IDS.JOB_DELETE));
       assert.ok(headRole.permissionIds.includes(PERMISSION_IDS.JOB_MANAGE));
       assert.ok(headRole.permissionIds.includes(PERMISSION_IDS.APPLICATION_READ));
-      assert.ok(headRole.permissionIds.includes(PERMISSION_IDS.APPLICATION_UPDATE));
+      assert.ok(!headRole.permissionIds.includes(PERMISSION_IDS.APPLICATION_UPDATE), 'Placement Head must not have APPLICATION_UPDATE by default');
       assert.ok(headRole.permissionIds.includes(PERMISSION_IDS.APPLICATION_MANAGE));
 
       // Super Admin: ALL_PERMISSION_IDS

@@ -618,3 +618,11 @@ export const ListIcon = createIcon(
     <line x1="3" y1="18" x2="3.01" y2="18" strokeWidth="2.5" />
   </>
 );
+
+export const MoreVerticalIcon = createIcon(
+  <>
+    <circle cx="12" cy="12" r="1.5" />
+    <circle cx="12" cy="5" r="1.5" />
+    <circle cx="12" cy="19" r="1.5" />
+  </>
+);

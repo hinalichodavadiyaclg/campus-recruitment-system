@@ -13,7 +13,12 @@ import {
   SearchIcon,
   RefreshCwIcon,
   AlertCircleIcon,
-  ExternalLinkIcon
+  ExternalLinkIcon,
+  XIcon,
+  MoreVerticalIcon,
+  EyeIcon,
+  CheckCircleIcon,
+  XCircleIcon
 } from '../../components/common/Icons.jsx';
 import {
   formatDate,
@@ -24,6 +29,7 @@ import {
 import { ApplicationDetailsModal } from './ApplicationDetailsModal.jsx';
 import { ApplicationStatusModal } from './ApplicationStatusModal.jsx';
 import { ApplicationWithdrawModal } from './ApplicationWithdrawModal.jsx';
+import { JobApplyModal } from '../jobs/JobApplyModal.jsx';
 import './Applications.css';
 
 export function ApplicationsPage() {
@@ -56,8 +62,15 @@ export function ApplicationsPage() {
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedPassingYear, setSelectedPassingYear] = useState('');
   const [selectedMinCgpa, setSelectedMinCgpa] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const limit = 15;
+
+  // Active 3-dots action menu id
+  const [openActionMenuId, setOpenActionMenuId] = useState(null);
+  const toggleActionMenu = (appId) => {
+    setOpenActionMenuId((prev) => (prev === appId ? null : appId));
+  };
 
   // Sync selectedJobId if route hash updates
   useEffect(() => {
@@ -84,6 +97,7 @@ export function ApplicationsPage() {
   const [selectedAppForDetails, setSelectedAppForDetails] = useState(null);
   const [selectedAppForStatus, setSelectedAppForStatus] = useState(null);
   const [selectedAppForWithdraw, setSelectedAppForWithdraw] = useState(null);
+  const [selectedJobForReapply, setSelectedJobForReapply] = useState(null);
 
   // Load available jobs for filter dropdown if user has JOB_READ and is non-student
   useEffect(() => {
@@ -115,7 +129,8 @@ export function ApplicationsPage() {
         jobId: selectedJobId || undefined,
         status: selectedStatus || undefined,
         passingYear: selectedPassingYear || undefined,
-        minCgpa: selectedMinCgpa || undefined
+        minCgpa: selectedMinCgpa || undefined,
+        search: searchQuery.trim() || undefined
       };
 
       const res = await applicationService.listApplications(params);
@@ -130,11 +145,32 @@ export function ApplicationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, selectedJobId, selectedStatus, selectedPassingYear, selectedMinCgpa]);
+  }, [page, limit, selectedJobId, selectedStatus, selectedPassingYear, selectedMinCgpa, searchQuery]);
 
   useEffect(() => {
     fetchApplications();
   }, [fetchApplications]);
+
+  // Enriched details opening
+  const handleOpenDetails = async (app) => {
+    setSelectedAppForDetails(app);
+    try {
+      const full = await applicationService.getApplicationById(app._id);
+      setSelectedAppForDetails(full);
+    } catch (err) {
+      console.warn('Could not enrich application details:', err);
+    }
+  };
+
+  // Reapply action handler
+  const handleReapplyClick = async (app) => {
+    try {
+      const fullJob = await jobService.getJobById(app.jobId?._id || app.jobId);
+      setSelectedJobForReapply(fullJob);
+    } catch (err) {
+      setSelectedJobForReapply(app.jobId);
+    }
+  };
 
   // Status Update action
   const handleConfirmStatusUpdate = async (id, payload) => {
@@ -171,18 +207,171 @@ export function ApplicationsPage() {
         isStudent
           ? 'Track your submitted job applications, interview schedules, and placement status.'
           : isCompany
-          ? 'Review qualified applicants, verify resumes, and advance candidates through recruitment stages.'
-          : isCoordinator
-          ? 'Oversee department-scoped recruitment applications and placement progression.'
-          : 'Portal-wide placement application oversight, verification, and audit logs.'
+            ? 'Review qualified applicants, verify resumes, and advance candidates through recruitment stages.'
+            : isCoordinator
+              ? 'Oversee department-scoped recruitment applications and placement progression.'
+              : 'Portal-wide placement application oversight, verification, and audit logs.'
       }
       category="Recruitment Module"
       section="Recruitment"
       currentPath="/applications"
     >
+      {/* Filters Bar (For Students) */}
+      {isStudent && (
+        <div className="app-filters-card" style={{ marginBottom: '20px' }}>
+          <div className="app-filter-item" style={{ minWidth: '240px', flex: '1 1 240px' }}>
+            <span className="app-filter-label">Search Applications</span>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type="text"
+                className="app-filter-input"
+                placeholder="Search by job title or company…"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
+                style={{
+                  width: '100%',
+                  height: '40px',
+                  padding: '8px 12px 8px 34px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--line)',
+                  background: 'var(--card-bg, #fff)',
+                  fontSize: '0.86rem',
+                  color: 'var(--ink)'
+                }}
+              />
+              <span style={{ position: 'absolute', left: '10px', color: 'var(--muted)', pointerEvents: 'none' }}>
+                <SearchIcon size={15} />
+              </span>
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setPage(1);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    color: 'var(--muted)'
+                  }}
+                  aria-label="Clear search"
+                >
+                  <XIcon size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="app-filter-item">
+            <span className="app-filter-label">Application Status</span>
+            <select
+              className="app-filter-select"
+              value={selectedStatus}
+              onChange={(e) => {
+                setSelectedStatus(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All Statuses</option>
+              <option value="APPLIED">Applied</option>
+              <option value="UNDER_REVIEW">Under Review</option>
+              <option value="SHORTLISTED">Shortlisted</option>
+              <option value="ASSESSMENT">Assessment</option>
+              <option value="INTERVIEW">Interview</option>
+              <option value="SELECTED">Selected</option>
+              <option value="REJECTED">Not Selected</option>
+              <option value="WITHDRAWN">Withdrawn</option>
+            </select>
+          </div>
+
+          {(searchQuery || selectedStatus) && (
+            <button
+              type="button"
+              className="ghost"
+              style={{ alignSelf: 'flex-end', height: '40px' }}
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedStatus('');
+                setPage(1);
+              }}
+            >
+              Clear
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="ghost"
+            style={{ alignSelf: 'flex-end', height: '40px', marginLeft: 'auto' }}
+            onClick={fetchApplications}
+            title="Refresh application records"
+          >
+            <RefreshCwIcon size={14} /> Refresh
+          </button>
+        </div>
+      )}
+
       {/* Filters Bar (For Recruiters and Placement Cell) */}
       {!isStudent && (
         <div className="app-filters-card">
+          {/* Search Box */}
+          <div className="app-filter-item" style={{ minWidth: '220px', flex: '1 1 200px' }}>
+            <span className="app-filter-label">Search Candidates / Jobs</span>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type="text"
+                className="app-filter-input"
+                placeholder="Search by name, roll no, job…"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
+                style={{
+                  width: '100%',
+                  height: '40px',
+                  padding: '8px 12px 8px 34px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--line)',
+                  background: 'var(--card-bg, #fff)',
+                  fontSize: '0.86rem',
+                  color: 'var(--ink)'
+                }}
+              />
+              <span style={{ position: 'absolute', left: '10px', color: 'var(--muted)', pointerEvents: 'none' }}>
+                <SearchIcon size={15} />
+              </span>
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setPage(1);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    color: 'var(--muted)'
+                  }}
+                  aria-label="Clear search"
+                >
+                  <XIcon size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Job Filter Dropdown */}
           <div className="app-filter-item">
             <span className="app-filter-label">Filter By Job Posting</span>
@@ -269,7 +458,7 @@ export function ApplicationsPage() {
           </div>
 
           {/* Reset Filters */}
-          {(selectedJobId || selectedStatus || selectedPassingYear || selectedMinCgpa) && (
+          {(selectedJobId || selectedStatus || selectedPassingYear || selectedMinCgpa || searchQuery) && (
             <button
               type="button"
               className="ghost"
@@ -279,6 +468,7 @@ export function ApplicationsPage() {
                 setSelectedStatus('');
                 setSelectedPassingYear('');
                 setSelectedMinCgpa('');
+                setSearchQuery('');
                 setPage(1);
               }}
             >
@@ -340,8 +530,8 @@ export function ApplicationsPage() {
             {isStudent
               ? 'You have not submitted any job applications yet. Visit Job Postings to explore eligible campus drives and apply.'
               : (selectedJobId || selectedStatus || selectedPassingYear || selectedMinCgpa)
-              ? 'No applicant records match your current filter selections.'
-              : 'No student applications have been received yet for your active recruitment drives.'}
+                ? 'No applicant records match your current filter selections.'
+                : 'No student applications have been received yet for your active recruitment drives.'}
           </p>
           {isStudent && (
             <a href="#/job-postings" className="primary" style={{ display: 'inline-flex' }}>
@@ -355,18 +545,21 @@ export function ApplicationsPage() {
       {!loading && !error && applications.length > 0 && (
         <div className="card table-card">
           <div className="table-wrap">
-            <table className="data-table">
+            <table className="data-table applications-table">
               <thead>
                 <tr>
                   <th>Application ID</th>
                   {!isStudent && <th>Candidate</th>}
                   {!isStudent && <th>Academic Info</th>}
                   <th>Job Title & Company</th>
-                  <th>Round</th>
+                  <th style={{ textAlign: 'center' }}>Round</th>
+                  <th style={{ textAlign: 'center' }}>{isStudent ? 'Attempt' : 'Attempts'}</th>
                   <th>Applied Date</th>
                   <th>Current Stage</th>
                   {!isStudent && <th>Resume</th>}
-                  <th>Actions</th>
+                  <th style={{ textAlign: isStudent ? 'left' : 'center', width: isStudent ? 'auto' : '48px' }}>
+                    {isStudent ? 'Actions' : ''}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -383,10 +576,22 @@ export function ApplicationsPage() {
                   const resumeUrl = app.resumeSnapshot?.url || studentInfo.resume?.url;
 
                   return (
-                    <tr key={app._id}>
+                    <tr
+                      key={app._id}
+                      className="clickable-app-row"
+                      onClick={() => handleOpenDetails(app)}
+                      title="Click anywhere on this row to view application details"
+                    >
                       {/* ID */}
                       <td>
-                        <strong style={{ fontFamily: 'monospace', color: 'var(--navy)' }}>
+                        <strong
+                          style={{
+                            fontFamily: 'monospace',
+                            fontWeight: 700,
+                            color: 'var(--teal, #0f766e)',
+                            fontSize: '0.86rem'
+                          }}
+                        >
                           {app.applicationId}
                         </strong>
                       </td>
@@ -423,19 +628,61 @@ export function ApplicationsPage() {
                       </td>
 
                       {/* Round */}
-                      <td>
+                      <td style={{ textAlign: 'center' }}>
                         <span className="badge neutral">
                           R{app.recruitmentRound || 1}
                         </span>
                       </td>
 
+                      {/* Attempt Info */}
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        {isStudent ? (
+                          (app.totalAttempts > 1 || app.attemptNumber > 1) ? (
+                            <span
+                              className={`badge ${(app.attemptNumber === 2 || app.totalAttempts === 2)
+                                  ? 'warning'
+                                  : 'danger'
+                                }`}
+                              style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' }}
+                            >
+                              {(app.attemptNumber === 2 || app.totalAttempts === 2)
+                                ? 'Attempt 2'
+                                : 'Attempt 3'}
+                            </span>
+                          ) : (
+                            <span
+                              className="badge neutral"
+                              style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' }}
+                            >
+                              Attempt 1
+                            </span>
+                          )
+                        ) : (
+                          (app.totalAttempts > 1) ? (
+                            <span
+                              className={`badge ${app.totalAttempts === 2 ? 'warning' : 'danger'}`}
+                              style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' }}
+                            >
+                              {app.totalAttempts === 2 ? 'Reapplied (2)' : `Attempt ${app.totalAttempts}`}
+                            </span>
+                          ) : (
+                            <span
+                              className="badge neutral"
+                              style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' }}
+                            >
+                              Attempt 1
+                            </span>
+                          )
+                        )}
+                      </td>
+
                       {/* Applied Date */}
-                      <td style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>
+                      <td style={{ color: 'var(--muted)', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
                         {formatDate(app.createdAt)}
                       </td>
 
                       {/* Current Stage */}
-                      <td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
                         <span className={`badge ${statusInfo.badgeClass}`}>
                           {statusInfo.label}
                         </span>
@@ -443,59 +690,119 @@ export function ApplicationsPage() {
 
                       {/* Resume Document Link (For recruiters/placement) */}
                       {!isStudent && (
-                        <td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
                           {resumeUrl ? (
                             <a
                               href={resumeUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="link-button"
+                              className="app-resume-link"
                               title="Preview candidate verified resume"
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              <DocumentIcon size={14} /> Resume ↗
+                              <DocumentIcon size={13} />
+                              <span>Resume</span>
+                              <ExternalLinkIcon size={11} />
                             </a>
                           ) : (
-                            <span style={{ color: 'var(--muted)', fontSize: '0.78rem' }}>None</span>
+                            <span style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>—</span>
                           )}
                         </td>
                       )}
 
                       {/* Actions */}
-                      <td>
-                        <div className="actions">
-                          <button
-                            type="button"
-                            className="link-button"
-                            onClick={() => setSelectedAppForDetails(app)}
-                          >
-                            Details
-                          </button>
-
-                          {/* Candidate Withdrawal Action */}
-                          {canCandidateWithdraw(app) && (
+                      {isStudent ? (
+                        /* Student Direct Action Buttons */
+                        <td style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                          <div className="app-table-actions">
                             <button
                               type="button"
-                              className="link-button"
-                              style={{ color: 'var(--red)' }}
-                              onClick={() => setSelectedAppForWithdraw(app)}
+                              className="app-btn-action ghost"
+                              onClick={() => handleOpenDetails(app)}
+                              title="View application details"
                             >
-                              Withdraw
+                              <EyeIcon size={13} color="var(--teal)" />
+                              <span>View Details</span>
                             </button>
-                          )}
 
-                          {/* Recruiter / Placement Stage Advancement */}
-                          {canAdvanceStage(app) && (
+                            {/* Reapply button if application is withdrawn and attempts remain */}
+                            {app.status === 'WITHDRAWN' && (app.attemptNumber || app.totalAttempts || 1) < 3 && (
+                              <button
+                                type="button"
+                                className="app-btn-action primary"
+                                onClick={() => handleReapplyClick(app)}
+                                title="Reapply to this job posting"
+                              >
+                                <ExternalLinkIcon size={12} />
+                                <span>Reapply</span>
+                              </button>
+                            )}
+
+                            {/* Candidate Withdrawal Action if active */}
+                            {canCandidateWithdraw(app) && (
+                              <button
+                                type="button"
+                                className="app-btn-action danger"
+                                onClick={() => setSelectedAppForWithdraw(app)}
+                                title="Withdraw this application"
+                              >
+                                Withdraw
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      ) : (
+                        /* Company / Recruiter / Placement: 3-Dots Action Dropdown Menu */
+                        <td style={{ textAlign: 'center', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                          <div className="app-action-dropdown-wrap">
                             <button
                               type="button"
-                              className="link-button"
-                              style={{ color: 'var(--teal)', fontWeight: 700 }}
-                              onClick={() => setSelectedAppForStatus(app)}
+                              className="app-dots-btn"
+                              onClick={() => toggleActionMenu(app._id)}
+                              aria-expanded={openActionMenuId === app._id}
+                              title="Actions"
                             >
-                              Update Stage →
+                              <MoreVerticalIcon size={16} />
                             </button>
-                          )}
-                        </div>
-                      </td>
+
+                            {openActionMenuId === app._id && (
+                              <>
+                                <div
+                                  className="app-action-menu-backdrop"
+                                  onClick={() => setOpenActionMenuId(null)}
+                                />
+                                <div className="app-action-dropdown-menu">
+                                  <button
+                                    type="button"
+                                    className="app-action-menu-item"
+                                    onClick={() => {
+                                      setOpenActionMenuId(null);
+                                      handleOpenDetails(app);
+                                    }}
+                                  >
+                                    <EyeIcon size={14} color="var(--teal)" />
+                                    <span>View Details</span>
+                                  </button>
+
+                                  {canAdvanceStage(app) && (
+                                    <button
+                                      type="button"
+                                      className="app-action-menu-item"
+                                      onClick={() => {
+                                        setOpenActionMenuId(null);
+                                        setSelectedAppForStatus(app);
+                                      }}
+                                    >
+                                      <CheckCircleIcon size={14} color="var(--teal)" />
+                                      <span>Update Stage</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -576,6 +883,19 @@ export function ApplicationsPage() {
           onClose={() => setSelectedAppForWithdraw(null)}
           application={selectedAppForWithdraw}
           onConfirm={handleConfirmWithdraw}
+        />
+      )}
+
+      {selectedJobForReapply && (
+        <JobApplyModal
+          isOpen={Boolean(selectedJobForReapply)}
+          onClose={() => setSelectedJobForReapply(null)}
+          job={selectedJobForReapply}
+          onSuccess={() => {
+            setSelectedJobForReapply(null);
+            toast('Application re-submitted successfully!');
+            fetchApplications();
+          }}
         />
       )}
     </PortalLayout>

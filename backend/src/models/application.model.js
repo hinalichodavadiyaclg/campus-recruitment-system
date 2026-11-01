@@ -88,6 +88,13 @@ const applicationSchema = new Schema(
       default: 1,
       min: 1
     },
+    attemptNumber: {
+      type: Number,
+      required: true,
+      default: 1,
+      min: 1,
+      max: 3
+    },
     status: {
       type: String,
       enum: [
@@ -124,12 +131,16 @@ const applicationSchema = new Schema(
   }
 );
 
-// Prevent duplicate applications for the same job and student in the same recruitment round
-applicationSchema.index({ jobId: 1, studentId: 1, recruitmentRound: 1 }, { unique: true });
+// Guarantee unique attempt number per student, job, and recruitment round (Max 3 attempts enforced)
+applicationSchema.index(
+  { jobId: 1, studentId: 1, recruitmentRound: 1, attemptNumber: 1 },
+  { unique: true, name: 'uniq_attempt_per_round' }
+);
 
 // Query optimization indexes
 applicationSchema.index({ studentId: 1, createdAt: -1 });
 applicationSchema.index({ companyId: 1, status: 1 });
 applicationSchema.index({ jobId: 1, status: 1 });
+applicationSchema.index({ jobId: 1, studentId: 1, createdAt: -1 });
 
 export const Application = model('Application', applicationSchema);

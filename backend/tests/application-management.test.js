@@ -21,9 +21,10 @@ const [
   { PlacementOfficer },
   { Job },
   { Application },
+  { Role },
   { hashPassword },
   { createRawSessionToken, hashSessionToken },
-  { ROLE_IDS }
+  { ROLE_IDS, PERMISSION_IDS }
 ] = await Promise.all([
   import('../src/app.js'),
   import('../src/config/database.js'),
@@ -37,6 +38,7 @@ const [
   import('../src/models/placement_officer.model.js'),
   import('../src/models/job.model.js'),
   import('../src/models/application.model.js'),
+  import('../src/models/role.model.js'),
   import('../src/utils/password.js'),
   import('../src/utils/session-token.js'),
   import('../src/utils/access-constants.js')
@@ -751,5 +753,569 @@ test('Application Management Backend Integration Tests', async (t) => {
       .get(`/api/applications/${createdAppId}/resume`)
       .set('Authorization', `Bearer ${otherRecruiter.token}`);
     assert.equal(badCompanyResumeRes.status, 403);
+  });
+
+  await t.test('9. Dynamic RBAC, Configurable Permissions, Scoping Invariants, and Seeder Preservation', async () => {
+    // A. Default Role-Based Access Control State
+    const [companyRole, coordRole, headRole, studentRole] = await Promise.all([
+      Role.findById(ROLE_IDS.COMPANY).lean(),
+      Role.findById(ROLE_IDS.PLACEMENT_COORDINATOR).lean(),
+      Role.findById(ROLE_IDS.PLACEMENT_HEAD).lean(),
+      Role.findById(ROLE_IDS.STUDENT).lean()
+    ]);
+
+    assert.ok(companyRole.permissionIds.includes(PERMISSION_IDS.APPLICATION_UPDATE), 'Company must have APPLICATION_UPDATE enabled by default');
+    assert.equal(coordRole.permissionIds.includes(PERMISSION_IDS.APPLICATION_UPDATE), false, 'Placement Coordinator must have APPLICATION_UPDATE disabled by default');
+    assert.equal(headRole.permissionIds.includes(PERMISSION_IDS.APPLICATION_UPDATE), false, 'Placement Head must have APPLICATION_UPDATE disabled by default');
+    assert.equal(studentRole.permissionIds.includes(PERMISSION_IDS.APPLICATION_UPDATE), false, 'Student must have APPLICATION_UPDATE disabled by default');
+
+    // B. Default Status Update Authorization Checks
+    const { job: companyJob, recruiterSession: assignedCompanyRecruiter, company: assignedCompany } = await setupCompanyJob({
+      allowedPassingYears: [2025, 2026]
+    });
+    const { studentSession: student1, studentDoc: student1Doc, dept: cseDept } = await setupStudentEnvironment({
+      departmentName: 'Computer Science & Engineering',
+      departmentCode: 'CSE',
+      cgpa: 8.5,
+      passingYear: 2026
+    });
+
+    const app1Res = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${student1.token}`)
+      .send({ jobId: String(companyJob._id) });
+    assert.equal(app1Res.status, 201);
+    const app1Id = app1Res.body.data._id;
+
+    // Coordinator session
+    const coordSession = await createAuthenticatedSession(ROLE_IDS.PLACEMENT_COORDINATOR, 'PLACEMENT');
+    await PlacementOfficer.create({
+      userId: coordSession.user._id,
+      employeeId: coordSession.user.employeeId,
+      firstName: 'Ramesh',
+      lastName: 'Mehta',
+      email: coordSession.user.email,
+      mobileNumber: '9988776655',
+      designation: 'Assistant Professor',
+      department: cseDept.name,
+      departmentId: cseDept._id,
+      role: ROLE_IDS.PLACEMENT_COORDINATOR
+    });
+
+    // Placement Head session
+    const headSession = await createAuthenticatedSession(ROLE_IDS.PLACEMENT_HEAD, 'PLACEMENT');
+    await PlacementOfficer.create({
+      userId: headSession.user._id,
+      employeeId: headSession.user.employeeId,
+      firstName: 'Dr. Suresh',
+      lastName: 'Sharma',
+      email: headSession.user.email,
+      mobileNumber: '9988776644',
+      designation: 'Director of Placements',
+      role: ROLE_IDS.PLACEMENT_HEAD
+    });
+
+    // Coordinator default update attempt -> 403 Forbidden
+    const coordDefaultRes = await request(app)
+      .patch(`/api/applications/${app1Id}/status`)
+      .set('Authorization', `Bearer ${coordSession.token}`)
+      .send({ status: 'UNDER_REVIEW' });
+    assert.equal(coordDefaultRes.status, 403, 'Placement Coordinator without APPLICATION_UPDATE must receive 403 Forbidden');
+
+    // Placement Head default update attempt -> 403 Forbidden
+    const headDefaultRes = await request(app)
+      .patch(`/api/applications/${app1Id}/status`)
+      .set('Authorization', `Bearer ${headSession.token}`)
+      .send({ status: 'UNDER_REVIEW' });
+    assert.equal(headDefaultRes.status, 403, 'Placement Head without APPLICATION_UPDATE must receive 403 Forbidden');
+
+    // Student update attempt -> 403 Forbidden
+    const studentUpdateRes = await request(app)
+      .patch(`/api/applications/${app1Id}/status`)
+      .set('Authorization', `Bearer ${student1.token}`)
+      .send({ status: 'UNDER_REVIEW' });
+    assert.equal(studentUpdateRes.status, 403, 'Student cannot update application status');
+
+    // Assigned company recruiter update -> 200 OK
+    const companyUpdateRes = await request(app)
+      .patch(`/api/applications/${app1Id}/status`)
+      .set('Authorization', `Bearer ${assignedCompanyRecruiter.token}`)
+      .send({ status: 'UNDER_REVIEW', note: 'Reviewed by hiring company' });
+    assert.equal(companyUpdateRes.status, 200, 'Assigned company recruiter can update application status');
+    assert.equal(companyUpdateRes.body.data.status, 'UNDER_REVIEW');
+
+    // Another company recruiter attempt -> 403 Forbidden
+    const { recruiterSession: otherCompanyRecruiter } = await setupCompanyJob();
+    const otherCompanyRes = await request(app)
+      .patch(`/api/applications/${app1Id}/status`)
+      .set('Authorization', `Bearer ${otherCompanyRecruiter.token}`)
+      .send({ status: 'SHORTLISTED' });
+    assert.equal(otherCompanyRes.status, 403, 'Unassigned company recruiter cannot update another company applications');
+
+    // C. University-Created Job Scoping
+    const superAdminSession = await createAuthenticatedSession(ROLE_IDS.SUPER_ADMIN, 'PLACEMENT');
+    const ts = Date.now() + Math.floor(Math.random() * 100000);
+    const univJob = await Job.create({
+      jobId: `JOB-UNIV-${ts.toString().slice(-4)}`,
+      companyId: assignedCompany._id,
+      createdBy: superAdminSession.user._id,
+      title: 'University Posted Job for Apex',
+      description: 'Job posted by university cell on behalf of partner company.',
+      jobType: 'FULL_TIME',
+      workMode: 'ON_SITE',
+      vacancies: 2,
+      compensation: { salaryMin: 500000, salaryMax: 700000, currency: 'INR', salaryFormat: 'PER_ANNUM' },
+      eligibilityMode: 'ALL_STUDENTS',
+      status: 'OPEN',
+      deadline: futureDate(25)
+    });
+
+    const univAppRes = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${student1.token}`)
+      .send({ jobId: String(univJob._id) });
+    assert.equal(univAppRes.status, 201);
+    const univAppId = univAppRes.body.data._id;
+
+    // Assigned hiring company can update application for university-created job
+    const assignedUnivUpdate = await request(app)
+      .patch(`/api/applications/${univAppId}/status`)
+      .set('Authorization', `Bearer ${assignedCompanyRecruiter.token}`)
+      .send({ status: 'UNDER_REVIEW' });
+    assert.equal(assignedUnivUpdate.status, 200);
+
+    // Another company cannot update university-created job assigned to Apex
+    const foreignUnivUpdate = await request(app)
+      .patch(`/api/applications/${univAppId}/status`)
+      .set('Authorization', `Bearer ${otherCompanyRecruiter.token}`)
+      .send({ status: 'SHORTLISTED' });
+    assert.equal(foreignUnivUpdate.status, 403);
+
+    // University-created job without assigned company returns 400 NO_ASSIGNED_COMPANY
+    const noCompanyJobDoc = new Job({
+      jobId: `JOB-NOC-${ts.toString().slice(-4)}`,
+      createdBy: superAdminSession.user._id,
+      title: 'Job Without Assigned Company',
+      description: 'Incomplete university posting.',
+      jobType: 'FULL_TIME',
+      workMode: 'REMOTE',
+      vacancies: 1,
+      compensation: { salaryMin: 400000, salaryMax: 600000, currency: 'INR', salaryFormat: 'PER_ANNUM' },
+      eligibilityMode: 'ALL_STUDENTS',
+      status: 'OPEN',
+      deadline: futureDate(20)
+    });
+    await noCompanyJobDoc.save({ validateBeforeSave: false });
+    const noCompAppDoc = new Application({
+      applicationId: `APP-NOC-${ts.toString().slice(-4)}`,
+      jobId: noCompanyJobDoc._id,
+      companyId: null,
+      studentId: student1Doc._id,
+      status: 'APPLIED',
+      recruitmentRound: 1,
+      jobSnapshot: {
+        title: noCompanyJobDoc.title,
+        jobType: noCompanyJobDoc.jobType,
+        workMode: noCompanyJobDoc.workMode,
+        vacancies: 1,
+        deadline: futureDate(20)
+      },
+      studentSnapshot: {
+        firstName: student1Doc.firstName,
+        lastName: student1Doc.lastName,
+        email: student1Doc.email,
+        universityId: student1Doc.universityId
+      },
+      resumeSnapshot: {
+        url: '/uploads/resumes/priya_resume_v1.pdf',
+        fileName: 'priya_resume_v1.pdf',
+        source: 'PROFILE'
+      },
+      eligibilitySnapshot: {
+        isEligible: true,
+        evaluatedAt: new Date()
+      }
+    });
+    await noCompAppDoc.save({ validateBeforeSave: false });
+    const missingCompUpdate = await request(app)
+      .patch(`/api/applications/${noCompAppDoc._id}/status`)
+      .set('Authorization', `Bearer ${assignedCompanyRecruiter.token}`)
+      .send({ status: 'UNDER_REVIEW' });
+    assert.equal(missingCompUpdate.status, 400);
+    assert.equal(missingCompUpdate.body.error?.code, 'NO_ASSIGNED_COMPANY');
+
+    // D. Dynamic RBAC: Granting APPLICATION_UPDATE to Coordinator
+    // Create MECH department student
+    const { studentSession: studentMech, studentDoc: studentMechDoc } = await setupStudentEnvironment({
+      departmentName: 'Mechanical Engineering',
+      departmentCode: 'MECH',
+      cgpa: 7.2,
+      passingYear: 2025
+    });
+
+    const mechAppRes = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${studentMech.token}`)
+      .send({ jobId: String(companyJob._id) });
+    assert.equal(mechAppRes.status, 201);
+    const mechAppId = mechAppRes.body.data._id;
+
+    // Grant APPLICATION_UPDATE to ROLE_PLACEMENT_COORDINATOR dynamically in MongoDB
+    await Role.updateOne(
+      { _id: ROLE_IDS.PLACEMENT_COORDINATOR },
+      { $addToSet: { permissionIds: PERMISSION_IDS.APPLICATION_UPDATE } }
+    );
+
+    // Dynamic verification without restart:
+    // 1. Coordinator can update CSE student application (assigned department)
+    const coordCseUpdate = await request(app)
+      .patch(`/api/applications/${app1Id}/status`)
+      .set('Authorization', `Bearer ${coordSession.token}`)
+      .send({ status: 'SHORTLISTED', note: 'Coordinator shortlisted departmental candidate' });
+    assert.equal(coordCseUpdate.status, 200, 'Coordinator dynamically granted APPLICATION_UPDATE can update assigned department candidate');
+    assert.equal(coordCseUpdate.body.data.status, 'SHORTLISTED');
+
+    // 2. Coordinator CANNOT update MECH student application (cross-department scope check enforced)
+    const coordMechUpdate = await request(app)
+      .patch(`/api/applications/${mechAppId}/status`)
+      .set('Authorization', `Bearer ${coordSession.token}`)
+      .send({ status: 'SHORTLISTED' });
+    assert.equal(coordMechUpdate.status, 403, 'Coordinator must NOT be able to update application from another department');
+
+    // Revoke APPLICATION_UPDATE from Coordinator
+    await Role.updateOne(
+      { _id: ROLE_IDS.PLACEMENT_COORDINATOR },
+      { $pull: { permissionIds: PERMISSION_IDS.APPLICATION_UPDATE } }
+    );
+
+    // Immediately rejected again (403 Forbidden)
+    const coordRevokedRes = await request(app)
+      .patch(`/api/applications/${app1Id}/status`)
+      .set('Authorization', `Bearer ${coordSession.token}`)
+      .send({ status: 'ASSESSMENT' });
+    assert.equal(coordRevokedRes.status, 403, 'Revoking permission takes effect immediately without restart');
+
+    // E. Dynamic RBAC: Granting APPLICATION_UPDATE to Placement Head
+    await Role.updateOne(
+      { _id: ROLE_IDS.PLACEMENT_HEAD },
+      { $addToSet: { permissionIds: PERMISSION_IDS.APPLICATION_UPDATE } }
+    );
+
+    // Placement Head can update across departments (institution-wide scope)
+    const headMechUpdate = await request(app)
+      .patch(`/api/applications/${mechAppId}/status`)
+      .set('Authorization', `Bearer ${headSession.token}`)
+      .send({ status: 'UNDER_REVIEW', note: 'Placement Head reviewed MECH applicant' });
+    assert.equal(headMechUpdate.status, 200, 'Placement Head with dynamic APPLICATION_UPDATE has institutional scope');
+
+    // Revoke APPLICATION_UPDATE from Placement Head
+    await Role.updateOne(
+      { _id: ROLE_IDS.PLACEMENT_HEAD },
+      { $pull: { permissionIds: PERMISSION_IDS.APPLICATION_UPDATE } }
+    );
+    const headRevokedRes = await request(app)
+      .patch(`/api/applications/${mechAppId}/status`)
+      .set('Authorization', `Bearer ${headSession.token}`)
+      .send({ status: 'SHORTLISTED' });
+    assert.equal(headRevokedRes.status, 403, 'Placement Head immediately loses update access after permission revocation');
+
+    // F. Preserving Custom Permission Assignments During Seeding
+    await Role.updateOne(
+      { _id: ROLE_IDS.PLACEMENT_HEAD },
+      { $addToSet: { permissionIds: 'CUSTOM_HEAD_PERMISSION' } }
+    );
+    await seedInitialData();
+
+    const seededHead = await Role.findById(ROLE_IDS.PLACEMENT_HEAD).lean();
+    assert.ok(seededHead.permissionIds.includes('CUSTOM_HEAD_PERMISSION'), 'Custom permissions on Placement Head must be preserved during seeding');
+    assert.equal(seededHead.permissionIds.includes(PERMISSION_IDS.APPLICATION_UPDATE), false, 'Default seeding does not re-add APPLICATION_UPDATE to Head');
+
+    const seededCompany = await Role.findById(ROLE_IDS.COMPANY).lean();
+    assert.ok(seededCompany.permissionIds.includes(PERMISSION_IDS.APPLICATION_UPDATE), 'Company retains APPLICATION_UPDATE after seeding');
+
+    // G. Application List Query Filtering by passingYear and minCgpa
+    // Student 1: passingYear 2026, cgpa 8.5
+    // Student Mech: passingYear 2025, cgpa 7.2
+    const filter2026 = await request(app)
+      .get(`/api/applications?jobId=${companyJob._id}&passingYear=2026`)
+      .set('Authorization', `Bearer ${assignedCompanyRecruiter.token}`);
+    assert.equal(filter2026.status, 200);
+    assert.equal(filter2026.body.data.items.length, 1);
+    assert.equal(filter2026.body.data.items[0]._id, app1Id);
+
+    const filterMinCgpa8 = await request(app)
+      .get(`/api/applications?jobId=${companyJob._id}&minCgpa=8.0`)
+      .set('Authorization', `Bearer ${assignedCompanyRecruiter.token}`);
+    assert.equal(filterMinCgpa8.status, 200);
+    assert.equal(filterMinCgpa8.body.data.items.length, 1);
+    assert.equal(filterMinCgpa8.body.data.items[0]._id, app1Id);
+
+    const filter2025 = await request(app)
+      .get(`/api/applications?jobId=${companyJob._id}&passingYear=2025`)
+      .set('Authorization', `Bearer ${assignedCompanyRecruiter.token}`);
+    assert.equal(filter2025.status, 200);
+    assert.equal(filter2025.body.data.items.length, 1);
+    assert.equal(filter2025.body.data.items[0]._id, mechAppId);
+
+    const filterAll = await request(app)
+      .get(`/api/applications?jobId=${companyJob._id}`)
+      .set('Authorization', `Bearer ${assignedCompanyRecruiter.token}`);
+    assert.equal(filterAll.status, 200);
+    assert.equal(filterAll.body.data.items.length, 2, 'Querying without passingYear filter returns all applicants');
+  });
+
+  await t.test('Phase 2 — Reapplication After Withdrawal & Application Attempt Management', async () => {
+    const { studentSession, studentDoc, dept } = await setupStudentEnvironment({
+      cgpa: 8.5,
+      passingYear: 2026,
+      skills: ['React']
+    });
+
+    const { recruiterSession, job, company } = await setupCompanyJob({
+      jobTitle: 'Cloud Solutions Architect',
+      allowedDepartmentIds: [dept._id],
+      allowedPassingYears: [2026],
+      minCgpa: 7.0,
+      requiredSkills: ['React']
+    });
+
+    // 1. Initial Attempt: Student submits first application (Attempt 1)
+    const app1Res = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .send({ jobId: job._id });
+
+    assert.equal(app1Res.status, 201, 'First application attempt should succeed');
+    assert.equal(app1Res.body.data.attemptNumber, 1, 'Initial attempt should be attemptNumber 1');
+    assert.equal(app1Res.body.data.status, 'APPLIED');
+    assert.ok(app1Res.body.data.applicationId.startsWith('APP-'));
+    const app1Id = app1Res.body.data._id;
+
+    // 2. Prevent duplicate active application in same round
+    const dupRes = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .send({ jobId: job._id });
+
+    assert.equal(dupRes.status, 409, 'Duplicate active application should be rejected with 409');
+    assert.equal(dupRes.body.error.code, 'DUPLICATE_APPLICATION');
+
+    // 3. Student withdraws first attempt
+    const withdraw1Res = await request(app)
+      .post(`/api/applications/${app1Id}/withdraw`)
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .send({ reason: 'Need to update resume details' });
+
+    assert.equal(withdraw1Res.status, 200, 'Withdrawal of attempt 1 should succeed');
+    assert.equal(withdraw1Res.body.data.status, 'WITHDRAWN');
+
+    // 4. Student reapplies (Attempt 2)
+    const app2Res = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .send({ jobId: job._id });
+
+    assert.equal(app2Res.status, 201, 'Second application attempt should succeed after withdrawal');
+    assert.equal(app2Res.body.data.attemptNumber, 2, 'Reapplication should be attemptNumber 2');
+    assert.equal(app2Res.body.data.status, 'APPLIED');
+    assert.notEqual(app2Res.body.data.applicationId, app1Res.body.data.applicationId, 'Each attempt has distinct ID');
+    const app2Id = app2Res.body.data._id;
+
+    // 5. Candidate withdraws second attempt
+    const withdraw2Res = await request(app)
+      .post(`/api/applications/${app2Id}/withdraw`)
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .send({ reason: 'Revising portfolio link' });
+
+    assert.equal(withdraw2Res.status, 200, 'Withdrawal of attempt 2 should succeed');
+    assert.equal(withdraw2Res.body.data.status, 'WITHDRAWN');
+
+    // 6. Student reapplies (Attempt 3 - Maximum allowed)
+    const app3Res = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .send({ jobId: job._id });
+
+    assert.equal(app3Res.status, 201, 'Third application attempt should succeed');
+    assert.equal(app3Res.body.data.attemptNumber, 3, 'Third attempt should be attemptNumber 3');
+    assert.equal(app3Res.body.data.status, 'APPLIED');
+    const app3Id = app3Res.body.data._id;
+
+    // 7. Candidate withdraws third attempt
+    const withdraw3Res = await request(app)
+      .post(`/api/applications/${app3Id}/withdraw`)
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .send({ reason: 'Withdrawing third attempt' });
+
+    assert.equal(withdraw3Res.status, 200, 'Withdrawal of attempt 3 should succeed');
+    assert.equal(withdraw3Res.body.data.status, 'WITHDRAWN');
+
+    // 8. Attempt 4 Blocked: Candidate attempts fourth submission
+    const app4Res = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .send({ jobId: job._id });
+
+    assert.equal(app4Res.status, 400, 'Fourth application attempt must be rejected');
+    assert.equal(app4Res.body.error.code, 'MAX_APPLICATION_ATTEMPTS_REACHED');
+
+    // 9. Reapplication blocked on terminal rejected or selected
+    const { studentSession: s2Session, studentDoc: s2Doc, dept: s2Dept } = await setupStudentEnvironment({
+      cgpa: 8.0,
+      passingYear: 2026,
+      skills: ['React']
+    });
+
+    const { recruiterSession: r2Session, job: j2 } = await setupCompanyJob({
+      jobTitle: 'Data Engineer',
+      allowedDepartmentIds: [s2Dept._id],
+      allowedPassingYears: [2026],
+      minCgpa: 7.0,
+      requiredSkills: ['React']
+    });
+
+    const s2AppRes = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${s2Session.token}`)
+      .send({ jobId: j2._id });
+    assert.equal(s2AppRes.status, 201);
+    const s2AppId = s2AppRes.body.data._id;
+
+    // Company rejects s2
+    const rejectRes = await request(app)
+      .patch(`/api/applications/${s2AppId}/status`)
+      .set('Authorization', `Bearer ${r2Session.token}`)
+      .send({ status: 'REJECTED', note: 'Does not meet technical interview standards' });
+    assert.equal(rejectRes.status, 200);
+
+    // Student tries to reapply after rejection -> BLOCKED
+    const reapplyRejectedRes = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${s2Session.token}`)
+      .send({ jobId: j2._id });
+    assert.equal(reapplyRejectedRes.status, 400);
+    assert.equal(reapplyRejectedRes.body.error.code, 'REAPPLICATION_NOT_ALLOWED');
+
+    // 10. Job conditions block application (suspended, deadline, closed)
+    await Job.updateOne({ _id: j2._id }, { $set: { isSuspended: true } });
+    const { studentSession: s3Session, dept: s3Dept } = await setupStudentEnvironment({
+      cgpa: 8.0,
+      passingYear: 2026,
+      skills: ['React']
+    });
+    await Job.updateOne({ _id: j2._id }, { $addToSet: { 'eligibilityCriteria.allowedDepartmentIds': s3Dept._id } });
+
+    const suspendedRes = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${s3Session.token}`)
+      .send({ jobId: j2._id });
+    assert.equal(suspendedRes.status, 400);
+    assert.equal(suspendedRes.body.error.code, 'JOB_SUSPENDED');
+
+    await Job.updateOne({ _id: j2._id }, { $set: { isSuspended: false, status: 'CLOSED' } });
+    const closedRes = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${s3Session.token}`)
+      .send({ jobId: j2._id });
+    assert.equal(closedRes.status, 400);
+    assert.equal(closedRes.body.error.code, 'JOB_NOT_OPEN');
+
+    await Job.updateOne({ _id: j2._id }, { $set: { status: 'OPEN', deadline: pastDate(2) } });
+    const expiredRes = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${s3Session.token}`)
+      .send({ jobId: j2._id });
+    assert.equal(expiredRes.status, 400);
+    assert.equal(expiredRes.body.error.code, 'APPLICATION_DEADLINE_PASSED');
+
+    // 11. Recruitment Round Reset: Round 2 gives fresh 3 attempts
+    await Job.updateOne({ _id: job._id }, { $set: { recruitmentRound: 2 } });
+    const round2App1 = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${studentSession.token}`)
+      .send({ jobId: job._id });
+    assert.equal(round2App1.status, 201, 'New recruitment round resets attempt counter');
+    assert.equal(round2App1.body.data.attemptNumber, 1);
+    assert.equal(round2App1.body.data.recruitmentRound, 2);
+
+    // 12. Recruiter ATS grouping and single entry per candidate per job
+    const recruiterList = await request(app)
+      .get(`/api/applications?jobId=${job._id}`)
+      .set('Authorization', `Bearer ${recruiterSession.token}`);
+
+    assert.equal(recruiterList.status, 200);
+    assert.equal(recruiterList.body.data.items.length, 1, 'Recruiter view shows exactly 1 entry per candidate per job');
+    const candidateEntry = recruiterList.body.data.items[0];
+    assert.equal(candidateEntry.totalAttempts, 4, 'Total attempts includes all attempts by candidate for this job');
+    assert.equal(candidateEntry.status, 'APPLIED', 'Latest status reflects candidate active attempt');
+
+    // 12b. Student view consolidation: per studentId + jobId + recruitmentRound
+    const studentList = await request(app)
+      .get('/api/applications')
+      .set('Authorization', `Bearer ${studentSession.token}`);
+
+    assert.equal(studentList.status, 200);
+    assert.equal(studentList.body.data.items.length, 2, 'Student view separates different recruitment rounds into distinct rows');
+    assert.equal(studentList.body.data.total, 2, 'Pagination total count reflects consolidated entries');
+
+    const round2Entry = studentList.body.data.items.find((item) => item.recruitmentRound === 2);
+    const round1Entry = studentList.body.data.items.find((item) => item.recruitmentRound === 1);
+
+    assert.ok(round2Entry, 'Round 2 consolidated entry must exist');
+    assert.equal(round2Entry.attemptNumber, 1, 'Round 2 latest attempt number is 1');
+    assert.equal(round2Entry.totalAttempts, 1, 'Round 2 has 1 attempt used');
+    assert.equal(round2Entry.status, 'APPLIED', 'Round 2 latest status is APPLIED');
+
+    assert.ok(round1Entry, 'Round 1 consolidated entry must exist');
+    assert.equal(round1Entry.attemptNumber, 3, 'Round 1 latest attempt number is 3');
+    assert.equal(round1Entry.totalAttempts, 3, 'Round 1 has 3 attempts used');
+    assert.equal(round1Entry.status, 'WITHDRAWN', 'Round 1 latest status is WITHDRAWN');
+
+    // 12c. Student status filter on consolidated entry
+    const studentAppliedOnly = await request(app)
+      .get('/api/applications?status=APPLIED')
+      .set('Authorization', `Bearer ${studentSession.token}`);
+    assert.equal(studentAppliedOnly.status, 200);
+    assert.equal(studentAppliedOnly.body.data.items.length, 1);
+    assert.equal(studentAppliedOnly.body.data.items[0].recruitmentRound, 2);
+
+    // 12d. Recruiter search filter across consolidated entries
+    const searchMatchRes = await request(app)
+      .get(`/api/applications?jobId=${job._id}&search=${studentDoc.universityId}`)
+      .set('Authorization', `Bearer ${recruiterSession.token}`);
+    assert.equal(searchMatchRes.status, 200);
+    assert.equal(searchMatchRes.body.data.items.length, 1, 'Search finds candidate by universityId');
+
+    const searchNoMatchRes = await request(app)
+      .get(`/api/applications?jobId=${job._id}&search=UNKNOWN_CANDIDATE_XYZ`)
+      .set('Authorization', `Bearer ${recruiterSession.token}`);
+    assert.equal(searchNoMatchRes.status, 200);
+    assert.equal(searchNoMatchRes.body.data.items.length, 0, 'Non-matching search returns 0 results');
+    assert.equal(searchNoMatchRes.body.data.total, 0);
+
+    // 13. getApplicationById returns full attempt history in descending order
+    const detailRes = await request(app)
+      .get(`/api/applications/${round2App1.body.data._id}`)
+      .set('Authorization', `Bearer ${recruiterSession.token}`);
+    assert.equal(detailRes.status, 200);
+    assert.ok(Array.isArray(detailRes.body.data.attemptHistory));
+    assert.equal(detailRes.body.data.attemptHistory.length, 4);
+    assert.equal(detailRes.body.data.attemptHistory[0].attemptNumber, 1);
+    assert.equal(detailRes.body.data.attemptHistory[0].recruitmentRound, 2);
+
+    // 14. Historical attempts locked from modification
+    const histUpdateRes = await request(app)
+      .patch(`/api/applications/${app1Id}/status`)
+      .set('Authorization', `Bearer ${recruiterSession.token}`)
+      .send({ status: 'UNDER_REVIEW' });
+    assert.equal(histUpdateRes.status, 400, 'Updating a historical attempt must be blocked');
+
+    // 15. Job candidate count in listJobs excludes withdrawn candidates
+    const jobListRes = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${recruiterSession.token}`);
+    assert.equal(jobListRes.status, 200);
+    const listedJob = jobListRes.body.data.items.find((j) => String(j._id) === String(job._id));
+    assert.equal(listedJob.applicationsCount, 1, 'Active candidate count is 1, not inflated by multiple attempts');
   });
 });

@@ -24,6 +24,7 @@ export function JobApplyModal({
   isOpen,
   onClose,
   job,
+  reapplyInfo,
   onSuccess
 }) {
   const [studentProfile, setStudentProfile] = useState(null);
@@ -190,12 +191,27 @@ export function JobApplyModal({
       <div style={{ marginBottom: '16px' }}>
         <span className="job-id-pill">{job.jobId}</span>
         <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '6px 0 2px', color: 'var(--ink)' }}>
-          Apply for {job.title}
+          {reapplyInfo?.isReapplication ? `Reapply for ${job.title}` : `Apply for ${job.title}`}
         </h2>
         <span style={{ fontSize: '0.88rem', color: 'var(--muted)', fontWeight: 600 }}>
           {companyName} &bull; Round {job.recruitmentRound || 1}
         </span>
       </div>
+
+      {/* Reapplication Notice Banner */}
+      {reapplyInfo?.isReapplication && (
+        <div className="notice warn" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '16px' }}>
+          <AlertCircleIcon size={20} color="var(--amber)" style={{ marginTop: '2px', flexShrink: 0 }} />
+          <div>
+            <strong style={{ display: 'block', fontSize: '0.88rem', color: 'var(--amber)' }}>
+              Reapplication — Attempt #{reapplyInfo.nextAttemptNumber}
+            </strong>
+            <span style={{ fontSize: '0.82rem', color: 'var(--ink)' }}>
+              You previously withdrew your application for this recruitment drive. Submitting now will record Attempt #{reapplyInfo.nextAttemptNumber} for Round {job.recruitmentRound || 1}.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Error / Ineligibility Feedback Alert */}
       {errorInfo && (
@@ -236,9 +252,15 @@ export function JobApplyModal({
                     <strong style={{ display: 'block', marginBottom: '4px', fontSize: '0.88rem' }}>
                       {errorInfo.code === 'INELIGIBLE_FOR_JOB'
                         ? 'Eligibility Criteria Not Met'
-                        : errorInfo.code === 'DUPLICATE_APPLICATION'
-                        ? 'Application Already Submitted'
-                        : 'Application Error'}
+                        : errorInfo.code === 'MAX_APPLICATION_ATTEMPTS_REACHED'
+                          ? 'Maximum Attempts Reached'
+                          : errorInfo.code === 'APPLICATION_ALREADY_ACTIVE'
+                            ? 'Active Application Exists'
+                            : errorInfo.code === 'REAPPLICATION_NOT_ALLOWED'
+                              ? 'Reapplication Not Permitted'
+                              : errorInfo.code === 'DUPLICATE_APPLICATION'
+                                ? 'Application Already Submitted'
+                                : 'Application Error'}
                     </strong>
                     {failureReasons.length > 0 ? (
                       <ul style={{ margin: '4px 0 0', paddingLeft: '18px', fontSize: '0.82rem' }}>
@@ -544,7 +566,9 @@ export function JobApplyModal({
           onClick={handleSubmitApplication}
           disabled={submitting || loadingProfile || !hasActiveResume}
         >
-          {submitting ? 'Submitting Application…' : 'Confirm & Submit Application'}
+          {submitting
+            ? (reapplyInfo?.isReapplication ? 'Submitting Reapplication…' : 'Submitting Application…')
+            : (reapplyInfo?.isReapplication ? 'Confirm & Submit Reapplication →' : 'Confirm & Submit Application')}
         </button>
       </div>
     </Modal>

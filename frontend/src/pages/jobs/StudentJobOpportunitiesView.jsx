@@ -406,18 +406,47 @@ export function StudentJobOpportunitiesView() {
 
   const hasActiveFilters = activeChips.length > 0;
 
-  // Authoritatively match student application records
-  const getStudentAppForJob = useCallback(
-    (jobId, round) => {
-      return studentApplications.find((app) => {
+  // Authoritatively match student application attempts for a job round
+  const getJobAttemptInfo = useCallback(
+    (jobId, round = 1) => {
+      const attempts = studentApplications.filter((app) => {
         const appJobId = app.jobId?._id || app.jobId;
-        return (
-          String(appJobId) === String(jobId) &&
-          (!round || app.recruitmentRound === round)
-        );
-      });
+        const appRound = app.recruitmentRound || 1;
+        return String(appJobId) === String(jobId) && Number(appRound) === Number(round || 1);
+      }).sort((a, b) => (a.attemptNumber || 1) - (b.attemptNumber || 1));
+
+      const attemptsUsed = attempts.length;
+      const latestApp = attemptsUsed > 0 ? attempts[attemptsUsed - 1] : null;
+
+      const hasActive = Boolean(latestApp && ['APPLIED', 'UNDER_REVIEW', 'SHORTLISTED', 'ASSESSMENT', 'INTERVIEW'].includes(latestApp.status));
+      const isSelected = latestApp?.status === 'SELECTED';
+      const isRejected = latestApp?.status === 'REJECTED';
+      const isWithdrawn = latestApp?.status === 'WITHDRAWN';
+
+      const canReapply = Boolean(isWithdrawn && attemptsUsed < 3);
+      const limitReached = Boolean(attemptsUsed >= 3 && (isWithdrawn || !hasActive));
+
+      return {
+        attempts,
+        attemptsUsed,
+        latestApp,
+        hasActive,
+        isSelected,
+        isRejected,
+        isWithdrawn,
+        canReapply,
+        limitReached
+      };
     },
     [studentApplications]
+  );
+
+  const getStudentAppForJob = useCallback(
+    (jobId, round) => {
+      const info = getJobAttemptInfo(jobId, round);
+      return info.latestApp;
+    },
+    [getJobAttemptInfo]
   );
 
   const handleApplySuccess = (application) => {
@@ -897,7 +926,9 @@ export function StudentJobOpportunitiesView() {
                 {jobs.map((job) => {
                   const companyName = job.companyId?.companyName || 'Company';
                   const palette = getCompanyPalette(companyName);
-                  const appliedApp = getStudentAppForJob(job._id, job.recruitmentRound);
+                  const attemptInfo = getJobAttemptInfo(job._id, job.recruitmentRound);
+                  const { attemptsUsed, latestApp, hasActive, isSelected, isRejected, isWithdrawn, canReapply, limitReached } = attemptInfo;
+                  const appliedApp = latestApp;
 
                   const isSuspended = Boolean(job.isSuspended);
                   const isDeadlinePassed = new Date(job.deadline) < new Date();
@@ -927,12 +958,12 @@ export function StudentJobOpportunitiesView() {
                   // Salary formatted
                   const hasSalary = Boolean(
                     job.compensation &&
-                      ((job.compensation.salaryMin !== undefined &&
-                        job.compensation.salaryMin !== null &&
-                        Number(job.compensation.salaryMin) > 0) ||
-                        (job.compensation.salaryMax !== undefined &&
-                          job.compensation.salaryMax !== null &&
-                          Number(job.compensation.salaryMax) > 0))
+                    ((job.compensation.salaryMin !== undefined &&
+                      job.compensation.salaryMin !== null &&
+                      Number(job.compensation.salaryMin) > 0) ||
+                      (job.compensation.salaryMax !== undefined &&
+                        job.compensation.salaryMax !== null &&
+                        Number(job.compensation.salaryMax) > 0))
                   );
                   const salaryText = formatSalary(job.compensation);
 
@@ -1003,8 +1034,22 @@ export function StudentJobOpportunitiesView() {
                                 {job.title}
                               </h3>
                               <div className="job-status-pill-wrap">
-                                {appliedApp ? (
-                                  <span className="job-badge-pill applied">Applied</span>
+                                {hasActive ? (
+                                  <span className="job-badge-pill applied">
+                                    {latestApp.status === 'APPLIED' ? 'Applied' : latestApp.status.replace('_', ' ')}
+                                  </span>
+                                ) : isSelected ? (
+                                  <span className="job-badge-pill open" style={{ background: '#dcfce7', color: '#166534', borderColor: '#bbf7d0' }}>
+                                    Selected
+                                  </span>
+                                ) : isRejected ? (
+                                  <span className="job-badge-pill closed" style={{ background: '#fee2e2', color: '#991b1b', borderColor: '#fecaca' }}>
+                                    Not Selected
+                                  </span>
+                                ) : isWithdrawn ? (
+                                  <span className="job-badge-pill closed" style={{ background: '#f1f5f9', color: '#475569', borderColor: '#cbd5e1' }}>
+                                    Withdrawn ({attemptsUsed}/3)
+                                  </span>
                                 ) : isSuspended ? (
                                   <span className="job-badge-pill suspended">Suspended</span>
                                 ) : isDeadlinePassed ? (
@@ -1070,7 +1115,7 @@ export function StudentJobOpportunitiesView() {
                           View Details
                         </button>
 
-                        {appliedApp ? (
+                        {hasActive ? (
                           <button
                             type="button"
                             className="job-btn-applied"
@@ -1078,6 +1123,58 @@ export function StudentJobOpportunitiesView() {
                           >
                             <CheckCircleIcon size={14} /> Applied
                           </button>
+                        ) : isSelected ? (
+                          <button
+                            type="button"
+                            className="job-btn-applied"
+                            style={{ background: '#16a34a', borderColor: '#16a34a' }}
+                            onClick={() => setSelectedJobForDetails(job)}
+                          >
+                            <CheckCircleIcon size={14} /> Selected
+                          </button>
+                        ) : isRejected ? (
+                          <button
+                            type="button"
+                            className="job-btn-disabled"
+                            disabled
+                          >
+                            Not Selected
+                          </button>
+                        ) : limitReached ? (
+                          <button
+                            type="button"
+                            className="job-btn-disabled"
+                            disabled
+                            title="Maximum 3 attempts reached for this recruitment round"
+                          >
+                            Application Limit Reached (3/3)
+                          </button>
+                        ) : canReapply ? (
+                          isSuspended || isDeadlinePassed || job.status !== 'OPEN' ? (
+                            <button
+                              type="button"
+                              className="job-btn-disabled"
+                              disabled
+                            >
+                              Unavailable
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="job-btn-primary"
+                              style={{ background: '#0284c7' }}
+                              onClick={() => setSelectedJobForApply({
+                                ...job,
+                                reapplyInfo: {
+                                  isReapplication: true,
+                                  attemptsUsed,
+                                  nextAttemptNumber: attemptsUsed + 1
+                                }
+                              })}
+                            >
+                              Reapply ({attemptsUsed + 1}) →
+                            </button>
+                          )
                         ) : !isEligible ? (
                           <button
                             type="button"
@@ -1176,6 +1273,7 @@ export function StudentJobOpportunitiesView() {
           isOpen={Boolean(selectedJobForApply)}
           onClose={() => setSelectedJobForApply(null)}
           job={selectedJobForApply}
+          reapplyInfo={selectedJobForApply.reapplyInfo}
           onSuccess={handleApplySuccess}
         />
       )}

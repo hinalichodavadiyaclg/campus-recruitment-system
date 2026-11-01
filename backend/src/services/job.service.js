@@ -300,7 +300,24 @@ export async function listJobs({ auth, query = {} }) {
 
     const appCounts = await Application.aggregate([
       { $match: appMatch },
-      { $group: { _id: '$jobId', count: { $sum: 1 } } }
+      { $sort: { createdAt: -1, attemptNumber: -1 } },
+      {
+        $group: {
+          _id: { jobId: '$jobId', studentId: '$studentId' },
+          latestStatus: { $first: '$status' }
+        }
+      },
+      {
+        $match: {
+          latestStatus: { $ne: 'WITHDRAWN' }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.jobId',
+          count: { $sum: 1 }
+        }
+      }
     ]);
     countMap = new Map(appCounts.map((c) => [String(c._id), c.count]));
   }

@@ -23,6 +23,8 @@ const ALLOWED_STATUS_TRANSITIONS = {
   INTERVIEW: ['SELECTED', 'REJECTED']
 };
 
+export const MAX_APPLICATION_ATTEMPTS = 3;
+
 export async function submitApplication({ auth, body }) {
   if (auth.userType !== 'STUDENT' && auth.roleId !== ROLE_IDS.STUDENT) {
     throw new AppError(403, 'FORBIDDEN', 'Only students can submit job applications.');
@@ -34,21 +36,76 @@ export async function submitApplication({ auth, body }) {
     throw new AppError(404, 'JOB_NOT_FOUND', 'Job posting not found.');
   }
 
+  // 1. Validate job status, suspension, and deadline
+  if (job.status !== 'OPEN') {
+    throw new AppError(400, 'JOB_NOT_OPEN', 'Applications can only be submitted for open jobs.');
+  }
+  if (job.isSuspended) {
+    throw new AppError(400, 'JOB_SUSPENDED', 'This job posting has been suspended.');
+  }
+  if (job.deadline && new Date() > new Date(job.deadline)) {
+    throw new AppError(400, 'APPLICATION_DEADLINE_PASSED', 'The application deadline for this job has passed.');
+  }
+
   const recruitmentRound = job.recruitmentRound || 1;
 
-  // Prevent duplicate application in the same recruitment round
-  const existingApp = await Application.findOne({
+  // 2. Query all existing application attempts for this student, job, and round
+  const existingAttempts = await Application.find({
     jobId: job._id,
     studentId: student._id,
     recruitmentRound
-  });
-  if (existingApp) {
+  }).sort({ attemptNumber: 1 });
+
+  const attemptsUsed = existingAttempts.length;
+
+  // 3. Strict attempt ceiling (Max 3 attempts per job per recruitment round)
+  if (attemptsUsed >= MAX_APPLICATION_ATTEMPTS) {
     throw new AppError(
-      409,
-      'DUPLICATE_APPLICATION',
-      'You have already submitted an application for this recruitment round.'
+      400,
+      'MAX_APPLICATION_ATTEMPTS_REACHED',
+      `You have reached the maximum allowed application attempts (${MAX_APPLICATION_ATTEMPTS}) for this recruitment round.`
     );
   }
+
+  // 4. Verify previous attempt status (reapplication only allowed after WITHDRAWN)
+  if (existingAttempts.length > 0) {
+    const latestAttempt = existingAttempts[existingAttempts.length - 1];
+
+    const activeStatuses = ['APPLIED', 'UNDER_REVIEW', 'SHORTLISTED', 'ASSESSMENT', 'INTERVIEW'];
+    if (activeStatuses.includes(latestAttempt.status)) {
+      throw new AppError(
+        409,
+        'DUPLICATE_APPLICATION',
+        'You already have an active application for this job posting in the current recruitment round.'
+      );
+    }
+
+    if (latestAttempt.status === 'SELECTED') {
+      throw new AppError(
+        400,
+        'REAPPLICATION_NOT_ALLOWED',
+        'Reapplication is not permitted after being selected for this job.'
+      );
+    }
+    if (latestAttempt.status === 'REJECTED') {
+      throw new AppError(
+        400,
+        'REAPPLICATION_NOT_ALLOWED',
+        'Reapplication is not permitted after being rejected for this job.'
+      );
+    }
+
+    if (latestAttempt.status !== 'WITHDRAWN') {
+      throw new AppError(
+        400,
+        'REAPPLICATION_NOT_ALLOWED',
+        'You can only reapply after withdrawing your previous application.'
+      );
+    }
+  }
+
+  const attemptNumber = attemptsUsed + 1;
+  const isReapplication = attemptNumber > 1;
 
   // Determine active resume: custom job-specific resume or student profile resume
   let selectedResume = null;
@@ -117,6 +174,7 @@ export async function submitApplication({ auth, body }) {
       studentId: student._id,
       companyId: job.companyId,
       recruitmentRound,
+      attemptNumber,
       status: 'APPLIED',
       jobSnapshot,
       resumeSnapshot,
@@ -127,14 +185,33 @@ export async function submitApplication({ auth, body }) {
           newStatus: 'APPLIED',
           changedBy: auth.userId,
           changedAt: new Date(),
-          note: 'Application submitted successfully.'
+          note: isReapplication
+            ? `Application re-submitted (attempt ${attemptNumber} of ${MAX_APPLICATION_ATTEMPTS}).`
+            : 'Application submitted successfully.'
         }
       ]
     });
-    return await application.save();
+    try {
+      return await application.save();
+    } catch (saveErr) {
+      if (saveErr.code === 11000) {
+        throw new AppError(
+          409,
+          'APPLICATION_ALREADY_ACTIVE',
+          'An active application already exists or another application attempt is in progress.'
+        );
+      }
+      throw saveErr;
+    }
   });
 
-  dispatchApplicationReceivedNotification({ application: createdApp, job, student }).catch(err => {
+  dispatchApplicationReceivedNotification({
+    application: createdApp,
+    job,
+    student,
+    isReapplication,
+    attemptNumber
+  }).catch(err => {
     console.error('Failed to dispatch application received notification:', err.message);
   });
 
@@ -149,15 +226,107 @@ export async function listApplications({ auth, query = {} }) {
   const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
   const skip = (page - 1) * limit;
 
-  const mongoQuery = {};
-
+  // Case 1: Student listing their own applications (consolidated per studentId + jobId + recruitmentRound)
   if (auth.userType === 'STUDENT' || auth.roleId === ROLE_IDS.STUDENT) {
     const student = await findStudentByUserId(auth.userId);
-    mongoQuery.studentId = student._id;
-  } else if (auth.userType === 'COMPANY' || auth.roleId === ROLE_IDS.COMPANY) {
+    const matchCriteria = { studentId: student._id };
+
+    if (query.recruitmentRound) {
+      matchCriteria.recruitmentRound = Number(query.recruitmentRound);
+    }
+    if (query.jobId && mongoose.Types.ObjectId.isValid(query.jobId)) {
+      matchCriteria.jobId = new mongoose.Types.ObjectId(query.jobId);
+    }
+    if (query.search && query.search.trim()) {
+      const searchRegex = new RegExp(query.search.trim(), 'i');
+      const matchingJobs = await Job.find({
+        $or: [
+          { title: searchRegex },
+          { jobId: searchRegex }
+        ]
+      }).distinct('_id');
+      matchCriteria.$or = [
+        { jobId: { $in: matchingJobs } },
+        { 'jobSnapshot.title': searchRegex }
+      ];
+    }
+
+    const studentPipeline = [
+      { $match: matchCriteria },
+      { $sort: { createdAt: -1, attemptNumber: -1 } },
+      {
+        $group: {
+          _id: { jobId: '$jobId', recruitmentRound: '$recruitmentRound' },
+          latestApp: { $first: '$$ROOT' },
+          totalAttempts: { $sum: 1 },
+          allAttempts: {
+            $push: {
+              _id: '$_id',
+              applicationId: '$applicationId',
+              attemptNumber: '$attemptNumber',
+              status: '$status',
+              createdAt: '$createdAt',
+              resumeSnapshot: '$resumeSnapshot',
+              eligibilitySnapshot: '$eligibilitySnapshot',
+              statusHistory: '$statusHistory'
+            }
+          }
+        }
+      },
+      {
+        $replaceRoot: {
+          newRoot: {
+            $mergeObjects: [
+              '$latestApp',
+              {
+                totalAttempts: '$totalAttempts',
+                allAttempts: '$allAttempts'
+              }
+            ]
+          }
+        }
+      }
+    ];
+
+    if (query.status) {
+      studentPipeline.push({ $match: { status: query.status } });
+    }
+
+    studentPipeline.push({
+      $facet: {
+        items: [
+          { $sort: { createdAt: -1 } },
+          { $skip: skip },
+          { $limit: limit }
+        ],
+        totalCount: [
+          { $count: 'count' }
+        ]
+      }
+    });
+
+    const [aggResult] = await Application.aggregate(studentPipeline);
+    const rawItems = aggResult?.items || [];
+    const total = aggResult?.totalCount?.[0]?.count || 0;
+
+    const populatedItems = await Application.populate(rawItems, [
+      { path: 'jobId', select: 'jobId title jobType workMode location deadline status' },
+      { path: 'companyId', select: 'companyName companyId officeAddress website industryType' },
+      { path: 'studentId', select: 'firstName lastName universityId email mobileNumber branch department cgpa passingYear' }
+    ]);
+
+    return { items: populatedItems, page, limit, total };
+  }
+
+  // Case 2: Recruiter / Placement Staff ATS view (grouped by student and job; displays candidate's latest attempt)
+  const matchCriteria = {};
+
+  if (auth.userType === 'COMPANY' || auth.roleId === ROLE_IDS.COMPANY) {
     const company = await findCompanyByUserId(auth.userId);
-    mongoQuery.companyId = company._id;
-    if (query.jobId) mongoQuery.jobId = query.jobId;
+    matchCriteria.companyId = company._id;
+    if (query.jobId && mongoose.Types.ObjectId.isValid(query.jobId)) {
+      matchCriteria.jobId = new mongoose.Types.ObjectId(query.jobId);
+    }
   } else if (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
     const coordDept = await getCoordinatorDepartment(auth);
     const deptStudentIds = await Student.find({
@@ -167,25 +336,32 @@ export async function listApplications({ auth, query = {} }) {
       ]
     }).distinct('_id');
 
-    mongoQuery.studentId = { $in: deptStudentIds };
-    if (query.jobId) mongoQuery.jobId = query.jobId;
-    if (query.companyId) mongoQuery.companyId = query.companyId;
+    matchCriteria.studentId = { $in: deptStudentIds };
+    if (query.jobId && mongoose.Types.ObjectId.isValid(query.jobId)) {
+      matchCriteria.jobId = new mongoose.Types.ObjectId(query.jobId);
+    }
+    if (query.companyId && mongoose.Types.ObjectId.isValid(query.companyId)) {
+      matchCriteria.companyId = new mongoose.Types.ObjectId(query.companyId);
+    }
   } else if (
     auth.roleId === ROLE_IDS.PLACEMENT_HEAD ||
     auth.roleId === ROLE_IDS.SUPER_ADMIN
   ) {
-    if (query.jobId) mongoQuery.jobId = query.jobId;
-    if (query.companyId) mongoQuery.companyId = query.companyId;
-    if (query.studentId) mongoQuery.studentId = query.studentId;
+    if (query.jobId && mongoose.Types.ObjectId.isValid(query.jobId)) {
+      matchCriteria.jobId = new mongoose.Types.ObjectId(query.jobId);
+    }
+    if (query.companyId && mongoose.Types.ObjectId.isValid(query.companyId)) {
+      matchCriteria.companyId = new mongoose.Types.ObjectId(query.companyId);
+    }
+    if (query.studentId && mongoose.Types.ObjectId.isValid(query.studentId)) {
+      matchCriteria.studentId = new mongoose.Types.ObjectId(query.studentId);
+    }
   } else {
     throw new AppError(403, 'FORBIDDEN', 'You do not have permission to view applications.');
   }
 
-  if (query.status) {
-    mongoQuery.status = query.status;
-  }
   if (query.recruitmentRound) {
-    mongoQuery.recruitmentRound = Number(query.recruitmentRound);
+    matchCriteria.recruitmentRound = Number(query.recruitmentRound);
   }
 
   // Recruiter & Placement cell applicant filtering by passing year (batch) and minimum CGPA
@@ -199,34 +375,123 @@ export async function listApplications({ auth, query = {} }) {
     }
     const matchingStudentIds = await Student.find(studentFilter).distinct('_id');
 
-    if (mongoQuery.studentId) {
-      if (Array.isArray(mongoQuery.studentId.$in)) {
+    if (matchCriteria.studentId) {
+      if (Array.isArray(matchCriteria.studentId.$in)) {
         const matchingSet = new Set(matchingStudentIds.map(String));
-        mongoQuery.studentId.$in = mongoQuery.studentId.$in.filter((id) =>
+        matchCriteria.studentId.$in = matchCriteria.studentId.$in.filter((id) =>
           matchingSet.has(String(id))
         );
       } else {
-        const currentId = String(mongoQuery.studentId);
+        const currentId = String(matchCriteria.studentId);
         const matchingSet = new Set(matchingStudentIds.map(String));
-        mongoQuery.studentId = matchingSet.has(currentId) ? currentId : null;
+        matchCriteria.studentId = matchingSet.has(currentId) ? currentId : null;
       }
     } else {
-      mongoQuery.studentId = { $in: matchingStudentIds };
+      matchCriteria.studentId = { $in: matchingStudentIds };
     }
   }
 
-  const [items, total] = await Promise.all([
-    Application.find(mongoQuery)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate('jobId', 'jobId title jobType workMode location deadline status')
-      .populate('companyId', 'companyName companyId officeAddress website industryType')
-      .populate('studentId', 'firstName lastName universityId email mobileNumber branch department cgpa passingYear'),
-    Application.countDocuments(mongoQuery)
+  // Search filter across candidate details and job title
+  if (query.search && query.search.trim()) {
+    const searchRegex = new RegExp(query.search.trim(), 'i');
+    const [matchingStudents, matchingJobs] = await Promise.all([
+      Student.find({
+        $or: [
+          { firstName: searchRegex },
+          { lastName: searchRegex },
+          { universityId: searchRegex },
+          { email: searchRegex },
+          { department: searchRegex }
+        ]
+      }).distinct('_id'),
+      Job.find({
+        $or: [
+          { title: searchRegex },
+          { jobId: searchRegex }
+        ]
+      }).distinct('_id')
+    ]);
+
+    const orClauses = [];
+    if (matchingStudents.length > 0) {
+      orClauses.push({ studentId: { $in: matchingStudents } });
+    }
+    if (matchingJobs.length > 0) {
+      orClauses.push({ jobId: { $in: matchingJobs } });
+    }
+
+    if (orClauses.length > 0) {
+      matchCriteria.$or = orClauses;
+    } else {
+      matchCriteria._id = null;
+    }
+  }
+
+  const pipeline = [
+    { $match: matchCriteria },
+    { $sort: { createdAt: -1, attemptNumber: -1 } },
+    {
+      $group: {
+        _id: { jobId: '$jobId', studentId: '$studentId' },
+        latestApp: { $first: '$$ROOT' },
+        totalAttempts: { $sum: 1 },
+        allAttempts: {
+          $push: {
+            _id: '$_id',
+            applicationId: '$applicationId',
+            attemptNumber: '$attemptNumber',
+            status: '$status',
+            createdAt: '$createdAt',
+            resumeSnapshot: '$resumeSnapshot',
+            eligibilitySnapshot: '$eligibilitySnapshot',
+            statusHistory: '$statusHistory'
+          }
+        }
+      }
+    },
+    {
+      $replaceRoot: {
+        newRoot: {
+          $mergeObjects: [
+            '$latestApp',
+            {
+              totalAttempts: '$totalAttempts',
+              allAttempts: '$allAttempts'
+            }
+          ]
+        }
+      }
+    }
+  ];
+
+  if (query.status) {
+    pipeline.push({ $match: { status: query.status } });
+  }
+
+  pipeline.push({
+    $facet: {
+      items: [
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit }
+      ],
+      totalCount: [
+        { $count: 'count' }
+      ]
+    }
+  });
+
+  const [aggResult] = await Application.aggregate(pipeline);
+  const items = aggResult?.items || [];
+  const total = aggResult?.totalCount?.[0]?.count || 0;
+
+  const populatedItems = await Application.populate(items, [
+    { path: 'jobId', select: 'jobId title jobType workMode location deadline status' },
+    { path: 'companyId', select: 'companyName companyId officeAddress website industryType' },
+    { path: 'studentId', select: 'firstName lastName universityId email mobileNumber branch department cgpa passingYear' }
   ]);
 
-  return { items, page, limit, total };
+  return { items: populatedItems, page, limit, total };
 }
 
 export async function getApplicationById({ auth, id }) {
@@ -256,14 +521,34 @@ export async function getApplicationById({ auth, id }) {
     const coordDept = await getCoordinatorDepartment(auth);
     const student = application.studentId;
     const matchesDept =
-      (student.departmentId && String(student.departmentId) === String(coordDept.departmentId)) ||
-      (student.department && student.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase());
+      (student?.departmentId && String(student.departmentId) === String(coordDept.departmentId)) ||
+      (student?.department && student.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase());
     if (!matchesDept) {
       throw new AppError(403, 'FORBIDDEN', 'You are not authorized to view applications from another department.');
     }
   }
 
-  return application;
+  // Load complete application attempt history in descending order
+  const historyQuery = {
+    jobId: application.jobId?._id || application.jobId,
+    studentId: application.studentId?._id || application.studentId
+  };
+
+  // For students, isolate attempts to the drive's recruitment round
+  if (auth.userType === 'STUDENT' || auth.roleId === ROLE_IDS.STUDENT) {
+    historyQuery.recruitmentRound = application.recruitmentRound || 1;
+  }
+
+  const attemptHistory = await Application.find(historyQuery)
+    .sort({ recruitmentRound: -1, attemptNumber: -1, createdAt: -1 })
+    .populate('statusHistory.changedBy', 'email userType')
+    .lean();
+
+  const appObj = application.toObject();
+  appObj.attemptHistory = attemptHistory;
+  appObj.totalAttempts = attemptHistory.length;
+
+  return appObj;
 }
 
 export async function updateApplicationStatus({ auth, id, status, note, reviewerNotes }) {
@@ -272,34 +557,65 @@ export async function updateApplicationStatus({ auth, id, status, note, reviewer
     throw new AppError(404, 'APPLICATION_NOT_FOUND', 'Application record not found.');
   }
 
-  if (auth.userType === 'COMPANY' || auth.roleId === ROLE_IDS.COMPANY) {
+  // 1. Verify that the job has an assigned hiring company
+  const job = await Job.findById(application.jobId).select('companyId createdBy');
+  const assignedCompanyId = job?.companyId || application.companyId;
+  if (!assignedCompanyId) {
+    throw new AppError(400, 'NO_ASSIGNED_COMPANY', 'This job posting does not have an assigned hiring company.');
+  }
+
+  // 2. Resource ownership / scope authorization checks:
+  if (auth.userType === 'COMPANY' || auth.roleId === ROLE_IDS.COMPANY || auth.companyId) {
     const company = await findCompanyByUserId(auth.userId);
-    if (String(application.companyId) !== String(company._id)) {
+    if (!company || String(assignedCompanyId) !== String(company._id)) {
       throw new AppError(403, 'FORBIDDEN', 'You do not have permission to update applications for another company.');
     }
   } else if (auth.roleId === ROLE_IDS.PLACEMENT_COORDINATOR) {
+    // If a Placement Coordinator is granted APPLICATION_UPDATE dynamically, enforce assigned department
     const coordDept = await getCoordinatorDepartment(auth);
-    if (coordDept?.departmentId) {
-      const student = await Student.findById(application.studentId).lean();
-      const matchesDept =
-        (student?.departmentId && String(student.departmentId) === String(coordDept.departmentId)) ||
-        (student?.department && student.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase());
-      if (!matchesDept) {
-        throw new AppError(403, 'FORBIDDEN', 'You are not authorized to update applications from another department.');
-      }
+    if (!coordDept?.departmentId) {
+      throw new AppError(403, 'FORBIDDEN', 'Placement Coordinator has no assigned department.');
     }
+    const student = await Student.findById(application.studentId).lean();
+    const matchesDept =
+      (student?.departmentId && String(student?.departmentId) === String(coordDept.departmentId)) ||
+      (student?.department && student?.department.trim().toLowerCase() === coordDept.departmentName.trim().toLowerCase());
+    if (!matchesDept) {
+      throw new AppError(403, 'FORBIDDEN', 'You are not authorized to update applications from another department.');
+    }
+  } else if (auth.userType === 'STUDENT' || auth.roleId === ROLE_IDS.STUDENT) {
+    throw new AppError(403, 'FORBIDDEN', 'Students cannot update application recruitment stages.');
+  } else if (auth.userType === 'PLACEMENT' || [ROLE_IDS.SUPER_ADMIN, ROLE_IDS.PLACEMENT_HEAD].includes(auth.roleId)) {
+    // Authorized institutional staff (Super Admin, Placement Head) have institution-wide oversight
+  } else {
+    throw new AppError(403, 'FORBIDDEN', 'You do not have authorized access to update this application.');
   }
 
   if (status === application.status) {
     return application;
   }
 
-  // Reject modifications on terminal statuses
+  // 3. Reject modifications on terminal statuses
   if (['SELECTED', 'REJECTED', 'WITHDRAWN'].includes(application.status)) {
     throw new AppError(
       400,
       'INVALID_STATUS_TRANSITION',
       `Applications in terminal status (${application.status}) cannot be modified.`
+    );
+  }
+
+  // 4. Historical attempts cannot be modified
+  const latestAttempt = await Application.findOne({
+    jobId: application.jobId,
+    studentId: application.studentId,
+    recruitmentRound: application.recruitmentRound
+  }).sort({ attemptNumber: -1 });
+
+  if (latestAttempt && String(latestAttempt._id) !== String(application._id)) {
+    throw new AppError(
+      400,
+      'HISTORICAL_ATTEMPT_LOCKED',
+      'Historical application attempts cannot be modified. Only the candidate\'s active or latest attempt can be updated.'
     );
   }
 

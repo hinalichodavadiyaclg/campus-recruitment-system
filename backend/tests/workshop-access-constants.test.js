@@ -216,9 +216,10 @@ test('Test Suite 4: Least-Privilege Role Authorization Matrix', async () => {
   assert.ok(headPerms.has(PERMISSION_IDS.WORKSHOP_APPROVE), 'Placement Head must have WORKSHOP_APPROVE');
   assert.ok(headPerms.has(PERMISSION_IDS.WORKSHOP_CERTIFICATE_MANAGE), 'Placement Head must have WORKSHOP_CERTIFICATE_MANAGE');
   assert.ok(headPerms.has(PERMISSION_IDS.WORKSHOP_MANAGE), 'Placement Head must have WORKSHOP_MANAGE');
-  // Placement Head must NOT have student self-registration
+  // Placement Head must NOT have student self-registration or application status update by default
   assert.equal(headPerms.has(PERMISSION_IDS.WORKSHOP_REGISTER), false, 'Placement Head must NOT hold student self-registration WORKSHOP_REGISTER');
-  assert.equal(headPerms.size, 43, 'ROLE_PLACEMENT_HEAD must have exactly 43 permissions (23 baseline + 12 workshop + 8 job/app)');
+  assert.equal(headPerms.has(PERMISSION_IDS.APPLICATION_UPDATE), false, 'Placement Head must NOT hold APPLICATION_UPDATE by default');
+  assert.equal(headPerms.size, 42, 'ROLE_PLACEMENT_HEAD must have exactly 42 permissions (23 baseline + 12 workshop + 7 job/app)');
 
   // 5. Super Admin Role
   const adminPerms = roleMap.get(ROLE_IDS.SUPER_ADMIN);
