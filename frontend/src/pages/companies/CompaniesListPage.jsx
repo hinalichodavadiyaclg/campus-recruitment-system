@@ -176,10 +176,9 @@ export function CompaniesListPage() {
         <button
           className="danger"
           type="button"
-          style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm(true)}
         >
-          <TrashIcon size={16} /> Delete All Companies ({filteredCompanies.length})
+          <TrashIcon size={16} /> Delete All ({filteredCompanies.length})
         </button>
       )}
       {has('USER_CREATE') && (
@@ -271,7 +270,7 @@ export function CompaniesListPage() {
                             title="Manage company recruiters"
                             onClick={() => setRecruitersCompany(c)}
                           >
-                            Manage Recruiters
+                            Recruiters
                           </button>
                         )}
                         {has('USER_UPDATE') && (
