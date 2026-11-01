@@ -41,6 +41,16 @@ export function FilteredStudentRecordsPage() {
   const [minCgpaFilter, setMinCgpaFilter] = useState(queryParams.get('cgpa') || queryParams.get('minCgpa') || '');
   const [backlogFilter, setBacklogFilter] = useState(queryParams.get('backlogs') || '');
 
+  const [students, setStudents] = useState([]);
+  const [departmentsList, setDepartmentsList] = useState([]);
+  const [coursesList, setCoursesList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+
+  // Pagination for display preview
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 15;
+
   useEffect(() => {
     if (isCoordinator && coordinatorDeptId && departmentFilter !== String(coordinatorDeptId)) {
       setDepartmentFilter(String(coordinatorDeptId));
@@ -87,16 +97,6 @@ export function FilteredStudentRecordsPage() {
     window.addEventListener('hashchange', applyHashParams);
     return () => window.removeEventListener('hashchange', applyHashParams);
   }, [isCoordinator, coursesList, departmentsList]);
-
-  const [students, setStudents] = useState([]);
-  const [departmentsList, setDepartmentsList] = useState([]);
-  const [coursesList, setCoursesList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
-
-  // Pagination for display preview
-  const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 15;
 
   const loadData = async () => {
     setLoading(true);
