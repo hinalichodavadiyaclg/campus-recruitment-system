@@ -21,6 +21,8 @@ import { jobRoutes } from './routes/job.routes.js';
 import { applicationRoutes } from './routes/application.routes.js';
 import { workshopRouter } from './routes/workshop.routes.js';
 import { notificationRoutes } from './routes/notification.routes.js';
+import { resumeAnalysisRouter } from './routes/resume-analysis.routes.js';
+import { resumeImprovementRouter } from './routes/resume-improvement.routes.js';
 import { AppError } from './utils/app-error.js';
 
 export function createApp() {
@@ -82,6 +84,10 @@ export function createApp() {
   app.use('/api/applications', applicationRoutes);
   app.use('/api/workshops', workshopRouter);
   app.use('/api/notifications', notificationRoutes);
+  app.use('/api/student/resumes', resumeAnalysisRouter);
+  app.use('/api/students/me/resumes', resumeAnalysisRouter);
+  app.use('/api/student/resume-improvements', resumeImprovementRouter);
+  app.use('/api/students/me/resume-improvements', resumeImprovementRouter);
   app.use(notFoundHandler);
   app.use(errorHandler);
   return app;

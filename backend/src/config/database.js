@@ -2,12 +2,16 @@ import mongoose from 'mongoose';
 import { env } from './env.js';
 
 export async function connectDatabase(uri) {
-  const isTest = process.env.NODE_ENV === 'test';
+  const isTest =
+    process.env.NODE_ENV === 'test' ||
+    Boolean(process.env.NODE_TEST_CONTEXT) ||
+    process.execArgv.includes('--test') ||
+    process.argv.some((a) => a.includes('--test') || a.endsWith('.test.js') || a.includes('/tests/'));
 
   if (isTest) {
     if (!uri) {
       throw new Error(
-        '[DATABASE SAFETY GUARD] In test mode (NODE_ENV=test), connectDatabase(uri) requires an explicit in-memory or isolated test database URI. Silent fallback to the development database is strictly blocked.'
+        '[DATABASE SAFETY GUARD] In test mode (NODE_ENV=test or test runner), connectDatabase(uri) requires an explicit in-memory or isolated test database URI. Silent fallback to the development database is strictly blocked.'
       );
     }
 
@@ -28,4 +32,3 @@ export async function connectDatabase(uri) {
 export async function disconnectDatabase() {
   await mongoose.disconnect();
 }
-

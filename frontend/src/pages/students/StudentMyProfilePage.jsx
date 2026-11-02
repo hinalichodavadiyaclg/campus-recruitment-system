@@ -6,6 +6,7 @@ import { getAssetUrl } from '../../services/api.js';
 import { PortalLayout } from '../../components/layout/PortalLayout.jsx';
 import { Modal } from '../../components/common/Modal.jsx';
 import { ConfirmModal } from '../../components/common/ConfirmModal.jsx';
+import { AiResumeAnalyzerTab } from '../../components/students/AiResumeAnalyzerTab.jsx';
 import './StudentProfile.css';
 import {
   GraduationCapIcon,
@@ -1087,41 +1088,29 @@ export function StudentMyProfilePage() {
             </form>
           )}
 
-          {/* TAB 2: RESUME MANAGEMENT */}
+          {/* TAB 2: RESUME MANAGEMENT & AI RESUME ANALYZER */}
           {activeTab === 'resume' && (
-            <article className="card">
-              <h3>Resume Management</h3>
-              {student.resume ? (
-                <div style={{ padding: '16px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--bg-card-subtle, #f8fafc)', margin: '16px 0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h4 style={{ margin: 0 }}>📄 {student.resume.fileName}</h4>
-                      <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.9em' }}>
-                        Uploaded at: {new Date(student.resume.uploadedAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <a href={getAssetUrl(student.resume.url)} target="_blank" rel="noreferrer" className="button primary">
-                        View / Download Resume ↗
-                      </a>
-                      <button type="button" className="button ghost" style={{ color: 'var(--red, red)' }} onClick={handleDeleteResume}>
-                        Delete Resume
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p style={{ color: 'var(--text-muted)' }}>No resume uploaded yet.</p>
-              )}
-
-              <hr style={{ borderColor: 'var(--border)', margin: '20px 0' }} />
-
-              <h4>{student.resume ? 'Replace Resume' : 'Upload New Resume'}</h4>
-              <input type="file" accept=".pdf,.doc,.docx" onChange={handleResumeUpload} disabled={uploadingResume} />
-              {uploadingResume && <p style={{ marginTop: '8px' }}>Uploading resume file…</p>}
-            </article>
+            <AiResumeAnalyzerTab
+              onResumeChange={(newResume) => {
+                if (newResume) {
+                  setStudent((prev) => ({
+                    ...prev,
+                    resume: {
+                      url: newResume.fileUrl,
+                      fileName: newResume.fileName,
+                      fileSize: newResume.fileSize,
+                      uploadedAt: newResume.createdAt
+                    }
+                  }));
+                } else {
+                  setStudent((prev) => ({
+                    ...prev,
+                    resume: undefined
+                  }));
+                }
+              }}
+            />
           )}
-
           {/* TAB 3: PROJECTS */}
           {activeTab === 'projects' && (
             <article className="card">

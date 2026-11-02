@@ -589,10 +589,9 @@ export function UsersListPage() {
         <button
           className="danger"
           type="button"
-          style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm({ type: 'students' })}
         >
-          <TrashIcon size={16} /> Delete All Students ({filteredStudents.length})
+          <TrashIcon size={16} /> Delete All ({filteredStudents.length})
         </button>
       )}
 
@@ -600,10 +599,9 @@ export function UsersListPage() {
         <button
           className="danger"
           type="button"
-          style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm({ type: 'company' })}
         >
-          <TrashIcon size={16} /> Delete All Companies ({filteredCompanies.length})
+          <TrashIcon size={16} /> Delete All ({filteredCompanies.length})
         </button>
       )}
 
@@ -611,10 +609,9 @@ export function UsersListPage() {
         <button
           className="danger"
           type="button"
-          style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm({ type: 'placement' })}
         >
-          <TrashIcon size={16} /> Delete All Officers ({filteredOfficers.length})
+          <TrashIcon size={16} /> Delete All ({filteredOfficers.length})
         </button>
       )}
 
@@ -622,10 +619,9 @@ export function UsersListPage() {
         <button
           className="danger"
           type="button"
-          style={{ backgroundColor: 'var(--red, #e53e3e)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 14px', cursor: 'pointer' }}
           onClick={() => setDeleteAllConfirm({ type: 'all' })}
         >
-          <TrashIcon size={16} /> Delete All Accounts ({filteredUsers.length})
+          <TrashIcon size={16} /> Delete All ({filteredUsers.length})
         </button>
       )}
 
@@ -1044,9 +1040,10 @@ export function UsersListPage() {
                               <button
                                 className="link-button"
                                 type="button"
+                                title="Manage company recruiters"
                                 onClick={() => setRecruitersCompany(c)}
                               >
-                                Manage Recruiters
+                                Recruiters
                               </button>
                             )}
                             {has('USER_UPDATE') && (
