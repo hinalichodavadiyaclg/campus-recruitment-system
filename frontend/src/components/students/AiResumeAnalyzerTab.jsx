@@ -322,10 +322,7 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
     <div className="ai-resume-container">
       {/* SECTION A: RESUME MANAGEMENT */}
       <article className="card resume-mgmt-card">
-        <h3 style={{ margin: '0 0 8px', color: '#102e5f' }}>Resume Management</h3>
-        <p style={{ margin: '0 0 16px', color: 'var(--muted)', fontSize: '0.88rem' }}>
-          Upload your latest resume document for recruiter applications and automated AI evaluation.
-        </p>
+        <h3 style={{ margin: '0 0 16px', color: '#102e5f' }}>Resume Management</h3>
 
         {activeResume ? (
           <div>
@@ -464,13 +461,8 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
 
       {/* SECTION B: AI RESUME ANALYSIS */}
       <article className="card" style={{ padding: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h3 style={{ margin: '0 0 6px', color: '#102e5f' }}>AI Resume Analysis</h3>
-            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.88rem', maxWidth: '640px' }}>
-              Analyze your resume using AI to identify your strengths, discover areas for improvement, and get personalized recommendations to improve your employability.
-            </p>
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <h3 style={{ margin: 0, color: '#102e5f' }}>AI Resume Analysis</h3>
 
           {latestAnalysis && (
             <div style={{ textAlign: 'right', fontSize: '0.78rem', color: 'var(--muted)' }}>
@@ -484,7 +476,7 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', marginTop: '18px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '12px', marginTop: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Optional Job Match Selector */}
           <div style={{ flex: '1', minWidth: '240px' }}>
             <label style={{ display: 'block', fontSize: '0.78rem', color: '#64748b', marginBottom: '4px', fontWeight: 600 }}>
@@ -532,17 +524,14 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
 
         {!activeResume && (
           <div style={{ marginTop: '12px', fontSize: '0.82rem', color: '#d97706', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <InfoIcon size={16} /> Please upload your resume above to enable AI analysis.
+            <InfoIcon size={16} /> Upload a resume above to enable analysis.
           </div>
         )}
 
         {analyzing && (
-          <div style={{ marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
-            <div style={{ fontWeight: 600, color: '#102e5f', fontSize: '0.9rem', marginBottom: '4px' }}>
-              Evaluating resume content, skills, and ATS alignment…
-            </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
-              Checking formatting, section structure, action verbs, and keyword density.
+          <div style={{ marginTop: '16px', padding: '14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+            <div style={{ fontWeight: 600, color: '#102e5f', fontSize: '0.88rem' }}>
+              Evaluating resume…
             </div>
           </div>
         )}
@@ -550,13 +539,8 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
 
       {/* SECTION C: AI RESUME IMPROVEMENT */}
       <article className="card" style={{ padding: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h3 style={{ margin: '0 0 6px', color: '#102e5f' }}>AI Resume Improvement</h3>
-            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.88rem', maxWidth: '640px' }}>
-              Make your resume more professional without changing your information.
-            </p>
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <h3 style={{ margin: 0, color: '#102e5f' }}>AI Resume Improvement</h3>
 
           <div style={{ display: 'flex', gap: '8px' }}>
             {currentImprovement && (
@@ -601,11 +585,8 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
               <CheckCircleIcon size={20} style={{ color: '#16a34a' }} />
               <div>
                 <strong style={{ fontSize: '0.9rem', color: '#166534' }}>
-                  Improved Resume (v{generatedDownload.versionNumber}) is Ready & Active
+                  Improved Resume (v{generatedDownload.versionNumber}) Ready & Active
                 </strong>
-                <div style={{ fontSize: '0.78rem', color: '#15803d' }}>
-                  ATS-friendly single-column layout generated from your approved content.
-                </div>
               </div>
             </div>
 
@@ -814,12 +795,9 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
             {/* Bottom Generate Action */}
             <div style={{ marginTop: '20px', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
-                <strong style={{ fontSize: '0.92rem', color: '#102e5f', display: 'block' }}>
-                  Ready to apply your changes?
+                <strong style={{ fontSize: '0.92rem', color: '#102e5f' }}>
+                  Apply Accepted Improvements
                 </strong>
-                <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
-                  Generates an ATS-friendly single-column PDF and DOCX with your accepted improvements.
-                </span>
               </div>
 
               <button
@@ -879,8 +857,8 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
                 <div style={{ fontWeight: 700, fontSize: '0.94rem', marginBottom: '4px' }}>
                   Non-Resume Document Detected ({currentReport.documentType || 'Certificate'})
                 </div>
-                <p style={{ margin: 0, fontSize: '0.84rem', lineHeight: 1.45, color: '#4c0519' }}>
-                  The uploaded file appears to be an institutional <strong>{currentReport.documentType === 'CERTIFICATE' ? 'Certificate of Completion / Participation' : currentReport.documentType}</strong> rather than an employment Resume or CV. ATS scoring and recruiter evaluation require a structured resume. Click <strong>Replace Resume</strong> above to upload your actual resume document.
+                <p style={{ margin: 0, fontSize: '0.84rem', color: '#4c0519' }}>
+                  The uploaded file appears to be a <strong>{currentReport.documentType === 'CERTIFICATE' ? 'Certificate' : currentReport.documentType}</strong>. Please upload a standard resume.
                 </p>
               </div>
             </div>
@@ -927,9 +905,6 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
               <p style={{ margin: 0, fontSize: '0.85rem', color: '#334155', lineHeight: 1.5 }}>
                 {currentReport.summary}
               </p>
-              <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '6px', fontStyle: 'italic' }}>
-                * Score is advisory and evaluates screening alignment and resume completeness.
-              </div>
             </div>
 
             {currentReport.analysisType === 'JOB_MATCH' && currentReport.jobMatchResult && (
@@ -1218,9 +1193,6 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
             <h4 style={{ margin: 0, color: '#102e5f', fontSize: '0.95rem' }}>
               Previous Analyses & Version History ({historyAnalyses.length})
             </h4>
-            <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '2px' }}>
-              Review past diagnostic runs or compare two versions to track score improvements.
-            </div>
           </div>
           <button type="button" className="ghost" style={{ fontSize: '0.82rem' }}>
             {showHistoryAccordion ? 'Collapse ▲' : 'Expand ▼'}
@@ -1231,13 +1203,13 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
           <div style={{ marginTop: '16px', borderTop: '1px solid var(--line)', paddingTop: '14px' }}>
             {historyAnalyses.length === 0 ? (
               <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: '8px 0' }}>
-                No previous analysis records found. Run an analysis above to start tracking version history.
+                No previous analysis records found.
               </p>
             ) : (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                    Select any 2 analyses to run a side-by-side progression comparison.
+                    Select 2 analyses to compare
                   </span>
                   <button
                     type="button"
@@ -1344,9 +1316,6 @@ export function AiResumeAnalyzerTab({ onResumeChange }) {
                 <strong style={{ fontSize: '1rem', color: '#102e5f' }}>
                   Version {comparisonResult.baseAnalysis.version} vs Version {comparisonResult.targetAnalysis.version}
                 </strong>
-                <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
-                  Chronological progression between analysis runs
-                </div>
               </div>
 
               <div
