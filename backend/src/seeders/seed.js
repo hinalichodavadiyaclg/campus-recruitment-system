@@ -14,6 +14,7 @@ import { Job } from '../models/job.model.js';
 import { Application } from '../models/application.model.js';
 import { assertStrongPassword, hashPassword } from '../utils/password.js';
 import { migrateLegacyPermissions } from '../utils/permission-migration.js';
+import { migrateApplicationIndexesAndData } from '../utils/application-indexes.js';
 
 const initialPermissions = [
   // Authentication
@@ -210,7 +211,6 @@ const initialRoles = [
       PERMISSION_IDS.JOB_DELETE,
       PERMISSION_IDS.JOB_MANAGE,
       PERMISSION_IDS.APPLICATION_READ,
-      PERMISSION_IDS.APPLICATION_UPDATE,
       PERMISSION_IDS.APPLICATION_MANAGE,
       PERMISSION_IDS.WORKSHOP_READ,
       PERMISSION_IDS.WORKSHOP_CREATE,
@@ -251,6 +251,9 @@ export async function seedInitialData() {
 
   // Clean up any legacy non-canonical permissions
   await migrateLegacyPermissions();
+
+  // Safely migrate application indexes and attempt numbers
+  await migrateApplicationIndexesAndData();
 
   for (const permission of initialPermissions) {
     await Permission.updateOne({ _id: permission._id }, { $set: permission }, { upsert: true });

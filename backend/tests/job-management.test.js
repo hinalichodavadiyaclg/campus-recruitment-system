@@ -18,6 +18,9 @@ const [
   { Department },
   { Course },
   { Job },
+  { Student },
+  { Role },
+  { Permission },
   { hashPassword },
   { createRawSessionToken, hashSessionToken },
   { ROLE_IDS }
@@ -31,6 +34,9 @@ const [
   import('../src/models/department.model.js'),
   import('../src/models/course.model.js'),
   import('../src/models/job.model.js'),
+  import('../src/models/student.model.js'),
+  import('../src/models/role.model.js'),
+  import('../src/models/permission.model.js'),
   import('../src/utils/password.js'),
   import('../src/utils/session-token.js'),
   import('../src/utils/access-constants.js')
@@ -599,5 +605,536 @@ test('Job Management Backend API Integration Tests', async (t) => {
       .get(`/api/jobs/${jobId}`)
       .set('Authorization', `Bearer ${student.token}`);
     assert.equal(studentGetRestored.status, 200);
+  });
+
+  await t.test('8. Department-Restricted Job Visibility for Students', async () => {
+    const company = await createTestCompany('dept-res');
+    const recruiter = await createAuthenticatedSession(ROLE_IDS.COMPANY, 'COMPANY', company._id);
+
+    // 1. Create departments
+    const ts = Date.now();
+    const csDept = await Department.create({
+      name: `Computer Science and Engineering ${ts}`,
+      code: `CS${ts % 10000}`,
+      isActive: true
+    });
+    const mgmtDept = await Department.create({
+      name: `Management Studies ${ts}`,
+      code: `MGMT${ts % 10000}`,
+      isActive: true
+    });
+
+    // 2. Create Student in Computer Science
+    const studentCsSession = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+    await Student.create({
+      userId: studentCsSession.user._id,
+      universityId: `CS-UNI-${ts % 100000}`,
+      firstName: 'Alice',
+      lastName: 'CS',
+      email: studentCsSession.user.email,
+      mobileNumber: '9876543210',
+      branch: 'Computer Science',
+      department: csDept.name,
+      departmentId: csDept._id,
+      semester: 6,
+      cgpa: 8.5
+    });
+
+    // 3. Create Student in Management
+    const studentMgmtSession = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+    await Student.create({
+      userId: studentMgmtSession.user._id,
+      universityId: `MGMT-UNI-${ts % 100000}`,
+      firstName: 'Bob',
+      lastName: 'MGMT',
+      email: studentMgmtSession.user.email,
+      mobileNumber: '9876543211',
+      branch: 'Management',
+      department: mgmtDept.name,
+      departmentId: mgmtDept._id,
+      semester: 4,
+      cgpa: 8.0
+    });
+
+    // 4. Company posts Job restricted to Management Studies
+    const mgmtJobRes = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${recruiter.token}`)
+      .send({
+        title: 'Management Trainee Opening',
+        description: 'Exclusively open for students from Management Studies.',
+        jobType: 'FULL_TIME',
+        workMode: 'ON_SITE',
+        location: 'Campus Auditorium',
+        vacancies: 3,
+        deadline: futureDate(15),
+        status: 'OPEN',
+        eligibilityMode: 'RESTRICTED',
+        eligibilityCriteria: {
+          allowedDepartmentIds: [mgmtDept._id]
+        }
+      });
+    assert.equal(mgmtJobRes.status, 201);
+    const mgmtJobId = mgmtJobRes.body.data._id;
+
+    // 5. Company posts Job open to ALL_STUDENTS
+    const allStudentsJobRes = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${recruiter.token}`)
+      .send({
+        title: 'General Campus Placement Drive',
+        description: 'Open to all departments and disciplines.',
+        jobType: 'FULL_TIME',
+        workMode: 'REMOTE',
+        vacancies: 10,
+        deadline: futureDate(20),
+        status: 'OPEN',
+        eligibilityMode: 'ALL_STUDENTS'
+      });
+    assert.equal(allStudentsJobRes.status, 201);
+    const allStudentsJobId = allStudentsJobRes.body.data._id;
+
+    // 6. Verify CS Student:
+    // MUST see the ALL_STUDENTS job
+    // MUST NOT see the Management-restricted job
+    const csList = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${studentCsSession.token}`);
+    assert.equal(csList.status, 200);
+    const csJobIds = csList.body.data.items.map((j) => String(j._id));
+    assert.ok(csJobIds.includes(String(allStudentsJobId)), 'CS student should see ALL_STUDENTS job');
+    assert.ok(!csJobIds.includes(String(mgmtJobId)), 'CS student MUST NOT see Management-restricted job');
+
+    // CS Student accessing Management job directly by ID -> 404 Not Found
+    const csDirectGet = await request(app)
+      .get(`/api/jobs/${mgmtJobId}`)
+      .set('Authorization', `Bearer ${studentCsSession.token}`);
+    assert.equal(csDirectGet.status, 404);
+
+    // 7. Verify Management Student:
+    // MUST see BOTH the Management-restricted job and the ALL_STUDENTS job
+    const mgmtList = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${studentMgmtSession.token}`);
+    assert.equal(mgmtList.status, 200);
+    const mgmtJobIds = mgmtList.body.data.items.map((j) => String(j._id));
+    assert.ok(mgmtJobIds.includes(String(mgmtJobId)), 'Management student should see Management-restricted job');
+    assert.ok(mgmtJobIds.includes(String(allStudentsJobId)), 'Management student should see ALL_STUDENTS job');
+
+    // Management Student accessing Management job directly by ID -> 200 OK
+    const mgmtDirectGet = await request(app)
+      .get(`/api/jobs/${mgmtJobId}`)
+      .set('Authorization', `Bearer ${studentMgmtSession.token}`);
+    assert.equal(mgmtDirectGet.status, 200);
+    assert.equal(mgmtDirectGet.body.data.title, 'Management Trainee Opening');
+  });
+
+  await t.test('9. Passing Year Restricted Job Visibility (e.g. 2027 Passing Year Only)', async () => {
+    const company = await createTestCompany('yr-res');
+    const recruiter = await createAuthenticatedSession(ROLE_IDS.COMPANY, 'COMPANY', company._id);
+
+    const ts = Date.now();
+
+    // 1. Create Student A with passing year 2027
+    const student2027Session = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+    await Student.create({
+      userId: student2027Session.user._id,
+      universityId: `UNI-2027-${ts % 100000}`,
+      firstName: 'Pooja',
+      lastName: 'Batch2027',
+      email: student2027Session.user.email,
+      mobileNumber: '9876543220',
+      branch: 'Information Technology',
+      department: 'Information Technology',
+      semester: 4,
+      cgpa: 8.2,
+      passingYear: 2027
+    });
+
+    // 2. Create Student B with passing year 2026
+    const student2026Session = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+    await Student.create({
+      userId: student2026Session.user._id,
+      universityId: `UNI-2026-${ts % 100000}`,
+      firstName: 'Rahul',
+      lastName: 'Batch2026',
+      email: student2026Session.user.email,
+      mobileNumber: '9876543221',
+      branch: 'Information Technology',
+      department: 'Information Technology',
+      semester: 6,
+      cgpa: 7.9,
+      passingYear: 2026
+    });
+
+    // 3. Company posts Job restricted strictly to 2027 passing year students
+    const job2027Res = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${recruiter.token}`)
+      .send({
+        title: '2027 Graduate Engineering Trainee',
+        description: 'Exclusive opportunity for students graduating in the 2027 batch.',
+        jobType: 'FULL_TIME',
+        workMode: 'REMOTE',
+        vacancies: 5,
+        deadline: futureDate(25),
+        status: 'OPEN',
+        eligibilityMode: 'RESTRICTED',
+        eligibilityCriteria: {
+          allowedPassingYears: [2027]
+        }
+      });
+    assert.equal(job2027Res.status, 201);
+    const job2027Id = job2027Res.body.data._id;
+
+    // 4. Company posts Job with Any Passing Year (empty allowedPassingYears)
+    const anyYearJobRes = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${recruiter.token}`)
+      .send({
+        title: 'General Technical Associate',
+        description: 'Open to all graduating batches.',
+        jobType: 'FULL_TIME',
+        workMode: 'REMOTE',
+        vacancies: 8,
+        deadline: futureDate(30),
+        status: 'OPEN',
+        eligibilityMode: 'RESTRICTED',
+        eligibilityCriteria: {
+          allowedPassingYears: []
+        }
+      });
+    assert.equal(anyYearJobRes.status, 201);
+    const anyYearJobId = anyYearJobRes.body.data._id;
+
+    // 5. Verify Student with Passing Year 2027 and Student with Passing Year 2026:
+    // Both students CAN see the job posting (unrestricted visibility across batches for their department)
+    const list2027 = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${student2027Session.token}`);
+    assert.equal(list2027.status, 200);
+    const jobIds2027 = list2027.body.data.items.map((j) => String(j._id));
+    assert.ok(jobIds2027.includes(String(job2027Id)), '2027 student sees the job');
+    assert.ok(jobIds2027.includes(String(anyYearJobId)), '2027 student sees any-year job');
+
+    // 2027 student direct get by ID -> 200 OK
+    const get2027 = await request(app)
+      .get(`/api/jobs/${job2027Id}`)
+      .set('Authorization', `Bearer ${student2027Session.token}`);
+    assert.equal(get2027.status, 200);
+    assert.equal(get2027.body.data.title, '2027 Graduate Engineering Trainee');
+
+    // 6. Verify Student with Passing Year 2026:
+    // Also can see the job because passing year is managed as a recruiter applicant filter
+    const list2026 = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${student2026Session.token}`);
+    assert.equal(list2026.status, 200);
+    const jobIds2026 = list2026.body.data.items.map((j) => String(j._id));
+    assert.ok(jobIds2026.includes(String(job2027Id)), '2026 student sees the job without gatekeeping');
+    assert.ok(jobIds2026.includes(String(anyYearJobId)), '2026 student sees any-year job');
+
+    // 2026 student direct get by ID -> 200 OK
+    const get2026 = await request(app)
+      .get(`/api/jobs/${job2027Id}`)
+      .set('Authorization', `Bearer ${student2026Session.token}`);
+    assert.equal(get2026.status, 200);
+  });
+
+  await t.test('10. Recruiter Application Screening Filters (Passing Batch & Minimum CGPA)', async () => {
+    const company = await createTestCompany('ats-filter');
+    const recruiter = await createAuthenticatedSession(ROLE_IDS.COMPANY, 'COMPANY', company._id);
+
+    const ts = Date.now();
+
+    // 1. Create Student High CGPA (2026 batch, 8.8 CGPA)
+    const studentHighSession = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+    const studentHigh = await Student.create({
+      userId: studentHighSession.user._id,
+      universityId: `UNI-HIGH-${ts % 100000}`,
+      firstName: 'Anjali',
+      lastName: 'Patel',
+      email: studentHighSession.user.email,
+      mobileNumber: '9876543290',
+      branch: 'Computer Engineering',
+      department: 'Computer Engineering',
+      semester: 6,
+      cgpa: 8.8,
+      passingYear: 2026,
+      resume: {
+        url: 'https://example.com/resumes/anjali.pdf',
+        fileName: 'Anjali_Resume.pdf'
+      },
+      certificates: [
+        {
+          name: 'Naandi Training',
+          issuingOrganization: 'Naandi Foundation',
+          isNaandiTraining: true,
+          isVerified: true
+        }
+      ]
+    });
+
+    // 2. Create Student Moderate CGPA (2025 batch, 7.2 CGPA)
+    const studentModSession = await createAuthenticatedSession(ROLE_IDS.STUDENT, 'STUDENT');
+    const studentMod = await Student.create({
+      userId: studentModSession.user._id,
+      universityId: `UNI-MOD-${ts % 100000}`,
+      firstName: 'Vikram',
+      lastName: 'Shah',
+      email: studentModSession.user.email,
+      mobileNumber: '9876543291',
+      branch: 'Computer Engineering',
+      department: 'Computer Engineering',
+      semester: 8,
+      cgpa: 7.2,
+      passingYear: 2025,
+      resume: {
+        url: 'https://example.com/resumes/vikram.pdf',
+        fileName: 'Vikram_Resume.pdf'
+      },
+      certificates: [
+        {
+          name: 'Naandi Training',
+          issuingOrganization: 'Naandi Foundation',
+          isNaandiTraining: true,
+          isVerified: true
+        }
+      ]
+    });
+
+    // 3. Post a Job by company
+    const jobRes = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${recruiter.token}`)
+      .send({
+        title: 'Full Stack Engineer Drive',
+        description: 'Comprehensive hiring drive for engineering graduates.',
+        jobType: 'FULL_TIME',
+        workMode: 'ON_SITE',
+        location: 'Surat, Gujarat',
+        vacancies: 4,
+        deadline: futureDate(20),
+        status: 'OPEN',
+        eligibilityMode: 'ALL_STUDENTS',
+        eligibilityCriteria: {
+          requiresNaandiTraining: false
+        }
+      });
+    assert.equal(jobRes.status, 201);
+    const jobId = jobRes.body.data._id;
+
+    // 4. Submit Applications for both students
+    const appHighRes = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${studentHighSession.token}`)
+      .send({
+        jobId,
+        customResume: {
+          url: 'https://example.com/resumes/anjali.pdf',
+          fileName: 'Anjali_Resume.pdf'
+        }
+      });
+    assert.equal(appHighRes.status, 201);
+
+    const appModRes = await request(app)
+      .post('/api/applications')
+      .set('Authorization', `Bearer ${studentModSession.token}`)
+      .send({
+        jobId,
+        customResume: {
+          url: 'https://example.com/resumes/vikram.pdf',
+          fileName: 'Vikram_Resume.pdf'
+        }
+      });
+    assert.equal(appModRes.status, 201);
+
+    // 5. Recruiter filters by passingYear = 2026 -> returns only Anjali
+    const filterYear2026 = await request(app)
+      .get(`/api/applications?jobId=${jobId}&passingYear=2026`)
+      .set('Authorization', `Bearer ${recruiter.token}`);
+    assert.equal(filterYear2026.status, 200);
+    assert.equal(filterYear2026.body.data.items.length, 1);
+    assert.equal(filterYear2026.body.data.items[0].studentId.passingYear, 2026);
+
+    // 6. Recruiter filters by passingYear = 2025 -> returns only Vikram
+    const filterYear2025 = await request(app)
+      .get(`/api/applications?jobId=${jobId}&passingYear=2025`)
+      .set('Authorization', `Bearer ${recruiter.token}`);
+    assert.equal(filterYear2025.status, 200);
+    assert.equal(filterYear2025.body.data.items.length, 1);
+    assert.equal(filterYear2025.body.data.items[0].studentId.passingYear, 2025);
+
+    // 7. Recruiter filters by minCgpa = 8.0 -> returns only Anjali (8.8)
+    const filterCgpa8 = await request(app)
+      .get(`/api/applications?jobId=${jobId}&minCgpa=8.0`)
+      .set('Authorization', `Bearer ${recruiter.token}`);
+    assert.equal(filterCgpa8.status, 200);
+    assert.equal(filterCgpa8.body.data.items.length, 1);
+    assert.ok(filterCgpa8.body.data.items[0].studentId.cgpa >= 8.0);
+
+    // 8. Recruiter filters by minCgpa = 7.0 -> returns both Anjali (8.8) and Vikram (7.2)
+    const filterCgpa7 = await request(app)
+      .get(`/api/applications?jobId=${jobId}&minCgpa=7.0`)
+      .set('Authorization', `Bearer ${recruiter.token}`);
+    assert.equal(filterCgpa7.status, 200);
+    assert.equal(filterCgpa7.body.data.items.length, 2);
+  });
+
+  await t.test('11. Dynamic Job Management Permissions: Placement Coordinator with JOB_CREATE creates and updates job on behalf of company', async () => {
+    const company = await createTestCompany('dyn1');
+    const coordSession = await createAuthenticatedSession(ROLE_IDS.PLACEMENT_COORDINATOR);
+
+    // Initial state: coordinator does not have JOB_CREATE permission -> 403 Forbidden
+    const unauthRes = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${coordSession.token}`)
+      .send({
+        companyId: company._id,
+        title: 'Unauthorized Job Attempt',
+        category: 'Software Engineering',
+        jobType: 'FULL_TIME',
+        workMode: 'ON_SITE',
+        location: 'Surat, Gujarat',
+        vacancies: 2,
+        description: 'Should be rejected without JOB_CREATE permission.',
+        responsibilities: ['Write code'],
+        deadline: futureDate(14)
+      });
+    assert.equal(unauthRes.status, 403);
+
+    // Grant JOB_CREATE and JOB_UPDATE to ROLE_PLACEMENT_COORDINATOR dynamically (simulating UI assignment)
+    await Role.findByIdAndUpdate(ROLE_IDS.PLACEMENT_COORDINATOR, {
+      $addToSet: { permissionIds: { $each: ['JOB_CREATE', 'JOB_UPDATE'] } }
+    });
+
+    // Now coordinator creates job on behalf of company
+    const createRes = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${coordSession.token}`)
+      .send({
+        companyId: company._id,
+        title: 'Cloud Systems Engineer',
+        category: 'Cloud Engineering',
+        jobType: 'FULL_TIME',
+        workMode: 'ON_SITE',
+        location: 'Surat, Gujarat',
+        vacancies: 3,
+        description: 'Design and deploy scalable cloud systems across multi-cloud infrastructure.',
+        responsibilities: ['Configure Kubernetes clusters', 'Manage CI/CD pipelines'],
+        deadline: futureDate(21),
+        status: 'OPEN'
+      });
+
+    assert.equal(createRes.status, 201, `Expected 201 but got ${createRes.status}: ${JSON.stringify(createRes.body)}`);
+    assert.equal(createRes.body.data.title, 'Cloud Systems Engineer');
+    assert.equal(createRes.body.data.companyId._id, String(company._id));
+    assert.equal(createRes.body.data.createdBy, String(coordSession.user._id));
+
+    const createdJobId = createRes.body.data._id;
+
+    // Coordinator updates job details with dynamic JOB_UPDATE
+    const updateRes = await request(app)
+      .put(`/api/jobs/${createdJobId}`)
+      .set('Authorization', `Bearer ${coordSession.token}`)
+      .send({
+        title: 'Senior Cloud Systems Engineer',
+        vacancies: 5
+      });
+
+    assert.equal(updateRes.status, 200);
+    assert.equal(updateRes.body.data.title, 'Senior Cloud Systems Engineer');
+    assert.equal(updateRes.body.data.vacancies, 5);
+  });
+
+  await t.test('12. Dynamic RBAC across all accounts: Revoking and granting permissions immediately takes effect without re-login', async () => {
+    // A. Student JOB_READ Dynamic Toggle
+    const studentSession = await createAuthenticatedSession(ROLE_IDS.STUDENT);
+
+    // Initial check: Student has JOB_READ -> GET /api/jobs returns 200
+    const initialJobsRes = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${studentSession.token}`);
+    assert.equal(initialJobsRes.status, 200);
+
+    // Check /api/auth/me has JOB_READ
+    const meRes1 = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${studentSession.token}`);
+    assert.ok(meRes1.body.data.permissionIds.includes('JOB_READ'));
+
+    // Admin goes to Role -> Student -> unchecks JOB_READ
+    await Role.findByIdAndUpdate(ROLE_IDS.STUDENT, {
+      $pull: { permissionIds: 'JOB_READ' }
+    });
+
+    // Immediate check: Student is blocked from GET /api/jobs with 403
+    const blockedJobsRes = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${studentSession.token}`);
+    assert.equal(blockedJobsRes.status, 403);
+
+    // Check /api/auth/me immediately reflects absence of JOB_READ
+    const meRes2 = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${studentSession.token}`);
+    assert.ok(!meRes2.body.data.permissionIds.includes('JOB_READ'));
+
+    // Admin restores JOB_READ to Student
+    await Role.findByIdAndUpdate(ROLE_IDS.STUDENT, {
+      $addToSet: { permissionIds: 'JOB_READ' }
+    });
+
+    // Immediate check: Student can view jobs again (200 OK)
+    const restoredJobsRes = await request(app)
+      .get('/api/jobs')
+      .set('Authorization', `Bearer ${studentSession.token}`);
+    assert.equal(restoredJobsRes.status, 200);
+
+    // B. Company JOB_CREATE Dynamic Toggle
+    const company = await createTestCompany('dyn_comp');
+    const companySession = await createAuthenticatedSession(ROLE_IDS.COMPANY, 'COMPANY', company._id);
+
+    // Admin unchecks JOB_CREATE for ROLE_COMPANY
+    await Role.findByIdAndUpdate(ROLE_IDS.COMPANY, {
+      $pull: { permissionIds: 'JOB_CREATE' }
+    });
+
+    const blockedCreateRes = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${companySession.token}`)
+      .send({
+        title: 'Unauthorized Company Job',
+        category: 'Engineering',
+        jobType: 'FULL_TIME',
+        workMode: 'ON_SITE',
+        location: 'Surat',
+        vacancies: 1,
+        description: 'Should fail',
+        responsibilities: ['Do task'],
+        deadline: futureDate(10)
+      });
+    assert.equal(blockedCreateRes.status, 403);
+
+    // Admin re-checks JOB_CREATE for ROLE_COMPANY
+    await Role.findByIdAndUpdate(ROLE_IDS.COMPANY, {
+      $addToSet: { permissionIds: 'JOB_CREATE' }
+    });
+
+    const allowedCreateRes = await request(app)
+      .post('/api/jobs')
+      .set('Authorization', `Bearer ${companySession.token}`)
+      .send({
+        title: 'Authorized Company Job',
+        category: 'Engineering',
+        jobType: 'FULL_TIME',
+        workMode: 'ON_SITE',
+        location: 'Surat',
+        vacancies: 1,
+        description: 'Should succeed',
+        responsibilities: ['Do task'],
+        deadline: futureDate(10)
+      });
+    assert.equal(allowedCreateRes.status, 201);
   });
 });

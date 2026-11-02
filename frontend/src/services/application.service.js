@@ -41,6 +41,15 @@ export const applicationService = {
     if (params.companyId) searchParams.set('companyId', params.companyId);
     if (params.status) searchParams.set('status', params.status);
     if (params.recruitmentRound) searchParams.set('recruitmentRound', params.recruitmentRound);
+    if (params.passingYear !== undefined && params.passingYear !== null && params.passingYear !== '') {
+      searchParams.set('passingYear', params.passingYear);
+    }
+    if (params.minCgpa !== undefined && params.minCgpa !== null && params.minCgpa !== '') {
+      searchParams.set('minCgpa', params.minCgpa);
+    }
+    if (params.search && params.search.trim()) {
+      searchParams.set('search', params.search.trim());
+    }
     const qs = searchParams.toString();
     return apiRequest(`/api/applications${qs ? `?${qs}` : ''}`);
   },

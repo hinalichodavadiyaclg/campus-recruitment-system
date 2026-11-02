@@ -45,7 +45,7 @@ function calculateProfileCompletion(student) {
 }
 
 export function StudentDashboard() {
-  const { user } = useAuth();
+  const { user, has } = useAuth();
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
@@ -64,12 +64,16 @@ export function StudentDashboard() {
     async function loadData() {
       try {
         setLoading(true);
+
+        const canReadJobs = has('JOB_READ');
+        const canReadApps = has('APPLICATION_READ');
+
         const [profileRes, jobsRes, appsRes, placedRes, interviewRes, notifRes] = await Promise.allSettled([
           studentService.getMyProfile(),
-          jobService.listJobs({ limit: 5 }),
-          applicationService.listApplications({ limit: 50 }),
-          applicationService.listApplications({ status: 'SELECTED', limit: 1 }),
-          applicationService.listApplications({ status: 'INTERVIEW', limit: 10 }),
+          canReadJobs ? jobService.listJobs({ limit: 5 }) : Promise.resolve({ jobs: [], total: 0 }),
+          canReadApps ? applicationService.listApplications({ limit: 50 }) : Promise.resolve({ items: [], total: 0 }),
+          canReadApps ? applicationService.listApplications({ status: 'SELECTED', limit: 1 }) : Promise.resolve({ items: [], total: 0 }),
+          canReadApps ? applicationService.listApplications({ status: 'INTERVIEW', limit: 10 }) : Promise.resolve({ items: [], total: 0 }),
           notificationService.getNotifications({ limit: 5 })
         ]);
 
@@ -77,29 +81,39 @@ export function StudentDashboard() {
           if (profileRes.status === 'fulfilled') {
             setStudent(profileRes.value);
           }
-          if (jobsRes.status === 'fulfilled') {
+          if (canReadJobs && jobsRes.status === 'fulfilled') {
             const jList = jobsRes.value?.jobs || jobsRes.value?.items || [];
             setRecentJobs(jList);
             setJobPostingsCount(jobsRes.value?.total ?? jobsRes.value?.pagination?.total ?? jList.length);
+          } else {
+            setRecentJobs([]);
+            setJobPostingsCount(0);
           }
-          if (appsRes.status === 'fulfilled') {
+          if (canReadApps && appsRes.status === 'fulfilled') {
             const aList = appsRes.value?.items || [];
             setApplicationsCount(appsRes.value?.total ?? aList.length);
+          } else {
+            setApplicationsCount(0);
           }
-          if (placedRes.status === 'fulfilled') {
+          if (canReadApps && placedRes.status === 'fulfilled') {
             setOffersCount(placedRes.value?.total ?? 0);
-          } else if (appsRes.status === 'fulfilled') {
+          } else if (canReadApps && appsRes.status === 'fulfilled') {
             const offers = (appsRes.value?.items || []).filter((a) => a.status === 'SELECTED').length;
             setOffersCount(offers);
+          } else {
+            setOffersCount(0);
           }
-          if (interviewRes.status === 'fulfilled') {
+          if (canReadApps && interviewRes.status === 'fulfilled') {
             const intList = interviewRes.value?.items || [];
             setUpcomingInterviews(intList);
             setInterviewsCount(interviewRes.value?.total ?? intList.length);
-          } else if (appsRes.status === 'fulfilled') {
+          } else if (canReadApps && appsRes.status === 'fulfilled') {
             const intList = (appsRes.value?.items || []).filter((a) => a.status === 'INTERVIEW');
             setUpcomingInterviews(intList);
             setInterviewsCount(intList.length);
+          } else {
+            setUpcomingInterviews([]);
+            setInterviewsCount(0);
           }
           if (notifRes.status === 'fulfilled') {
             const notifs = notifRes.value?.items || notifRes.value?.data || [];
@@ -125,7 +139,7 @@ export function StudentDashboard() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [has]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -323,163 +337,179 @@ export function StudentDashboard() {
           </div>
         </div>
 
-        {/* 3. FOUR METRICS CARDS ROW */}
-        <div className="student-metrics-grid">
-          {/* Card 1: Opportunities */}
-          <a href="#/jobs" className="student-metric-card" title="Available Job Opportunities">
-            <div className="student-metric-left">
-              <div className="student-metric-icon-box blue">
-                <BriefcaseIcon size={22} color="#0284c7" />
-              </div>
-              <div className="student-metric-details">
-                <span className="student-metric-value">{jobPostingsCount}</span>
-                <span className="student-metric-label">Opportunities</span>
-              </div>
-            </div>
-            <div className="student-chevron-arrow">
-              <ChevronRightIcon size={18} />
-            </div>
-          </a>
+        {/* 3. METRICS CARDS ROW */}
+        {(has('JOB_READ') || has('APPLICATION_READ')) && (
+          <div className="student-metrics-grid">
+            {/* Card 1: Opportunities */}
+            {has('JOB_READ') && (
+              <a href="#/jobs" className="student-metric-card" title="Available Job Opportunities">
+                <div className="student-metric-left">
+                  <div className="student-metric-icon-box blue">
+                    <BriefcaseIcon size={22} color="#0284c7" />
+                  </div>
+                  <div className="student-metric-details">
+                    <span className="student-metric-value">{jobPostingsCount}</span>
+                    <span className="student-metric-label">Opportunities</span>
+                  </div>
+                </div>
+                <div className="student-chevron-arrow">
+                  <ChevronRightIcon size={18} />
+                </div>
+              </a>
+            )}
 
-          {/* Card 2: Applications */}
-          <a href="#/applications" className="student-metric-card" title="Submitted Applications">
-            <div className="student-metric-left">
-              <div className="student-metric-icon-box purple">
-                <DocumentIcon size={22} color="#9333ea" />
-              </div>
-              <div className="student-metric-details">
-                <span className="student-metric-value">{applicationsCount}</span>
-                <span className="student-metric-label">Applications</span>
-              </div>
-            </div>
-            <div className="student-chevron-arrow">
-              <ChevronRightIcon size={18} />
-            </div>
-          </a>
+            {/* Card 2: Applications */}
+            {has('APPLICATION_READ') && (
+              <a href="#/applications" className="student-metric-card" title="Submitted Applications">
+                <div className="student-metric-left">
+                  <div className="student-metric-icon-box purple">
+                    <DocumentIcon size={22} color="#9333ea" />
+                  </div>
+                  <div className="student-metric-details">
+                    <span className="student-metric-value">{applicationsCount}</span>
+                    <span className="student-metric-label">Applications</span>
+                  </div>
+                </div>
+                <div className="student-chevron-arrow">
+                  <ChevronRightIcon size={18} />
+                </div>
+              </a>
+            )}
 
-          {/* Card 3: Interviews */}
-          <a href="#/interviews" className="student-metric-card" title="Scheduled Interviews">
-            <div className="student-metric-left">
-              <div className="student-metric-icon-box green">
-                <CalendarIcon size={22} color="#16a34a" />
-              </div>
-              <div className="student-metric-details">
-                <span className="student-metric-value">{interviewsCount}</span>
-                <span className="student-metric-label">Interviews</span>
-              </div>
-            </div>
-            <div className="student-chevron-arrow">
-              <ChevronRightIcon size={18} />
-            </div>
-          </a>
+            {/* Card 3: Interviews */}
+            {has('APPLICATION_READ') && (
+              <a href="#/interviews" className="student-metric-card" title="Scheduled Interviews">
+                <div className="student-metric-left">
+                  <div className="student-metric-icon-box green">
+                    <CalendarIcon size={22} color="#16a34a" />
+                  </div>
+                  <div className="student-metric-details">
+                    <span className="student-metric-value">{interviewsCount}</span>
+                    <span className="student-metric-label">Interviews</span>
+                  </div>
+                </div>
+                <div className="student-chevron-arrow">
+                  <ChevronRightIcon size={18} />
+                </div>
+              </a>
+            )}
 
-          {/* Card 4: Offers */}
-          <a href="#/placements" className="student-metric-card" title="Received Job Offers">
-            <div className="student-metric-left">
-              <div className="student-metric-icon-box orange">
-                <TrophyIcon size={22} color="#d97706" />
-              </div>
-              <div className="student-metric-details">
-                <span className="student-metric-value">{offersCount}</span>
-                <span className="student-metric-label">Offers</span>
-              </div>
-            </div>
-            <div className="student-chevron-arrow">
-              <ChevronRightIcon size={18} />
-            </div>
-          </a>
-        </div>
+            {/* Card 4: Offers */}
+            {has('APPLICATION_READ') && (
+              <a href="#/placements" className="student-metric-card" title="Received Job Offers">
+                <div className="student-metric-left">
+                  <div className="student-metric-icon-box orange">
+                    <TrophyIcon size={22} color="#d97706" />
+                  </div>
+                  <div className="student-metric-details">
+                    <span className="student-metric-value">{offersCount}</span>
+                    <span className="student-metric-label">Offers</span>
+                  </div>
+                </div>
+                <div className="student-chevron-arrow">
+                  <ChevronRightIcon size={18} />
+                </div>
+              </a>
+            )}
+          </div>
+        )}
 
         {/* 4. MIDDLE TWO-COLUMN GRID: Recent Opportunities & Upcoming Interviews */}
-        <div className="student-two-col-grid">
-          {/* Column 1: Recent Opportunities */}
-          <div className="student-section-col">
-            <div className="student-section-header">
-              <h3 className="student-section-title">Recent Opportunities</h3>
-              <a href="#/jobs" className="student-view-all-link">
-                <span>View All</span>
-                <span aria-hidden="true">→</span>
-              </a>
-            </div>
-            <div className="student-card-list">
-              {recentJobs.length > 0 ? (
-                recentJobs.map((job) => (
-                  <a key={job._id || job.id} href="#/jobs" className="student-list-row">
-                    <div className="student-list-left">
-                      <div className="student-company-avatar tn">
-                        {((job.companyId?.companyName || job.companyName || 'CO')).slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="student-list-info">
-                        <span className="student-list-primary">{job.companyId?.companyName || job.companyName || 'Company'}</span>
-                        <span className="student-list-secondary">{job.title || job.role}</span>
-                      </div>
-                    </div>
-                    <div className="student-list-right">
-                      <span className={`student-pill-badge ${job.status?.toLowerCase() || 'open'}`}>{job.status || 'Open'}</span>
-                      <div className="student-chevron-arrow">
-                        <ChevronRightIcon size={16} />
-                      </div>
-                    </div>
+        {(has('JOB_READ') || has('APPLICATION_READ')) && (
+          <div className="student-two-col-grid">
+            {/* Column 1: Recent Opportunities */}
+            {has('JOB_READ') && (
+              <div className="student-section-col">
+                <div className="student-section-header">
+                  <h3 className="student-section-title">Recent Opportunities</h3>
+                  <a href="#/jobs" className="student-view-all-link">
+                    <span>View All</span>
+                    <span aria-hidden="true">→</span>
                   </a>
-                ))
-              ) : (
-                <div className="student-empty-state">
-                  <div className="student-empty-icon">
-                    <BriefcaseIcon size={20} />
-                  </div>
-                  <p className="student-empty-title">No data found</p>
-                  <p className="student-empty-desc">No active job opportunities are available at this time.</p>
                 </div>
-              )}
-            </div>
-          </div>
+                <div className="student-card-list">
+                  {recentJobs.length > 0 ? (
+                    recentJobs.map((job) => (
+                      <a key={job._id || job.id} href="#/jobs" className="student-list-row">
+                        <div className="student-list-left">
+                          <div className="student-company-avatar tn">
+                            {((job.companyId?.companyName || job.companyName || 'CO')).slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="student-list-info">
+                            <span className="student-list-primary">{job.companyId?.companyName || job.companyName || 'Company'}</span>
+                            <span className="student-list-secondary">{job.title || job.role}</span>
+                          </div>
+                        </div>
+                        <div className="student-list-right">
+                          <span className={`student-pill-badge ${job.status?.toLowerCase() || 'open'}`}>{job.status || 'Open'}</span>
+                          <div className="student-chevron-arrow">
+                            <ChevronRightIcon size={16} />
+                          </div>
+                        </div>
+                      </a>
+                    ))
+                  ) : (
+                    <div className="student-empty-state">
+                      <div className="student-empty-icon">
+                        <BriefcaseIcon size={20} />
+                      </div>
+                      <p className="student-empty-title">No data found</p>
+                      <p className="student-empty-desc">No active job opportunities are available at this time.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-          {/* Column 2: Upcoming Interviews */}
-          <div className="student-section-col">
-            <div className="student-section-header">
-              <h3 className="student-section-title">Upcoming Interviews</h3>
-              <a href="#/applications" className="student-view-all-link">
-                <span>View All</span>
-                <span aria-hidden="true">→</span>
-              </a>
-            </div>
-            <div className="student-card-list">
-              {upcomingInterviews.length > 0 ? (
-                upcomingInterviews.map((interview) => {
-                  const compName = interview.companyId?.companyName || interview.jobSnapshot?.companyName || 'Company';
-                  const roleTitle = interview.jobSnapshot?.title || interview.jobId?.title || 'Recruitment Interview';
-                  return (
-                    <a key={interview._id || interview.id} href="#/applications" className="student-list-row">
-                      <div className="student-list-left">
-                        <div className="student-company-avatar tn">
-                          {compName.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="student-list-info">
-                          <span className="student-list-primary">{compName}</span>
-                          <span className="student-list-secondary">{roleTitle} • Round {interview.recruitmentRound || 1}</span>
-                        </div>
-                      </div>
-                      <div className="student-list-right">
-                        <span className="student-pill-badge online">Interview</span>
-                        <div className="student-chevron-arrow">
-                          <ChevronRightIcon size={16} />
-                        </div>
-                      </div>
-                    </a>
-                  );
-                })
-              ) : (
-                <div className="student-empty-state">
-                  <div className="student-empty-icon">
-                    <CalendarIcon size={20} />
-                  </div>
-                  <p className="student-empty-title">No data found</p>
-                  <p className="student-empty-desc">You have no scheduled interviews at this time.</p>
+            {/* Column 2: Upcoming Interviews */}
+            {has('APPLICATION_READ') && (
+              <div className="student-section-col">
+                <div className="student-section-header">
+                  <h3 className="student-section-title">Upcoming Interviews</h3>
+                  <a href="#/applications" className="student-view-all-link">
+                    <span>View All</span>
+                    <span aria-hidden="true">→</span>
+                  </a>
                 </div>
-              )}
-            </div>
+                <div className="student-card-list">
+                  {upcomingInterviews.length > 0 ? (
+                    upcomingInterviews.map((interview) => {
+                      const compName = interview.companyId?.companyName || interview.jobSnapshot?.companyName || 'Company';
+                      const roleTitle = interview.jobSnapshot?.title || interview.jobId?.title || 'Recruitment Interview';
+                      return (
+                        <a key={interview._id || interview.id} href="#/applications" className="student-list-row">
+                          <div className="student-list-left">
+                            <div className="student-company-avatar tn">
+                              {compName.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="student-list-info">
+                              <span className="student-list-primary">{compName}</span>
+                              <span className="student-list-secondary">{roleTitle} • Round {interview.recruitmentRound || 1}</span>
+                            </div>
+                          </div>
+                          <div className="student-list-right">
+                            <span className="student-pill-badge online">Interview</span>
+                            <div className="student-chevron-arrow">
+                              <ChevronRightIcon size={16} />
+                            </div>
+                          </div>
+                        </a>
+                      );
+                    })
+                  ) : (
+                    <div className="student-empty-state">
+                      <div className="student-empty-icon">
+                        <CalendarIcon size={20} />
+                      </div>
+                      <p className="student-empty-title">No data found</p>
+                      <p className="student-empty-desc">You have no scheduled interviews at this time.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {/* 5. BOTTOM TWO-COLUMN GRID: Announcements & Quick Actions */}
         <div className="student-two-col-grid">

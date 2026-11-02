@@ -691,9 +691,16 @@ export const jobListQuerySchema = z.object({
     departmentId: objectId.optional(),
     courseId: objectId.optional(),
     eligibleOnly: z
-      .string()
-      .transform((val) => val === 'true')
-      .optional()
+      .union([z.boolean(), z.string().transform((val) => val === 'true')])
+      .optional(),
+    category: z.string().trim().optional(),
+    location: z.string().trim().optional(),
+    minSalary: z.coerce.number().min(0).optional(),
+    datePosted: z.enum(['24h', '7d', '30d']).optional(),
+    closingSoon: z
+      .union([z.boolean(), z.string().transform((val) => val === 'true')])
+      .optional(),
+    sortBy: z.enum(['recent', 'deadline', 'vacancies', 'salary']).optional()
   })
 });
 
@@ -742,7 +749,10 @@ export const applicationListQuerySchema = z.object({
     studentId: objectId.optional(),
     companyId: objectId.optional(),
     status: applicationStatusEnum.optional(),
-    recruitmentRound: z.coerce.number().int().min(1).optional()
+    recruitmentRound: z.coerce.number().int().min(1).optional(),
+    passingYear: z.coerce.number().int().min(1990).max(2100).optional(),
+    minCgpa: z.coerce.number().min(0).max(10).optional(),
+    search: z.string().trim().max(100).optional()
   })
 });
 

@@ -476,7 +476,7 @@ export async function dispatchJobStatusChangedNotifications({ job, previousStatu
 /**
  * Dispatch notification to company when a new application is received
  */
-export async function dispatchApplicationReceivedNotification({ application, job, student }) {
+export async function dispatchApplicationReceivedNotification({ application, job, student, isReapplication = false, attemptNumber = 1 }) {
   try {
     const companyUsers = await User.find({
       companyId: job.companyId,
@@ -485,18 +485,21 @@ export async function dispatchApplicationReceivedNotification({ application, job
 
     const notifications = [];
     const studentName = `${student.firstName} ${student.lastName}`.trim();
+    const appId = application.applicationId || 'Application';
 
     for (const u of companyUsers) {
       notifications.push({
         recipientId: u._id,
         type: 'APPLICATION_RECEIVED',
-        title: `New Applicant: ${job.title}`,
-        message: `${studentName} has submitted an application for "${job.title}".`,
+        title: isReapplication ? `Reapplication Received: ${job.title}` : `New Applicant: ${job.title}`,
+        message: isReapplication
+          ? `${studentName} has submitted reapplication attempt #${attemptNumber} (${appId}) for "${job.title}".`
+          : `${studentName} has submitted an application (${appId}) for "${job.title}".`,
         relatedResourceType: 'APPLICATION',
         relatedResourceId: application._id,
         actionUrl: `#/applications`,
         dedupKey: `app_recv_${application._id}_u${u._id}`,
-        metadata: { applicationId: application._id, jobId: job._id, studentId: student._id }
+        metadata: { applicationId: application._id, jobId: job._id, studentId: student._id, attemptNumber, isReapplication }
       });
     }
 

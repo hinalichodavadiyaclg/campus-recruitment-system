@@ -55,7 +55,7 @@ export function ApplicationWithdrawModal({
       </div>
 
       <p style={{ fontSize: '0.88rem', color: 'var(--muted)', lineHeight: 1.5, margin: '0 0 16px' }}>
-        Are you sure you want to withdraw your application? This action cannot be undone for the current recruitment round.
+        Are you sure you want to withdraw your application? You can reapply later while the job application window remains open.
       </p>
 
       {error && <div className="notice error" style={{ marginBottom: '12px' }}>{error}</div>}

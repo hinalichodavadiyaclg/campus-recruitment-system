@@ -11,6 +11,8 @@ import { JobFilterBar } from './JobFilterBar.jsx';
 import { JobTable } from './JobTable.jsx';
 import { JobEmptyState } from './JobEmptyState.jsx';
 import { JobDetailsModal } from './JobDetailsModal.jsx';
+import { JobSuspendModal } from './JobSuspendModal.jsx';
+import { JobFormModal } from './JobFormModal.jsx';
 import {
   BriefcaseIcon,
   CheckCircleIcon,
@@ -18,6 +20,7 @@ import {
   UsersIcon,
   AwardIcon,
   BuildingIcon,
+  PlusIcon,
   RefreshCwIcon
 } from '../../components/common/Icons.jsx';
 import './JobPostings.css';
@@ -64,6 +67,9 @@ export function CoordinatorJobPostingsView() {
 
   // Modal State
   const [selectedJobForDetails, setSelectedJobForDetails] = useState(null);
+  const [selectedJobForForm, setSelectedJobForForm] = useState(null);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [selectedJobForSuspend, setSelectedJobForSuspend] = useState(null);
 
   // Load Companies & Courses Lookups
   useEffect(() => {
@@ -205,6 +211,63 @@ export function CoordinatorJobPostingsView() {
     window.location.hash = `#/applications?jobId=${job._id}`;
   };
 
+  // Job creation and update handlers (Dynamic RBAC)
+  const handleSaveJob = async (payload, id) => {
+    if (id) {
+      await jobService.updateJob(id, payload);
+      toast('Job posting updated successfully.');
+    } else {
+      await jobService.createJob(payload);
+      toast('Job posting created successfully.');
+    }
+    fetchJobs();
+    loadCoordinatorMetrics();
+  };
+
+  const handleStatusChange = async (job, newStatus) => {
+    try {
+      await jobService.updateJobStatus(job._id, { status: newStatus });
+      toast(`Job status updated to ${newStatus}.`);
+      fetchJobs();
+      loadCoordinatorMetrics();
+    } catch (err) {
+      toast(`Action failed: ${err.message}`);
+    }
+  };
+
+  const handleReopen = async (job) => {
+    const newDeadline = prompt('Enter new application deadline (YYYY-MM-DD):');
+    if (!newDeadline) return;
+    try {
+      await jobService.reopenJob(job._id, { newDeadline });
+      toast('Job posting reopened for recruitment.');
+      fetchJobs();
+      loadCoordinatorMetrics();
+    } catch (err) {
+      toast(`Action failed: ${err.message}`);
+    }
+  };
+
+  const handleConfirmSuspend = async (payload) => {
+    if (!selectedJobForSuspend) return;
+    try {
+      await jobService.suspendJob(selectedJobForSuspend._id, payload);
+      toast(
+        payload.isSuspended
+          ? 'Job posting suspended successfully.'
+          : 'Job posting restored to active recruitment.'
+      );
+      setSelectedJobForSuspend(null);
+      fetchJobs();
+      loadCoordinatorMetrics();
+      if (selectedJobForDetails?._id === selectedJobForSuspend._id) {
+        setSelectedJobForDetails(null);
+      }
+    } catch (err) {
+      toast(`Action failed: ${err.message}`);
+    }
+  };
+
   // Metrics Cards Data
   const summaryCards = useMemo(
     () => [
@@ -267,6 +330,20 @@ export function CoordinatorJobPostingsView() {
       category="Recruitment Module"
       section="Recruitment"
       currentPath="/job-postings"
+      actions={
+        has('JOB_CREATE') && (
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              setSelectedJobForForm(null);
+              setIsFormModalOpen(true);
+            }}
+          >
+            <PlusIcon size={16} /> Post New Job
+          </button>
+        )
+      }
     >
       {/* 1. Assigned Department Context Banner */}
       <div className="coordinator-dept-banner">
@@ -354,6 +431,21 @@ export function CoordinatorJobPostingsView() {
             roleType="PLACEMENT_COORDINATOR"
             onViewDetails={(j) => setSelectedJobForDetails(j)}
             onViewApplicants={handleViewApplicants}
+            onEdit={
+              has('JOB_UPDATE')
+                ? (j) => {
+                    setSelectedJobForForm(j);
+                    setIsFormModalOpen(true);
+                  }
+                : undefined
+            }
+            onStatusChange={has('JOB_UPDATE') ? handleStatusChange : undefined}
+            onReopen={has('JOB_UPDATE') ? handleReopen : undefined}
+            onSuspend={
+              has('JOB_MANAGE')
+                ? (j) => setSelectedJobForSuspend(j)
+                : undefined
+            }
           />
 
           {/* Pagination Controls */}
@@ -404,6 +496,48 @@ export function CoordinatorJobPostingsView() {
           user={user}
           role={role}
           has={has}
+          onEditClick={
+            has('JOB_UPDATE')
+              ? (j) => {
+                  setSelectedJobForDetails(null);
+                  setSelectedJobForForm(j);
+                  setIsFormModalOpen(true);
+                }
+              : undefined
+          }
+          onStatusClick={has('JOB_UPDATE') ? handleStatusChange : undefined}
+          onReopenClick={has('JOB_UPDATE') ? handleReopen : undefined}
+          onSuspendClick={
+            has('JOB_MANAGE')
+              ? (j) => {
+                  setSelectedJobForDetails(null);
+                  setSelectedJobForSuspend(j);
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {selectedJobForSuspend && (
+        <JobSuspendModal
+          isOpen={Boolean(selectedJobForSuspend)}
+          onClose={() => setSelectedJobForSuspend(null)}
+          job={selectedJobForSuspend}
+          onConfirm={handleConfirmSuspend}
+        />
+      )}
+
+      {isFormModalOpen && (
+        <JobFormModal
+          isOpen={isFormModalOpen}
+          onClose={() => {
+            setIsFormModalOpen(false);
+            setSelectedJobForForm(null);
+          }}
+          job={selectedJobForForm}
+          user={user}
+          role={role}
+          onSave={handleSaveJob}
         />
       )}
     </PortalLayout>

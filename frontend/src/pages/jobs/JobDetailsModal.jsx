@@ -40,11 +40,7 @@ export function JobDetailsModal({
 
   const isStudent = user?.userType === 'STUDENT' || role?.id === 'ROLE_STUDENT' || user?.roleId === 'ROLE_STUDENT';
   const isCompany = user?.userType === 'COMPANY' || role?.id === 'ROLE_COMPANY' || user?.roleId === 'ROLE_COMPANY';
-  const isPlacementAdmin =
-    role?.id === 'ROLE_PLACEMENT_HEAD' ||
-    role?.id === 'ROLE_SUPER_ADMIN' ||
-    user?.roleId === 'ROLE_PLACEMENT_HEAD' ||
-    user?.roleId === 'ROLE_SUPER_ADMIN';
+  const isStaff = !isStudent && !isCompany;
 
   const isDeadlinePassed = new Date(job.deadline) < new Date();
   const isSuspended = Boolean(job.isSuspended);
@@ -265,6 +261,39 @@ export function JobDetailsModal({
           </section>
         )}
 
+        {/* Role Skills & Technical Qualifications */}
+        {((criteria.requiredSkills && criteria.requiredSkills.length > 0) || (criteria.preferredSkills && criteria.preferredSkills.length > 0)) && (
+          <section className="job-details-section" style={{ marginTop: '20px' }}>
+            <h3 className="section-heading">Skills & Qualifications</h3>
+            {criteria.requiredSkills?.length > 0 && (
+              <div style={{ marginBottom: criteria.preferredSkills?.length > 0 ? '12px' : '0' }}>
+                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>
+                  Required Skills
+                </span>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {criteria.requiredSkills.map((sk) => (
+                    <span key={sk} className="badge neutral" style={{ background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}>
+                      {sk}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {criteria.preferredSkills?.length > 0 && (
+              <div>
+                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700, color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>
+                  Preferred Skills
+                </span>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {criteria.preferredSkills.map((sk) => (
+                    <span key={sk} className="badge neutral">{sk}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* Eligibility Criteria Breakdown */}
         <section className="job-details-section" style={{ marginTop: '24px' }}>
           <h3 className="section-heading">Eligibility Criteria</h3>
@@ -273,34 +302,34 @@ export function JobDetailsModal({
               <span className="criteria-label">Eligibility Mode</span>
               <strong>{job.eligibilityMode === 'ALL_STUDENTS' ? 'Open to All Students' : 'Restricted by Department / Criteria'}</strong>
             </div>
-            <div className="criteria-card">
-              <span className="criteria-label">Minimum CGPA</span>
-              <strong>{minCgpa > 0 ? `${minCgpa} CGPA` : 'No Minimum CGPA'}</strong>
-            </div>
-            <div className="criteria-card">
-              <span className="criteria-label">Active Backlogs Allowed</span>
-              <strong>{maxBacklogs === null || maxBacklogs === undefined ? 'Any' : `${maxBacklogs} max`}</strong>
-            </div>
+            {minCgpa > 0 && (
+              <div className="criteria-card">
+                <span className="criteria-label">Minimum CGPA</span>
+                <strong>{minCgpa} CGPA</strong>
+              </div>
+            )}
+            {criteria.maxActiveBacklogs !== null && criteria.maxActiveBacklogs !== undefined && (
+              <div className="criteria-card">
+                <span className="criteria-label">Active Backlogs Allowed</span>
+                <strong>{maxBacklogs} max</strong>
+              </div>
+            )}
             <div className="criteria-card">
               <span className="criteria-label">Mandatory Naandi Training</span>
               <strong style={{ color: requiresNaandi ? 'var(--navy)' : 'var(--muted)' }}>
                 {requiresNaandi ? 'Yes (Verified Certificate Required)' : 'Not Required'}
               </strong>
             </div>
-            <div className="criteria-card full-width">
-              <span className="criteria-label">Allowed Passing Years</span>
-              {passingYears.length > 0 ? (
+            {passingYears.length > 0 && (
+              <div className="criteria-card full-width">
+                <span className="criteria-label">Allowed Passing Years</span>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
                   {passingYears.map((yr) => (
                     <span key={yr} className="badge neutral">{yr}</span>
                   ))}
                 </div>
-              ) : (
-                <span style={{ fontSize: '0.88rem', color: 'var(--navy)', fontWeight: 600, marginTop: '2px', display: 'block' }}>
-                  Any Passing Year (All batches eligible)
-                </span>
-              )}
-            </div>
+              </div>
+            )}
             {allowedDepts.length > 0 && (
               <div className="criteria-card full-width">
                 <span className="criteria-label">Eligible Departments</span>
@@ -321,28 +350,6 @@ export function JobDetailsModal({
                     <span key={c._id || c.name} className="badge neutral">
                       {c.name || c.code || c}
                     </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {criteria.requiredSkills?.length > 0 && (
-              <div className="criteria-card full-width">
-                <span className="criteria-label">Required Skills</span>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
-                  {criteria.requiredSkills.map((sk) => (
-                    <span key={sk} className="badge neutral" style={{ background: '#e0f2fe', color: '#0369a1' }}>
-                      {sk}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {criteria.preferredSkills?.length > 0 && (
-              <div className="criteria-card full-width">
-                <span className="criteria-label">Preferred Skills</span>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
-                  {criteria.preferredSkills.map((sk) => (
-                    <span key={sk} className="badge neutral">{sk}</span>
                   ))}
                 </div>
               </div>
@@ -487,10 +494,10 @@ export function JobDetailsModal({
           </div>
         )}
 
-        {/* Placement Cell Actions */}
-        {isPlacementAdmin && (
+        {/* Placement Cell & Staff Dynamic Actions */}
+        {isStaff && (
           <div style={{ display: 'flex', gap: '8px' }}>
-            {has('JOB_UPDATE') && (
+            {has('JOB_UPDATE') && Boolean(onEditClick) && (
               <button
                 type="button"
                 className="secondary"
@@ -499,7 +506,7 @@ export function JobDetailsModal({
                 <EditIcon size={15} /> Edit
               </button>
             )}
-            {has('JOB_MANAGE') && (
+            {has('JOB_MANAGE') && Boolean(onSuspendClick) && (
               <button
                 type="button"
                 className={isSuspended ? 'secondary' : 'danger'}

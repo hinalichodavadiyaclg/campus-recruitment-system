@@ -35,8 +35,33 @@ export function AuthProvider({ children }) {
       window.location.hash = '#/login';
     };
 
+    const handleAuthRefresh = () => {
+      loadCurrentUser();
+    };
+
+    const handleStorageChange = (e) => {
+      if (e.key === 'auth_perm_sync') {
+        loadCurrentUser();
+      }
+    };
+
+    const handleWindowFocus = () => {
+      if (getToken()) {
+        loadCurrentUser();
+      }
+    };
+
     window.addEventListener('auth:expired', handleAuthExpired);
-    return () => window.removeEventListener('auth:expired', handleAuthExpired);
+    window.addEventListener('auth:refresh', handleAuthRefresh);
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      window.removeEventListener('auth:expired', handleAuthExpired);
+      window.removeEventListener('auth:refresh', handleAuthRefresh);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
   }, [loadCurrentUser]);
 
   const login = async (email, password, remember = false) => {
